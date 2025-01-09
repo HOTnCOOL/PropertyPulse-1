@@ -57,7 +57,7 @@ export default function TodoList({ todos }: TodoListProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTodo.trim()) return;
-    
+
     addTodo.mutate({
       title: newTodo,
       dueDate: selectedDate,
@@ -100,18 +100,20 @@ export default function TodoList({ todos }: TodoListProps) {
             className="flex items-center gap-2 p-2 rounded-lg hover:bg-accent"
           >
             <Checkbox
+              id={`todo-${todo.id}`}
               checked={todo.completed}
-              onCheckedChange={(checked: boolean) =>
-                toggleTodo.mutate({ id: todo.id, completed: checked })
+              onCheckedChange={(checked) =>
+                toggleTodo.mutate({ id: todo.id, completed: checked === true })
               }
             />
-            <span
-              className={`flex-1 ${
+            <label
+              htmlFor={`todo-${todo.id}`}
+              className={`flex-1 cursor-pointer ${
                 todo.completed ? "line-through text-muted-foreground" : ""
               }`}
             >
               {todo.title}
-            </span>
+            </label>
             {todo.dueDate && (
               <span className="text-sm text-muted-foreground">
                 {format(new Date(todo.dueDate), "MMM dd")}
