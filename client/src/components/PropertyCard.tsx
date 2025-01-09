@@ -17,7 +17,7 @@ export default function PropertyCard({ property }: PropertyCardProps) {
       </CardHeader>
       <CardContent>
         <div className="space-y-2">
-          <p className="text-sm text-muted-foreground">{property.address}</p>
+          <p className="text-sm text-muted-foreground">{property.description}</p>
           <div className="flex justify-between text-sm">
             <span>Capacity: {property.capacity}</span>
             <span>${Number(property.rate).toLocaleString()}/night</span>

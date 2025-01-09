@@ -5,8 +5,8 @@ import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 export const properties = pgTable("properties", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
-  address: text("address").notNull(),
-  type: text("type").notNull(), // apartment, house, shared space
+  description: text("description").notNull(),
+  type: text("type").notNull(), // studio, room, floor, house
   capacity: integer("capacity").notNull(),
   rate: numeric("rate").notNull(),
   isOccupied: boolean("is_occupied").default(false),

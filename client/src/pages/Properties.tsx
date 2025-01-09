@@ -32,7 +32,7 @@ export default function Properties() {
     resolver: zodResolver(insertPropertySchema),
     defaultValues: {
       name: "",
-      address: "",
+      description: "",
       type: "",
       capacity: undefined,
       rate: undefined,
@@ -112,10 +112,10 @@ export default function Properties() {
 
                 <FormField
                   control={form.control}
-                  name="address"
+                  name="description"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Address</FormLabel>
+                      <FormLabel>Description</FormLabel>
                       <FormControl>
                         <Input {...field} />
                       </FormControl>
@@ -140,9 +140,10 @@ export default function Properties() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="apartment">Apartment</SelectItem>
+                          <SelectItem value="studio">Studio</SelectItem>
+                          <SelectItem value="room">Room</SelectItem>
+                          <SelectItem value="floor">Floor</SelectItem>
                           <SelectItem value="house">House</SelectItem>
-                          <SelectItem value="shared">Shared Space</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
