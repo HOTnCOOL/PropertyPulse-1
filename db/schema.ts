@@ -1,6 +1,7 @@
-import { pgTable, text, serial, timestamp, numeric, integer, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, numeric, integer, boolean, jsonb } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
+import { z } from "zod";
 
 export const properties = pgTable("properties", {
   id: serial("id").primaryKey(),
@@ -13,6 +14,10 @@ export const properties = pgTable("properties", {
   weeklyRate: numeric("weekly_rate"),
   monthlyRate: numeric("monthly_rate"),
   isOccupied: boolean("is_occupied").default(false),
+  imageUrl: text("image_url"),
+  amenities: jsonb("amenities").default('{}').notNull(),
+  bedType: text("bed_type"), // single, double, queen, king
+  bathrooms: integer("bathrooms").default(1),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -68,8 +73,24 @@ export const paymentsRelations = relations(payments, ({ one }) => ({
   }),
 }));
 
-// Schemas
-export const insertPropertySchema = createInsertSchema(properties);
+// Extended Schemas with Zod
+const amenitiesSchema = z.object({
+  tv: z.boolean().default(false),
+  aircon: z.boolean().default(false),
+  view: z.boolean().default(false),
+  balcony: z.boolean().default(false),
+  fireplace: z.boolean().default(false),
+  sofa: z.boolean().default(false),
+});
+
+// Create the base insert schema
+const basePropertySchema = createInsertSchema(properties);
+
+// Extend it with the custom amenities schema
+export const insertPropertySchema = basePropertySchema.extend({
+  amenities: amenitiesSchema,
+});
+
 export const selectPropertySchema = createSelectSchema(properties);
 
 export const insertGuestSchema = createInsertSchema(guests);

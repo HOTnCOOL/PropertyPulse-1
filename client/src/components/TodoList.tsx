@@ -102,8 +102,8 @@ export default function TodoList({ todos }: TodoListProps) {
             <Checkbox
               id={`todo-${todo.id}`}
               checked={todo.completed}
-              onCheckedChange={(checked) =>
-                toggleTodo.mutate({ id: todo.id, completed: checked === true })
+              onCheckedChange={(checked: boolean) =>
+                toggleTodo.mutate({ id: todo.id, completed: checked })
               }
             />
             <label
