@@ -31,6 +31,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { insertGuestSchema, type Property } from "@db/schema";
 import GuestList from "../components/GuestList";
+import { type Guest } from "@db/schema"; // Added import for Guest type
+
 
 export default function GuestRegistration() {
   const { toast } = useToast();
@@ -57,7 +59,7 @@ export default function GuestRegistration() {
     queryKey: ["/api/properties"],
   });
 
-  const { data: guests } = useQuery({
+  const { data: guests = [] } = useQuery<Guest[]>({ //Corrected guests type and added default value
     queryKey: ["/api/guests"],
   });
 
@@ -169,7 +171,7 @@ export default function GuestRegistration() {
                     <FormItem>
                       <FormLabel>Property</FormLabel>
                       <Select
-                        onValueChange={(value) => field.onChange(parseInt(value))}
+                        onValueChange={(value: string) => field.onChange(parseInt(value))}
                         value={field.value?.toString()}
                       >
                         <FormControl>
@@ -307,7 +309,7 @@ export default function GuestRegistration() {
             <CardTitle>Recent Registrations</CardTitle>
           </CardHeader>
           <CardContent>
-            <GuestList guests={guests?.slice(0, 5) || []} />
+            <GuestList guests={guests.slice(0, 5)} /> {/*Corrected slice*/}
           </CardContent>
         </Card>
       </div>

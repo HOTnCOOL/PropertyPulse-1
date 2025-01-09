@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, numeric, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, numeric, integer, boolean } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 
@@ -9,6 +9,7 @@ export const properties = pgTable("properties", {
   type: text("type").notNull(), // apartment, house, shared space
   capacity: integer("capacity").notNull(),
   rate: numeric("rate").notNull(),
+  isOccupied: boolean("is_occupied").default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -30,7 +31,17 @@ export const payments = pgTable("payments", {
   amount: numeric("amount").notNull(),
   status: text("status").notNull(), // pending, paid, refunded
   type: text("type").notNull(), // rent, deposit, service
+  dueDate: timestamp("due_date").notNull(),
   date: timestamp("date").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const todos = pgTable("todos", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description"),
+  dueDate: timestamp("due_date"),
+  completed: boolean("completed").default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -64,7 +75,11 @@ export const selectGuestSchema = createSelectSchema(guests);
 export const insertPaymentSchema = createInsertSchema(payments);
 export const selectPaymentSchema = createSelectSchema(payments);
 
+export const insertTodoSchema = createInsertSchema(todos);
+export const selectTodoSchema = createSelectSchema(todos);
+
 // Types
 export type Property = typeof properties.$inferSelect;
 export type Guest = typeof guests.$inferSelect;
 export type Payment = typeof payments.$inferSelect;
+export type Todo = typeof todos.$inferSelect;

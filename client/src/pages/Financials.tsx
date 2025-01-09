@@ -13,17 +13,15 @@ import {
 } from "@/components/ui/popover";
 import PaymentHistory from "../components/PaymentHistory";
 import type { Payment } from "@db/schema";
+import { type DateRange } from "react-day-picker";
 
 export default function Financials() {
-  const [dateRange, setDateRange] = useState<{
-    from?: Date;
-    to?: Date;
-  }>({});
+  const [dateRange, setDateRange] = useState<DateRange | undefined>();
 
   const { data: payments } = useQuery<Payment[]>({
     queryKey: [
       "/api/payments",
-      dateRange.from && dateRange.to
+      dateRange?.from && dateRange?.to
         ? `?startDate=${dateRange.from.toISOString()}&endDate=${dateRange.to.toISOString()}`
         : "",
     ],
@@ -67,8 +65,8 @@ export default function Financials() {
           <PopoverTrigger asChild>
             <Button variant="outline" className="w-[300px] justify-start text-left font-normal">
               <CalendarIcon className="mr-2 h-4 w-4" />
-              {dateRange.from ? (
-                dateRange.to ? (
+              {dateRange?.from ? (
+                dateRange?.to ? (
                   <>
                     {format(dateRange.from, "LLL dd, y")} -{" "}
                     {format(dateRange.to, "LLL dd, y")}
@@ -85,11 +83,8 @@ export default function Financials() {
             <Calendar
               initialFocus
               mode="range"
-              defaultMonth={dateRange.from}
-              selected={{
-                from: dateRange.from,
-                to: dateRange.to,
-              }}
+              defaultMonth={dateRange?.from}
+              selected={dateRange}
               onSelect={setDateRange}
               numberOfMonths={2}
             />

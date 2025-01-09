@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { db } from "@db";
-import { properties, guests, payments } from "@db/schema";
+import { properties, guests, payments, todos } from "@db/schema";
 import { eq, and, gte, lte } from "drizzle-orm";
 
 export function registerRoutes(app: Express): Server {
@@ -26,6 +26,31 @@ export function registerRoutes(app: Express): Server {
     res.json(allGuests);
   });
 
+  app.get("/api/guests/today", async (_req, res) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const checkIns = await db.query.guests.findMany({
+      where: and(
+        gte(guests.checkIn, today),
+        lte(guests.checkIn, tomorrow)
+      ),
+      with: { property: true },
+    });
+
+    const checkOuts = await db.query.guests.findMany({
+      where: and(
+        gte(guests.checkOut, today),
+        lte(guests.checkOut, tomorrow)
+      ),
+      with: { property: true },
+    });
+
+    res.json({ checkIns, checkOuts });
+  });
+
   app.post("/api/guests", async (req, res) => {
     const guest = await db.insert(guests).values(req.body).returning();
     res.json(guest[0]);
@@ -42,9 +67,9 @@ export function registerRoutes(app: Express): Server {
 
   // Payments endpoints
   app.get("/api/payments", async (req, res) => {
-    const { startDate, endDate } = req.query;
+    const { startDate, endDate, status } = req.query;
     let query = db.select().from(payments);
-    
+
     if (startDate && endDate) {
       query = query.where(
         and(
@@ -53,7 +78,11 @@ export function registerRoutes(app: Express): Server {
         )
       );
     }
-    
+
+    if (status) {
+      query = query.where(eq(payments.status, status as string));
+    }
+
     const allPayments = await query;
     res.json(allPayments);
   });
@@ -61,6 +90,26 @@ export function registerRoutes(app: Express): Server {
   app.post("/api/payments", async (req, res) => {
     const payment = await db.insert(payments).values(req.body).returning();
     res.json(payment[0]);
+  });
+
+  // Todos endpoints
+  app.get("/api/todos", async (_req, res) => {
+    const allTodos = await db.select().from(todos);
+    res.json(allTodos);
+  });
+
+  app.post("/api/todos", async (req, res) => {
+    const todo = await db.insert(todos).values(req.body).returning();
+    res.json(todo[0]);
+  });
+
+  app.patch("/api/todos/:id", async (req, res) => {
+    const todo = await db
+      .update(todos)
+      .set(req.body)
+      .where(eq(todos.id, parseInt(req.params.id)))
+      .returning();
+    res.json(todo[0]);
   });
 
   const httpServer = createServer(app);

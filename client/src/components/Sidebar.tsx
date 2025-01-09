@@ -21,8 +21,8 @@ export default function Sidebar() {
           const isActive = location === href;
           return (
             <Link key={href} href={href}>
-              <a
-                className={`flex items-center gap-3 px-4 py-3 rounded-md mb-1 transition-colors
+              <div
+                className={`flex items-center gap-3 px-4 py-3 rounded-md mb-1 transition-colors cursor-pointer
                   ${isActive 
                     ? "bg-sidebar-accent text-sidebar-accent-foreground"
                     : "text-sidebar-foreground hover:bg-sidebar-accent/50"
@@ -30,7 +30,7 @@ export default function Sidebar() {
               >
                 <Icon className="h-5 w-5" />
                 <span>{label}</span>
-              </a>
+              </div>
             </Link>
           );
         })}
