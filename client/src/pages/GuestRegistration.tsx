@@ -29,12 +29,11 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
-import { insertGuestSchema, type Property } from "@db/schema";
+import { insertGuestSchema, type Property, type Guest } from "@db/schema";
 import GuestList from "../components/GuestList";
-import { type Guest } from "@db/schema";
 import PaymentEstimator from "../components/PaymentEstimator";
 import PaymentHistory from "../components/PaymentHistory";
-
+import PaymentRegistration from "../components/PaymentRegistration";
 
 export default function GuestRegistration() {
   const { toast } = useToast();
@@ -43,6 +42,7 @@ export default function GuestRegistration() {
     checkIn?: Date;
     checkOut?: Date;
   }>({});
+  const [activeGuest, setActiveGuest] = useState<Guest | null>(null);
 
   const form = useForm({
     resolver: zodResolver(insertGuestSchema),
@@ -70,8 +70,9 @@ export default function GuestRegistration() {
     return properties.find(p => p.id === form.getValues("propertyId"));
   }, [properties, form.watch("propertyId")]);
 
-  const { data: payments = [] } = useQuery({ // Added a payments query -  needs a proper queryKey
-    queryKey: ['/api/payments'], // Replace with actual API endpoint
+  const { data: payments = [] } = useQuery({
+    queryKey: ['/api/payments', activeGuest?.id],
+    enabled: !!activeGuest,
   });
 
 
@@ -324,26 +325,77 @@ export default function GuestRegistration() {
           />
         )}
 
-        <Card>
+        <Card className="md:col-span-2">
           <CardHeader>
-            <CardTitle>Recent Registrations</CardTitle>
+            <CardTitle>Recent Registrations & Payments</CardTitle>
           </CardHeader>
           <CardContent>
-            <GuestList guests={guests.slice(0, 5)} />
-          </CardContent>
-        </Card>
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-medium mb-4">Recent Guests</h3>
+                <GuestList 
+                  guests={guests.slice(0, 5)} 
+                  onSelectGuest={(guest) => setActiveGuest(guest)}
+                  selectedGuestId={activeGuest?.id}
+                />
+              </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Payment History</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <PaymentHistory
-              payments={form.getValues("propertyId")
-                ? payments?.filter(p => p.guestId === form.getValues("propertyId")) || []
-                : []
-              }
-            />
+              {activeGuest && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-medium">
+                      Payments for {activeGuest.firstName} {activeGuest.lastName}
+                    </h3>
+                    <Button
+                      variant="outline"
+                      onClick={() => setActiveGuest(null)}
+                    >
+                      Clear Selection
+                    </Button>
+                  </div>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Register New Payment</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <PaymentRegistration
+                        guestId={activeGuest.id}
+                        onSuccess={() => {
+                          queryClient.invalidateQueries({ 
+                            queryKey: ['/api/payments', activeGuest.id] 
+                          });
+                        }}
+                      />
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Payment History & Pending Payments</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        <div>
+                          <h4 className="font-medium mb-2">Pending Payments</h4>
+                          <PaymentHistory
+                            payments={payments.filter(p => p.status === 'pending')}
+                            showActions
+                          />
+                        </div>
+
+                        <div>
+                          <h4 className="font-medium mb-2">Payment History</h4>
+                          <PaymentHistory
+                            payments={payments.filter(p => p.status !== 'pending')}
+                          />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>

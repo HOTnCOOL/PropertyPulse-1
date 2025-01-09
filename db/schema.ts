@@ -68,7 +68,6 @@ export const todos = pgTable("todos", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-// Relations
 export const propertiesRelations = relations(properties, ({ many }) => ({
   guests: many(guests),
 }));
@@ -88,7 +87,6 @@ export const paymentsRelations = relations(payments, ({ one }) => ({
   }),
 }));
 
-// Extended Schemas with Zod
 const amenitiesSchema = z.object({
   tv: z.boolean().default(false),
   aircon: z.boolean().default(false),
@@ -98,10 +96,8 @@ const amenitiesSchema = z.object({
   sofa: z.boolean().default(false),
 });
 
-// Create the base insert schema
 const basePropertySchema = createInsertSchema(properties);
 
-// Extend it with the custom amenities schema
 export const insertPropertySchema = basePropertySchema.extend({
   amenities: amenitiesSchema,
 });
@@ -114,10 +110,12 @@ export const selectGuestSchema = createSelectSchema(guests);
 export const insertPaymentSchema = createInsertSchema(payments);
 export const selectPaymentSchema = createSelectSchema(payments);
 
+export const insertAssetSchema = createInsertSchema(assets);
+export const selectAssetSchema = createSelectSchema(assets);
+
 export const insertTodoSchema = createInsertSchema(todos);
 export const selectTodoSchema = createSelectSchema(todos);
 
-// Types
 export type Property = typeof properties.$inferSelect;
 export type Guest = typeof guests.$inferSelect;
 export type Payment = typeof payments.$inferSelect;
