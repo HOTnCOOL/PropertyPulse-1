@@ -35,7 +35,10 @@ export default function Properties() {
       description: "",
       type: "",
       capacity: undefined,
+      hourlyRate: undefined,
       rate: undefined,
+      weeklyRate: undefined,
+      monthlyRate: undefined,
     },
   });
 
@@ -74,7 +77,10 @@ export default function Properties() {
     addProperty.mutate({
       ...values,
       capacity: parseInt(values.capacity),
+      hourlyRate: values.hourlyRate ? parseFloat(values.hourlyRate) : null,
       rate: parseFloat(values.rate),
+      weeklyRate: values.weeklyRate ? parseFloat(values.weeklyRate) : null,
+      monthlyRate: values.monthlyRate ? parseFloat(values.monthlyRate) : null,
     });
   }
 
@@ -151,17 +157,36 @@ export default function Properties() {
                   )}
                 />
 
+                <FormField
+                  control={form.control}
+                  name="capacity"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Capacity</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min="1"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
-                    name="capacity"
+                    name="hourlyRate"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Capacity</FormLabel>
+                        <FormLabel>Hourly Rate ($)</FormLabel>
                         <FormControl>
                           <Input
                             type="number"
-                            min="1"
+                            min="0"
+                            step="0.01"
                             {...field}
                           />
                         </FormControl>
@@ -175,7 +200,45 @@ export default function Properties() {
                     name="rate"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Rate (per night)</FormLabel>
+                        <FormLabel>Nightly Rate ($)</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="weeklyRate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Weekly Rate ($)</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="monthlyRate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Monthly Rate ($)</FormLabel>
                         <FormControl>
                           <Input
                             type="number"

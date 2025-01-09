@@ -18,9 +18,18 @@ export default function PropertyCard({ property }: PropertyCardProps) {
       <CardContent>
         <div className="space-y-2">
           <p className="text-sm text-muted-foreground">{property.description}</p>
-          <div className="flex justify-between text-sm">
+          <div className="grid grid-cols-2 gap-2 text-sm">
             <span>Capacity: {property.capacity}</span>
-            <span>${Number(property.rate).toLocaleString()}/night</span>
+            <span className="text-right">${Number(property.rate).toLocaleString()}/night</span>
+            {property.hourlyRate && (
+              <span className="text-muted-foreground">${Number(property.hourlyRate).toLocaleString()}/hour</span>
+            )}
+            {property.weeklyRate && (
+              <span className="text-right text-muted-foreground">${Number(property.weeklyRate).toLocaleString()}/week</span>
+            )}
+            {property.monthlyRate && (
+              <span className="text-muted-foreground">${Number(property.monthlyRate).toLocaleString()}/month</span>
+            )}
           </div>
         </div>
       </CardContent>

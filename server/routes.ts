@@ -7,9 +7,7 @@ import { eq, and, gte, lte } from "drizzle-orm";
 export function registerRoutes(app: Express): Server {
   // Properties endpoints
   app.get("/api/properties", async (_req, res) => {
-    const allProperties = await db.query.properties.findMany({
-      with: { guests: true },
-    });
+    const allProperties = await db.query.properties.findMany();
     res.json(allProperties);
   });
 
@@ -21,7 +19,7 @@ export function registerRoutes(app: Express): Server {
   // Guests endpoints
   app.get("/api/guests", async (_req, res) => {
     const allGuests = await db.query.guests.findMany({
-      with: { property: true, payments: true },
+      with: { property: true },
     });
     res.json(allGuests);
   });
@@ -59,7 +57,7 @@ export function registerRoutes(app: Express): Server {
   app.get("/api/guests/:id", async (req, res) => {
     const guest = await db.query.guests.findFirst({
       where: eq(guests.id, parseInt(req.params.id)),
-      with: { property: true, payments: true },
+      with: { property: true },
     });
     if (!guest) return res.status(404).send("Guest not found");
     res.json(guest);

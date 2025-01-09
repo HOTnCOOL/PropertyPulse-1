@@ -8,7 +8,10 @@ export const properties = pgTable("properties", {
   description: text("description").notNull(),
   type: text("type").notNull(), // studio, room, floor, house
   capacity: integer("capacity").notNull(),
-  rate: numeric("rate").notNull(),
+  hourlyRate: numeric("hourly_rate"),
+  rate: numeric("rate").notNull(), // nightly rate
+  weeklyRate: numeric("weekly_rate"),
+  monthlyRate: numeric("monthly_rate"),
   isOccupied: boolean("is_occupied").default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
