@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { db } from "@db";
-import { properties, guests, payments, todos } from "@db/schema";
+import { properties, guests, payments, todos, assets } from "@db/schema";
 import { eq, and, gte, lte } from "drizzle-orm";
 
 export function registerRoutes(app: Express): Server {
@@ -65,7 +65,7 @@ export function registerRoutes(app: Express): Server {
 
   // Payments endpoints
   app.get("/api/payments", async (req, res) => {
-    const { startDate, endDate, status } = req.query;
+    const { startDate, endDate, status, guestId } = req.query;
     let query = db.select().from(payments);
 
     if (startDate && endDate) {
@@ -81,13 +81,73 @@ export function registerRoutes(app: Express): Server {
       query = query.where(eq(payments.status, status as string));
     }
 
+    if (guestId) {
+      query = query.where(eq(payments.guestId, parseInt(guestId as string)));
+    }
+
     const allPayments = await query;
     res.json(allPayments);
   });
 
   app.post("/api/payments", async (req, res) => {
-    const payment = await db.insert(payments).values(req.body).returning();
+    const payment = await db.insert(payments).values({
+      ...req.body,
+      confirmedAt: req.body.status === 'confirmed' ? new Date() : null,
+    }).returning();
+
+    // Update assets if payment is confirmed
+    if (req.body.status === 'confirmed') {
+      await db.insert(assets).values({
+        type: req.body.method === 'cash' ? 'cash' : 'bank',
+        amount: req.body.amount,
+        date: new Date(),
+        description: `Payment from guest ${req.body.guestId}`,
+        paymentId: payment[0].id,
+      });
+    }
+
     res.json(payment[0]);
+  });
+
+  app.patch("/api/payments/:id/confirm", async (req, res) => {
+    const payment = await db.transaction(async (tx) => {
+      // Update payment status
+      const [updatedPayment] = await tx
+        .update(payments)
+        .set({
+          status: 'confirmed',
+          confirmedBy: req.body.confirmedBy,
+          confirmedAt: new Date(),
+        })
+        .where(eq(payments.id, parseInt(req.params.id)))
+        .returning();
+
+      // Add to assets
+      await tx.insert(assets).values({
+        type: updatedPayment.method === 'cash' ? 'cash' : 'bank',
+        amount: updatedPayment.amount,
+        date: new Date(),
+        description: `Payment from guest ${updatedPayment.guestId}`,
+        paymentId: updatedPayment.id,
+      });
+
+      return updatedPayment;
+    });
+
+    res.json(payment);
+  });
+
+  // Assets endpoints
+  app.get("/api/assets", async (req, res) => {
+    const { type } = req.query;
+    let query = db.select().from(assets);
+
+    if (type) {
+      query = query.where(eq(assets.type, type as string));
+    }
+
+    const allAssets = await query;
+    res.json(allAssets);
   });
 
   // Todos endpoints

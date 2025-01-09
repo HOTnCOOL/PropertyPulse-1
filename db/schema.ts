@@ -7,16 +7,16 @@ export const properties = pgTable("properties", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   description: text("description").notNull(),
-  type: text("type").notNull(), // studio, room, floor, house
+  type: text("type").notNull(),
   capacity: integer("capacity").notNull(),
   hourlyRate: numeric("hourly_rate"),
-  rate: numeric("rate").notNull(), // nightly rate
+  rate: numeric("rate").notNull(),
   weeklyRate: numeric("weekly_rate"),
   monthlyRate: numeric("monthly_rate"),
   isOccupied: boolean("is_occupied").default(false),
   imageUrl: text("image_url"),
   amenities: jsonb("amenities").default('{}').notNull(),
-  bedType: text("bed_type"), // single, double, queen, king
+  bedType: text("bed_type"),
   bathrooms: integer("bathrooms").default(1),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -37,11 +37,25 @@ export const payments = pgTable("payments", {
   id: serial("id").primaryKey(),
   guestId: integer("guest_id").references(() => guests.id),
   amount: numeric("amount").notNull(),
-  status: text("status").notNull(), // pending, paid, refunded
+  status: text("status").notNull(), // pending, confirmed, refunded
   type: text("type").notNull(), // rent, deposit, service
+  method: text("payment_method").notNull(), // cash, bank, card
+  reference: text("reference"), // reference number for bank/card payments
   dueDate: timestamp("due_date").notNull(),
   date: timestamp("date").notNull(),
   description: text("description"),
+  confirmedBy: text("confirmed_by"), // manager who confirmed the payment
+  confirmedAt: timestamp("confirmed_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const assets = pgTable("assets", {
+  id: serial("id").primaryKey(),
+  type: text("type").notNull(), // cash, bank
+  amount: numeric("amount").notNull(),
+  date: timestamp("date").notNull(),
+  description: text("description"),
+  paymentId: integer("payment_id").references(() => payments.id),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -108,3 +122,4 @@ export type Property = typeof properties.$inferSelect;
 export type Guest = typeof guests.$inferSelect;
 export type Payment = typeof payments.$inferSelect;
 export type Todo = typeof todos.$inferSelect;
+export type Asset = typeof assets.$inferSelect;
