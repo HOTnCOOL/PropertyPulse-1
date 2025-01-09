@@ -41,6 +41,7 @@ export const payments = pgTable("payments", {
   type: text("type").notNull(), // rent, deposit, service
   dueDate: timestamp("due_date").notNull(),
   date: timestamp("date").notNull(),
+  description: text("description"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

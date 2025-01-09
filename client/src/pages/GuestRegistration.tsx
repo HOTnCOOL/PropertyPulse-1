@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -31,7 +31,9 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { insertGuestSchema, type Property } from "@db/schema";
 import GuestList from "../components/GuestList";
-import { type Guest } from "@db/schema"; // Added import for Guest type
+import { type Guest } from "@db/schema";
+import PaymentEstimator from "../components/PaymentEstimator";
+import PaymentHistory from "../components/PaymentHistory";
 
 
 export default function GuestRegistration() {
@@ -59,9 +61,19 @@ export default function GuestRegistration() {
     queryKey: ["/api/properties"],
   });
 
-  const { data: guests = [] } = useQuery<Guest[]>({ //Corrected guests type and added default value
+  const { data: guests = [] } = useQuery<Guest[]>({
     queryKey: ["/api/guests"],
   });
+
+  const selectedProperty = useMemo(() => {
+    if (!properties || !form.getValues("propertyId")) return undefined;
+    return properties.find(p => p.id === form.getValues("propertyId"));
+  }, [properties, form.watch("propertyId")]);
+
+  const { data: payments = [] } = useQuery({ // Added a payments query -  needs a proper queryKey
+    queryKey: ['/api/payments'], // Replace with actual API endpoint
+  });
+
 
   const registerGuest = useMutation({
     mutationFn: async (values: any) => {
@@ -304,12 +316,34 @@ export default function GuestRegistration() {
           </CardContent>
         </Card>
 
+        {selectedProperty && (
+          <PaymentEstimator
+            property={selectedProperty}
+            checkIn={form.watch("checkIn")}
+            checkOut={form.watch("checkOut")}
+          />
+        )}
+
         <Card>
           <CardHeader>
             <CardTitle>Recent Registrations</CardTitle>
           </CardHeader>
           <CardContent>
-            <GuestList guests={guests.slice(0, 5)} /> {/*Corrected slice*/}
+            <GuestList guests={guests.slice(0, 5)} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Payment History</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <PaymentHistory
+              payments={form.getValues("propertyId")
+                ? payments?.filter(p => p.guestId === form.getValues("propertyId")) || []
+                : []
+              }
+            />
           </CardContent>
         </Card>
       </div>
