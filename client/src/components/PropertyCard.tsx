@@ -49,14 +49,14 @@ interface EditableFieldProps {
   options?: { value: string; label: string }[];
 }
 
-function EditableField({ 
-  isEditing, 
-  value, 
-  onEdit, 
-  onSave, 
-  onCancel, 
+function EditableField({
+  isEditing,
+  value,
+  onEdit,
+  onSave,
+  onCancel,
   type = "text",
-  options = []
+  options = [],
 }: EditableFieldProps) {
   const [editValue, setEditValue] = useState(value);
 
@@ -96,22 +96,16 @@ function EditableField({
         <Input
           type={type}
           value={editValue}
-          onChange={(e) => setEditValue(type === "number" ? Number(e.target.value) : e.target.value)}
+          onChange={(e) =>
+            setEditValue(type === "number" ? Number(e.target.value) : e.target.value)
+          }
           className="w-[180px]"
         />
       )}
-      <Button
-        size="sm"
-        variant="ghost"
-        onClick={() => onSave(editValue)}
-      >
+      <Button size="sm" variant="ghost" onClick={() => onSave(editValue)}>
         <Check className="h-4 w-4" />
       </Button>
-      <Button
-        size="sm"
-        variant="ghost"
-        onClick={onCancel}
-      >
+      <Button size="sm" variant="ghost" onClick={onCancel}>
         <X className="h-4 w-4" />
       </Button>
     </div>
@@ -137,7 +131,7 @@ export default function PropertyCard({ property, onEdit }: PropertyCardProps) {
   };
 
   const updateField = useMutation({
-    mutationFn: async ({ field, value }: { field: string, value: any }) => {
+    mutationFn: async ({ field, value }: { field: string; value: any }) => {
       const response = await fetch(`/api/properties/${property.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -234,19 +228,19 @@ export default function PropertyCard({ property, onEdit }: PropertyCardProps) {
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
           <EditableField
-            isEditing={editingField === 'name'}
+            isEditing={editingField === "name"}
             value={property.name}
-            onEdit={() => setEditingField('name')}
-            onSave={(value) => updateField.mutate({ field: 'name', value })}
+            onEdit={() => setEditingField("name")}
+            onSave={(value) => updateField.mutate({ field: "name", value })}
             onCancel={() => setEditingField(null)}
           />
           <div className="flex items-center gap-2 text-sm font-normal">
             <Users className="h-4 w-4" />
             <EditableField
-              isEditing={editingField === 'capacity'}
+              isEditing={editingField === "capacity"}
               value={property.capacity}
-              onEdit={() => setEditingField('capacity')}
-              onSave={(value) => updateField.mutate({ field: 'capacity', value })}
+              onEdit={() => setEditingField("capacity")}
+              onSave={(value) => updateField.mutate({ field: "capacity", value })}
               onCancel={() => setEditingField(null)}
             />
           </div>
@@ -257,10 +251,10 @@ export default function PropertyCard({ property, onEdit }: PropertyCardProps) {
         <div className="space-y-4">
           <div className="flex justify-between items-start">
             <EditableField
-              isEditing={editingField === 'description'}
+              isEditing={editingField === "description"}
               value={property.description}
-              onEdit={() => setEditingField('description')}
-              onSave={(value) => updateField.mutate({ field: 'description', value })}
+              onEdit={() => setEditingField("description")}
+              onSave={(value) => updateField.mutate({ field: "description", value })}
               onCancel={() => setEditingField(null)}
             />
             <div className="flex gap-2">
@@ -292,17 +286,17 @@ export default function PropertyCard({ property, onEdit }: PropertyCardProps) {
             <div className="flex items-center gap-2">
               <Bed className="h-4 w-4" />
               <EditableField
-                isEditing={editingField === 'bedType'}
+                isEditing={editingField === "bedType"}
                 value={property.bedType || ""}
-                onEdit={() => setEditingField('bedType')}
-                onSave={(value) => updateField.mutate({ field: 'bedType', value })}
+                onEdit={() => setEditingField("bedType")}
+                onSave={(value) => updateField.mutate({ field: "bedType", value })}
                 onCancel={() => setEditingField(null)}
                 type="select"
                 options={[
-                  { value: 'single', label: 'Single' },
-                  { value: 'double', label: 'Double' },
-                  { value: 'queen', label: 'Queen' },
-                  { value: 'king', label: 'King' },
+                  { value: "single", label: "Single" },
+                  { value: "double", label: "Double" },
+                  { value: "queen", label: "Queen" },
+                  { value: "king", label: "King" },
                 ]}
               />
             </div>
@@ -310,10 +304,12 @@ export default function PropertyCard({ property, onEdit }: PropertyCardProps) {
               <div className="flex items-center gap-2">
                 <Bath className="h-4 w-4" />
                 <EditableField
-                  isEditing={editingField === 'bathrooms'}
+                  isEditing={editingField === "bathrooms"}
                   value={property.bathrooms}
-                  onEdit={() => setEditingField('bathrooms')}
-                  onSave={(value) => updateField.mutate({ field: 'bathrooms', value: Number(value) })}
+                  onEdit={() => setEditingField("bathrooms")}
+                  onSave={(value) =>
+                    updateField.mutate({ field: "bathrooms", value: Number(value) })
+                  }
                   onCancel={() => setEditingField(null)}
                   type="number"
                 />
@@ -325,51 +321,67 @@ export default function PropertyCard({ property, onEdit }: PropertyCardProps) {
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
               <div className="text-lg font-semibold">
-                $<EditableField
-                  isEditing={editingField === 'rate'}
+                $
+                <EditableField
+                  isEditing={editingField === "rate"}
                   value={Number(property.rate)}
-                  onEdit={() => setEditingField('rate')}
-                  onSave={(value) => updateField.mutate({ field: 'rate', value: Number(value) })}
+                  onEdit={() => setEditingField("rate")}
+                  onSave={(value) =>
+                    updateField.mutate({ field: "rate", value: Number(value) })
+                  }
                   onCancel={() => setEditingField(null)}
                   type="number"
-                />/night
+                />
+                /night
               </div>
               {property.hourlyRate && (
                 <div className="text-sm text-muted-foreground">
-                  $<EditableField
-                    isEditing={editingField === 'hourlyRate'}
+                  $
+                  <EditableField
+                    isEditing={editingField === "hourlyRate"}
                     value={Number(property.hourlyRate)}
-                    onEdit={() => setEditingField('hourlyRate')}
-                    onSave={(value) => updateField.mutate({ field: 'hourlyRate', value: Number(value) })}
+                    onEdit={() => setEditingField("hourlyRate")}
+                    onSave={(value) =>
+                      updateField.mutate({ field: "hourlyRate", value: Number(value) })
+                    }
                     onCancel={() => setEditingField(null)}
                     type="number"
-                  />/hour
+                  />
+                  /hour
                 </div>
               )}
             </div>
             <div className="space-y-1 text-right">
               {property.weeklyRate && (
                 <div className="text-sm text-muted-foreground">
-                  $<EditableField
-                    isEditing={editingField === 'weeklyRate'}
+                  $
+                  <EditableField
+                    isEditing={editingField === "weeklyRate"}
                     value={Number(property.weeklyRate)}
-                    onEdit={() => setEditingField('weeklyRate')}
-                    onSave={(value) => updateField.mutate({ field: 'weeklyRate', value: Number(value) })}
+                    onEdit={() => setEditingField("weeklyRate")}
+                    onSave={(value) =>
+                      updateField.mutate({ field: "weeklyRate", value: Number(value) })
+                    }
                     onCancel={() => setEditingField(null)}
                     type="number"
-                  />/week
+                  />
+                  /week
                 </div>
               )}
               {property.monthlyRate && (
                 <div className="text-sm text-muted-foreground">
-                  $<EditableField
-                    isEditing={editingField === 'monthlyRate'}
+                  $
+                  <EditableField
+                    isEditing={editingField === "monthlyRate"}
                     value={Number(property.monthlyRate)}
-                    onEdit={() => setEditingField('monthlyRate')}
-                    onSave={(value) => updateField.mutate({ field: 'monthlyRate', value: Number(value) })}
+                    onEdit={() => setEditingField("monthlyRate")}
+                    onSave={(value) =>
+                      updateField.mutate({ field: "monthlyRate", value: Number(value) })
+                    }
                     onCancel={() => setEditingField(null)}
                     type="number"
-                  />/month
+                  />
+                  /month
                 </div>
               )}
             </div>
@@ -386,6 +398,48 @@ export default function PropertyCard({ property, onEdit }: PropertyCardProps) {
             disabled={{ before: new Date() }}
             className="rounded-md border"
           />
+          {dateRange?.from && dateRange?.to && (
+            <div className="mt-4">
+              <Button className="w-full"
+                onClick={async () => {
+                  try {
+                    const response = await fetch(
+                      `/api/properties/${property.id}/check-availability`,
+                      {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          checkIn: dateRange.from,
+                          checkOut: dateRange.to,
+                        }),
+                      }
+                    );
+
+                    if (!response.ok) {
+                      throw new Error("Failed to check availability");
+                    }
+
+                    const { available } = await response.json();
+                    toast({
+                      title: available ? "Available!" : "Not Available",
+                      description: available
+                        ? "The property is available for your selected dates"
+                        : "Sorry, the property is not available for these dates",
+                      variant: available ? "default" : "destructive",
+                    });
+                  } catch (error) {
+                    toast({
+                      title: "Error",
+                      description: "Failed to check availability",
+                      variant: "destructive",
+                    });
+                  }
+                }}
+              >
+                Check Availability
+              </Button>
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>

@@ -4,7 +4,7 @@ import multer from "multer";
 import path from "path";
 import { db } from "@db";
 import { properties, guests, payments, todos, assets } from "@db/schema";
-import { eq, and, gte, lte } from "drizzle-orm";
+import { eq, and, gte, lte, or } from "drizzle-orm";
 import express from "express";
 
 // Configure multer for file upload
@@ -114,6 +114,40 @@ export function registerRoutes(app: Express): Server {
     } catch (error) {
       console.error(error);
       res.status(500).send("Failed to upload images");
+    }
+  });
+
+  // New endpoint for checking property availability
+  app.post("/api/properties/:id/check-availability", async (req, res) => {
+    const propertyId = parseInt(req.params.id);
+    const { checkIn, checkOut } = req.body;
+
+    try {
+      // Find any overlapping bookings
+      const overlappingBookings = await db.query.guests.findFirst({
+        where: and(
+          eq(guests.propertyId, propertyId),
+          or(
+            and(
+              lte(guests.checkIn, new Date(checkIn)),
+              gte(guests.checkOut, new Date(checkIn))
+            ),
+            and(
+              lte(guests.checkIn, new Date(checkOut)),
+              gte(guests.checkOut, new Date(checkOut))
+            ),
+            and(
+              gte(guests.checkIn, new Date(checkIn)),
+              lte(guests.checkOut, new Date(checkOut))
+            )
+          )
+        )
+      });
+
+      res.json({ available: !overlappingBookings });
+    } catch (error) {
+      console.error('Error checking availability:', error);
+      res.status(500).send("Failed to check availability");
     }
   });
 
