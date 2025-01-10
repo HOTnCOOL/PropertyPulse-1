@@ -1,0 +1,34 @@
+Warning: A component is changing an uncontrolled input to be controlled. This is likely caused by the value changing from undefined to a defined value, which should not happen. Decide between using a controlled or uncontrolled input element for the lifetime of the component. More info: https://reactjs.org/link/controlled-components%s 
+    at input
+    at _c (https://a3cde7ed-73dd-428e-8e2b-eab504bafa13-00-3juu4od8irud3.kirk.replit.dev/src/components/ui/input.tsx:20:11)
+    at https://a3cde7ed-73dd-428e-8e2b-eab504bafa13-00-3juu4od8irud3.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-UACHJROW.js?v=69ed70af:52:11
+    at https://a3cde7ed-73dd-428e-8e2b-eab504bafa13-00-3juu4od8irud3.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-UACHJROW.js?v=69ed70af:33:11
+    at https://a3cde7ed-73dd-428e-8e2b-eab504bafa13-00-3juu4od8irud3.kirk.replit.dev/src/components/ui/form.tsx:127:9
+    at div
+    at https://a3cde7ed-73dd-428e-8e2b-eab504bafa13-00-3juu4od8irud3.kirk.replit.dev/src/components/ui/form.tsx:71:6
+    at Controller (https://a3cde7ed-73dd-428e-8e2b-eab504bafa13-00-3juu4od8irud3.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-YABUFNLM.js?v=69ed70af:313:35)
+    at FormField (https://a3cde7ed-73dd-428e-8e2b-eab504bafa13-00-3juu4od8irud3.kirk.replit.dev/src/components/ui/form.tsx:32:6)
+    at div
+    at form
+    at FormProvider (https://a3cde7ed-73dd-428e-8e2b-eab504bafa13-00-3juu4od8irud3.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-YABUFNLM.js?v=69ed70af:102:11)
+    at div
+    at _c9 (https://a3cde7ed-73dd-428e-8e2b-eab504bafa13-00-3juu4od8irud3.kirk.replit.dev/src/components/ui/card.tsx:106:12)
+    at div
+    at _c (https://a3cde7ed-73dd-428e-8e2b-eab504bafa13-00-3juu4od8irud3.kirk.replit.dev/src/components/ui/card.tsx:20:11)
+    at div
+    at https://a3cde7ed-73dd-428e-8e2b-eab504bafa13-00-3juu4od8irud3.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RLTE5R7I.js?v=69ed70af:41:13
+    at https://a3cde7ed-73dd-428e-8e2b-eab504bafa13-00-3juu4od8irud3.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-collapsible.js?v=69ed70af:106:11
+    at Presence (https://a3cde7ed-73dd-428e-8e2b-eab504bafa13-00-3juu4od8irud3.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-4WDTRNMG.js?v=69ed70af:24:11)
+    at https://a3cde7ed-73dd-428e-8e2b-eab504bafa13-00-3juu4od8irud3.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-collapsible.js?v=69ed70af:99:13
+    at div
+    at https://a3cde7ed-73dd-428e-8e2b-eab504bafa13-00-3juu4od8irud3.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RLTE5R7I.js?v=69ed70af:41:13
+    at Provider (https://a3cde7ed-73dd-428e-8e2b-eab504bafa13-00-3juu4od8irud3.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-EEDRIIRB.js?v=69ed70af:32:15)
+    at https://a3cde7ed-73dd-428e-8e2b-eab504bafa13-00-3juu4od8irud3.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-collapsible.js?v=69ed70af:40:7
+    at div
+    at Properties (https://a3cde7ed-73dd-428e-8e2b-eab504bafa13-00-3juu4od8irud3.kirk.replit.dev/src/pages/Properties.tsx:52:21)
+    at Route (https://a3cde7ed-73dd-428e-8e2b-eab504bafa13-00-3juu4od8irud3.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=69ed70af:323:16)
+    at Switch (https://a3cde7ed-73dd-428e-8e2b-eab504bafa13-00-3juu4od8irud3.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=69ed70af:379:17)
+    at main
+    at div
+    at App
+    at QueryClientProvider (https://a3cde7ed-73dd-428e-8e2b-eab504bafa13-00-3juu4od8irud3.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=69ed70af:2829:3)

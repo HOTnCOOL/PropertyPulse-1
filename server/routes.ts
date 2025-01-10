@@ -7,6 +7,7 @@ import { properties, guests, payments, todos, assets, bookings } from "@db/schem
 import { eq, and, gte, lte, or } from "drizzle-orm";
 import express from "express";
 import { addDays, parseISO, isWithinInterval } from "date-fns";
+import { sql } from "drizzle-orm";
 
 // Configure multer for file upload
 const storage = multer.diskStorage({
@@ -207,18 +208,18 @@ export function registerRoutes(app: Express): Server {
     if (startDate && endDate) {
       query = query.where(
         and(
-          gte(payments.date, new Date(startDate as string)),
-          lte(payments.date, new Date(endDate as string))
+          gte(payments.date, new Date(String(startDate))),
+          lte(payments.date, new Date(String(endDate)))
         )
       );
     }
 
     if (status) {
-      query = query.where(eq(payments.status, status as string));
+      query = query.where(eq(payments.status, String(status)));
     }
 
     if (guestId) {
-      query = query.where(eq(payments.guestId, parseInt(guestId as string)));
+      query = query.where(eq(payments.guestId, Number(guestId)));
     }
 
     const allPayments = await query;
@@ -279,7 +280,7 @@ export function registerRoutes(app: Express): Server {
     let query = db.select().from(assets);
 
     if (type) {
-      query = query.where(eq(assets.type, type as string));
+      query = query.where(eq(assets.type, String(type)));
     }
 
     const allAssets = await query;
@@ -340,15 +341,17 @@ export function registerRoutes(app: Express): Server {
       }
 
       // Create the booking
-      const [booking] = await db.insert(bookings).values({
-        propertyId,
-        guestId,
-        checkIn: new Date(checkIn),
-        checkOut: new Date(checkOut),
-        totalAmount,
-        notes,
-        status: "pending",
-      }).returning();
+      const [booking] = await db.insert(bookings)
+        .values({
+          propertyId,
+          guestId,
+          checkIn: new Date(checkIn),
+          checkOut: new Date(checkOut),
+          totalAmount,
+          notes,
+          status: "pending",
+        })
+        .returning();
 
       res.json(booking);
     } catch (error) {
@@ -360,17 +363,21 @@ export function registerRoutes(app: Express): Server {
   app.get("/api/bookings", async (req, res) => {
     try {
       const { propertyId, status } = req.query;
-      let query = db.select().from(bookings);
+      let queryBuilder = db.select().from(bookings);
 
       if (propertyId) {
-        query = query.where(eq(bookings.propertyId, parseInt(propertyId as string)));
+        queryBuilder = queryBuilder.where(
+          eq(bookings.propertyId, Number(propertyId))
+        );
       }
 
       if (status) {
-        query = query.where(eq(bookings.status, status as string));
+        queryBuilder = queryBuilder.where(
+          eq(bookings.status, String(status))
+        );
       }
 
-      const allBookings = await query;
+      const allBookings = await queryBuilder;
       res.json(allBookings);
     } catch (error) {
       console.error('Error fetching bookings:', error);
@@ -387,8 +394,8 @@ export function registerRoutes(app: Express): Server {
         return res.status(400).send("Start and end dates are required");
       }
 
-      const startDate = parseISO(start as string);
-      const endDate = parseISO(end as string);
+      const startDate = parseISO(String(start));
+      const endDate = parseISO(String(end));
 
       // Get all confirmed bookings for this property within the date range
       const existingBookings = await db.query.bookings.findMany({

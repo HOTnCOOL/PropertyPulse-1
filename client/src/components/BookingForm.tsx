@@ -15,8 +15,18 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { insertBookingSchema, type Property } from "@db/schema";
+import { type Property } from "@db/schema";
 import * as z from "zod";
+
+// Define the booking schema
+const bookingSchema = z.object({
+  propertyId: z.number(),
+  checkIn: z.date(),
+  checkOut: z.date(),
+  notes: z.string().optional(),
+  status: z.string(),
+  totalAmount: z.number(),
+});
 
 interface BookingFormProps {
   property: Property;
@@ -27,16 +37,16 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedDates, setSelectedDates] = useState<{
-    from: Date;
-    to: Date;
-  } | null>(null);
+    from: Date | undefined;
+    to: Date | undefined;
+  }>({ from: undefined, to: undefined });
 
   // Query for availability data
   const { data: availabilityData } = useQuery({
     queryKey: [
       `/api/properties/${property.id}/availability`,
-      selectedDates?.from,
-      selectedDates?.to,
+      selectedDates?.from?.toISOString(),
+      selectedDates?.to?.toISOString(),
     ],
     queryFn: async () => {
       if (!selectedDates?.from || !selectedDates?.to) return null;
@@ -49,12 +59,10 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
     enabled: !!selectedDates?.from && !!selectedDates?.to,
   });
 
-  const form = useForm({
-    resolver: zodResolver(insertBookingSchema),
+  const form = useForm<z.infer<typeof bookingSchema>>({
+    resolver: zodResolver(bookingSchema),
     defaultValues: {
       propertyId: property.id,
-      checkIn: undefined,
-      checkOut: undefined,
       notes: "",
       status: "pending",
       totalAmount: 0,
@@ -62,7 +70,7 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
   });
 
   const createBooking = useMutation({
-    mutationFn: async (values: z.infer<typeof insertBookingSchema>) => {
+    mutationFn: async (values: z.infer<typeof bookingSchema>) => {
       const response = await fetch("/api/bookings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -77,7 +85,7 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/bookings"] });
       form.reset();
-      setSelectedDates(null);
+      setSelectedDates({ from: undefined, to: undefined });
       toast({
         title: "Success",
         description: "Booking request submitted successfully",
@@ -98,7 +106,7 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
     return days * Number(property.rate);
   }
 
-  function onSubmit(values: z.infer<typeof insertBookingSchema>) {
+  function onSubmit(values: z.infer<typeof bookingSchema>) {
     if (!selectedDates?.from || !selectedDates?.to) {
       toast({
         title: "Error",
@@ -122,13 +130,11 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
       return;
     }
 
-    const totalAmount = calculateTotalAmount(selectedDates.from, selectedDates.to);
-
     createBooking.mutate({
       ...values,
       checkIn: selectedDates.from,
       checkOut: selectedDates.to,
-      totalAmount,
+      totalAmount: calculateTotalAmount(selectedDates.from, selectedDates.to),
     });
   }
 
@@ -145,12 +151,15 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
                 <Calendar
                   mode="range"
                   selected={{
-                    from: selectedDates?.from,
-                    to: selectedDates?.to,
+                    from: selectedDates.from,
+                    to: selectedDates.to,
                   }}
                   onSelect={(range) => {
                     if (range?.from && range?.to) {
-                      setSelectedDates(range);
+                      setSelectedDates({
+                        from: range.from,
+                        to: range.to,
+                      });
                       form.setValue("checkIn", range.from);
                       form.setValue("checkOut", range.to);
                     }
@@ -172,12 +181,8 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
         {selectedDates?.from && selectedDates?.to && (
           <>
             <div className="text-sm">
-              <p>
-                Check-in: {format(selectedDates.from, "MMM dd, yyyy")}
-              </p>
-              <p>
-                Check-out: {format(selectedDates.to, "MMM dd, yyyy")}
-              </p>
+              <p>Check-in: {format(selectedDates.from, "MMM dd, yyyy")}</p>
+              <p>Check-out: {format(selectedDates.to, "MMM dd, yyyy")}</p>
               <p className="font-semibold mt-2">
                 Total: ${calculateTotalAmount(selectedDates.from, selectedDates.to)}
               </p>
