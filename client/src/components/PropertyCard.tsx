@@ -2,6 +2,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Bed,
   Tv,
@@ -16,6 +24,9 @@ import {
   Trash2,
   ChevronLeft,
   ChevronRight,
+  Check,
+  X,
+  Pencil,
 } from "lucide-react";
 import { useState } from "react";
 import { type DateRange } from "react-day-picker";
@@ -28,9 +39,89 @@ interface PropertyCardProps {
   onEdit?: (property: Property) => void;
 }
 
+interface EditableFieldProps {
+  isEditing: boolean;
+  value: string | number;
+  onEdit: () => void;
+  onSave: (value: string | number) => void;
+  onCancel: () => void;
+  type?: "text" | "number" | "select";
+  options?: { value: string; label: string }[];
+}
+
+function EditableField({ 
+  isEditing, 
+  value, 
+  onEdit, 
+  onSave, 
+  onCancel, 
+  type = "text",
+  options = []
+}: EditableFieldProps) {
+  const [editValue, setEditValue] = useState(value);
+
+  if (!isEditing) {
+    return (
+      <div className="group flex items-center gap-2">
+        <span>{value}</span>
+        <button
+          onClick={onEdit}
+          className="opacity-0 group-hover:opacity-100 transition-opacity"
+        >
+          <Pencil className="h-4 w-4 text-muted-foreground" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      {type === "select" ? (
+        <Select
+          value={String(editValue)}
+          onValueChange={(value) => setEditValue(value)}
+        >
+          <SelectTrigger className="w-[180px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {options.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ) : (
+        <Input
+          type={type}
+          value={editValue}
+          onChange={(e) => setEditValue(type === "number" ? Number(e.target.value) : e.target.value)}
+          className="w-[180px]"
+        />
+      )}
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={() => onSave(editValue)}
+      >
+        <Check className="h-4 w-4" />
+      </Button>
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={onCancel}
+      >
+        <X className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+}
+
 export default function PropertyCard({ property, onEdit }: PropertyCardProps) {
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [editingField, setEditingField] = useState<string | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const amenities = property.amenities as Record<string, boolean>;
@@ -44,6 +135,33 @@ export default function PropertyCard({ property, onEdit }: PropertyCardProps) {
     fireplace: { icon: Flame, label: "Fireplace" },
     sofa: { icon: Sofa, label: "Sofa" },
   };
+
+  const updateField = useMutation({
+    mutationFn: async ({ field, value }: { field: string, value: any }) => {
+      const response = await fetch(`/api/properties/${property.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [field]: value }),
+      });
+      if (!response.ok) throw new Error("Failed to update property");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/properties"] });
+      setEditingField(null);
+      toast({
+        title: "Success",
+        description: "Property has been updated",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update property",
+        variant: "destructive",
+      });
+    },
+  });
 
   const deleteProperty = useMutation({
     mutationFn: async () => {
@@ -115,10 +233,22 @@ export default function PropertyCard({ property, onEdit }: PropertyCardProps) {
 
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
-          <span>{property.name}</span>
+          <EditableField
+            isEditing={editingField === 'name'}
+            value={property.name}
+            onEdit={() => setEditingField('name')}
+            onSave={(value) => updateField.mutate({ field: 'name', value })}
+            onCancel={() => setEditingField(null)}
+          />
           <div className="flex items-center gap-2 text-sm font-normal">
             <Users className="h-4 w-4" />
-            <span>Up to {property.capacity} guests</span>
+            <EditableField
+              isEditing={editingField === 'capacity'}
+              value={property.capacity}
+              onEdit={() => setEditingField('capacity')}
+              onSave={(value) => updateField.mutate({ field: 'capacity', value })}
+              onCancel={() => setEditingField(null)}
+            />
           </div>
         </CardTitle>
       </CardHeader>
@@ -126,7 +256,13 @@ export default function PropertyCard({ property, onEdit }: PropertyCardProps) {
       <CardContent className="space-y-6">
         <div className="space-y-4">
           <div className="flex justify-between items-start">
-            <p className="text-sm text-muted-foreground">{property.description}</p>
+            <EditableField
+              isEditing={editingField === 'description'}
+              value={property.description}
+              onEdit={() => setEditingField('description')}
+              onSave={(value) => updateField.mutate({ field: 'description', value })}
+              onCancel={() => setEditingField(null)}
+            />
             <div className="flex gap-2">
               {onEdit && (
                 <Button
@@ -155,54 +291,85 @@ export default function PropertyCard({ property, onEdit }: PropertyCardProps) {
           <div className="flex flex-wrap gap-4">
             <div className="flex items-center gap-2">
               <Bed className="h-4 w-4" />
-              <span className="text-sm">{property.bedType} Bed</span>
+              <EditableField
+                isEditing={editingField === 'bedType'}
+                value={property.bedType || ""}
+                onEdit={() => setEditingField('bedType')}
+                onSave={(value) => updateField.mutate({ field: 'bedType', value })}
+                onCancel={() => setEditingField(null)}
+                type="select"
+                options={[
+                  { value: 'single', label: 'Single' },
+                  { value: 'double', label: 'Double' },
+                  { value: 'queen', label: 'Queen' },
+                  { value: 'king', label: 'King' },
+                ]}
+              />
             </div>
             {property.bathrooms && (
               <div className="flex items-center gap-2">
                 <Bath className="h-4 w-4" />
-                <span className="text-sm">
-                  {property.bathrooms} Bathroom{property.bathrooms > 1 ? 's' : ''}
-                </span>
+                <EditableField
+                  isEditing={editingField === 'bathrooms'}
+                  value={property.bathrooms}
+                  onEdit={() => setEditingField('bathrooms')}
+                  onSave={(value) => updateField.mutate({ field: 'bathrooms', value: Number(value) })}
+                  onCancel={() => setEditingField(null)}
+                  type="number"
+                />
               </div>
             )}
-          </div>
-
-          {/* Amenities */}
-          <div className="flex flex-wrap gap-3">
-            {Object.entries(amenityIcons).map(([key, { icon: Icon, label }]) => (
-              amenities[key] && (
-                <div
-                  key={key}
-                  className="flex items-center gap-1 text-xs text-muted-foreground bg-accent/50 px-2 py-1 rounded-md"
-                >
-                  <Icon className="h-3 w-3" />
-                  <span>{label}</span>
-                </div>
-              )
-            ))}
           </div>
 
           {/* Rates */}
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
               <div className="text-lg font-semibold">
-                ${Number(property.rate).toLocaleString()}/night
+                $<EditableField
+                  isEditing={editingField === 'rate'}
+                  value={Number(property.rate)}
+                  onEdit={() => setEditingField('rate')}
+                  onSave={(value) => updateField.mutate({ field: 'rate', value: Number(value) })}
+                  onCancel={() => setEditingField(null)}
+                  type="number"
+                />/night
               </div>
               {property.hourlyRate && (
                 <div className="text-sm text-muted-foreground">
-                  ${Number(property.hourlyRate).toLocaleString()}/hour
+                  $<EditableField
+                    isEditing={editingField === 'hourlyRate'}
+                    value={Number(property.hourlyRate)}
+                    onEdit={() => setEditingField('hourlyRate')}
+                    onSave={(value) => updateField.mutate({ field: 'hourlyRate', value: Number(value) })}
+                    onCancel={() => setEditingField(null)}
+                    type="number"
+                  />/hour
                 </div>
               )}
             </div>
             <div className="space-y-1 text-right">
               {property.weeklyRate && (
                 <div className="text-sm text-muted-foreground">
-                  ${Number(property.weeklyRate).toLocaleString()}/week
+                  $<EditableField
+                    isEditing={editingField === 'weeklyRate'}
+                    value={Number(property.weeklyRate)}
+                    onEdit={() => setEditingField('weeklyRate')}
+                    onSave={(value) => updateField.mutate({ field: 'weeklyRate', value: Number(value) })}
+                    onCancel={() => setEditingField(null)}
+                    type="number"
+                  />/week
                 </div>
               )}
               {property.monthlyRate && (
                 <div className="text-sm text-muted-foreground">
-                  ${Number(property.monthlyRate).toLocaleString()}/month
+                  $<EditableField
+                    isEditing={editingField === 'monthlyRate'}
+                    value={Number(property.monthlyRate)}
+                    onEdit={() => setEditingField('monthlyRate')}
+                    onSave={(value) => updateField.mutate({ field: 'monthlyRate', value: Number(value) })}
+                    onCancel={() => setEditingField(null)}
+                    type="number"
+                  />/month
                 </div>
               )}
             </div>
