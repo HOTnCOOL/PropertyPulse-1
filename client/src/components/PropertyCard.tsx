@@ -33,6 +33,7 @@ import { type DateRange } from "react-day-picker";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import type { Property } from "@db/schema";
+import BookingForm from "./BookingForm";
 
 interface PropertyCardProps {
   property: Property;
@@ -388,58 +389,18 @@ export default function PropertyCard({ property, onEdit }: PropertyCardProps) {
           </div>
         </div>
 
-        {/* Availability Calendar */}
+        {/* Replace the old calendar section with the new BookingForm */}
         <div className="border rounded-lg p-4">
-          <h4 className="text-sm font-medium mb-2">Check Availability</h4>
-          <Calendar
-            mode="range"
-            selected={dateRange}
-            onSelect={setDateRange}
-            disabled={{ before: new Date() }}
-            className="rounded-md border"
+          <h4 className="text-sm font-medium mb-2">Book this Property</h4>
+          <BookingForm
+            property={property}
+            onSuccess={() => {
+              toast({
+                title: "Success",
+                description: "Booking request submitted successfully",
+              });
+            }}
           />
-          {dateRange?.from && dateRange?.to && (
-            <div className="mt-4">
-              <Button className="w-full"
-                onClick={async () => {
-                  try {
-                    const response = await fetch(
-                      `/api/properties/${property.id}/check-availability`,
-                      {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          checkIn: dateRange.from,
-                          checkOut: dateRange.to,
-                        }),
-                      }
-                    );
-
-                    if (!response.ok) {
-                      throw new Error("Failed to check availability");
-                    }
-
-                    const { available } = await response.json();
-                    toast({
-                      title: available ? "Available!" : "Not Available",
-                      description: available
-                        ? "The property is available for your selected dates"
-                        : "Sorry, the property is not available for these dates",
-                      variant: available ? "default" : "destructive",
-                    });
-                  } catch (error) {
-                    toast({
-                      title: "Error",
-                      description: "Failed to check availability",
-                      variant: "destructive",
-                    });
-                  }
-                }}
-              >
-                Check Availability
-              </Button>
-            </div>
-          )}
         </div>
       </CardContent>
     </Card>

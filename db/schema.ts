@@ -68,8 +68,23 @@ export const todos = pgTable("todos", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const bookings = pgTable("bookings", {
+  id: serial("id").primaryKey(),
+  propertyId: integer("property_id").references(() => properties.id),
+  guestId: integer("guest_id").references(() => guests.id),
+  checkIn: timestamp("check_in").notNull(),
+  checkOut: timestamp("check_out").notNull(),
+  status: text("status").notNull(), // pending, confirmed, cancelled
+  totalAmount: numeric("total_amount", { precision: 10, scale: 0 }).notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Relations
 export const propertiesRelations = relations(properties, ({ many }) => ({
   guests: many(guests),
+  bookings: many(bookings),
 }));
 
 export const guestsRelations = relations(guests, ({ one, many }) => ({
@@ -78,6 +93,7 @@ export const guestsRelations = relations(guests, ({ one, many }) => ({
     references: [properties.id],
   }),
   payments: many(payments),
+  bookings: many(bookings),
 }));
 
 export const paymentsRelations = relations(payments, ({ one }) => ({
@@ -87,6 +103,18 @@ export const paymentsRelations = relations(payments, ({ one }) => ({
   }),
 }));
 
+export const bookingsRelations = relations(bookings, ({ one }) => ({
+  property: one(properties, {
+    fields: [bookings.propertyId],
+    references: [properties.id],
+  }),
+  guest: one(guests, {
+    fields: [bookings.guestId],
+    references: [guests.id],
+  }),
+}));
+
+// Schemas
 const amenitiesSchema = z.object({
   tv: z.boolean().default(false),
   aircon: z.boolean().default(false),
@@ -96,9 +124,7 @@ const amenitiesSchema = z.object({
   sofa: z.boolean().default(false),
 });
 
-const basePropertySchema = createInsertSchema(properties);
-
-export const insertPropertySchema = basePropertySchema.extend({
+export const insertPropertySchema = createInsertSchema(properties).extend({
   amenities: amenitiesSchema,
   capacity: z.string().refine(
     (val) => /^\d+(\+\d+)?$/.test(val),
@@ -111,21 +137,22 @@ export const insertPropertySchema = basePropertySchema.extend({
 });
 
 export const selectPropertySchema = createSelectSchema(properties);
-
 export const insertGuestSchema = createInsertSchema(guests);
 export const selectGuestSchema = createSelectSchema(guests);
-
 export const insertPaymentSchema = createInsertSchema(payments);
 export const selectPaymentSchema = createSelectSchema(payments);
-
 export const insertAssetSchema = createInsertSchema(assets);
 export const selectAssetSchema = createSelectSchema(assets);
-
 export const insertTodoSchema = createInsertSchema(todos);
 export const selectTodoSchema = createSelectSchema(todos);
+export const insertBookingSchema = createInsertSchema(bookings);
+export const selectBookingSchema = createSelectSchema(bookings);
 
+// Types
 export type Property = typeof properties.$inferSelect;
 export type Guest = typeof guests.$inferSelect;
 export type Payment = typeof payments.$inferSelect;
 export type Todo = typeof todos.$inferSelect;
 export type Asset = typeof assets.$inferSelect;
+export type Booking = typeof bookings.$inferSelect;
+export type NewBooking = typeof bookings.$inferInsert;

@@ -3,9 +3,10 @@ import { createServer, type Server } from "http";
 import multer from "multer";
 import path from "path";
 import { db } from "@db";
-import { properties, guests, payments, todos, assets } from "@db/schema";
+import { properties, guests, payments, todos, assets, bookings } from "@db/schema";
 import { eq, and, gte, lte, or } from "drizzle-orm";
 import express from "express";
+import { addDays, parseISO, isWithinInterval } from "date-fns";
 
 // Configure multer for file upload
 const storage = multer.diskStorage({
@@ -304,6 +305,159 @@ export function registerRoutes(app: Express): Server {
       .returning();
     res.json(todo[0]);
   });
+
+  // Bookings endpoints
+  app.post("/api/bookings", async (req, res) => {
+    try {
+      const { propertyId, guestId, checkIn, checkOut, totalAmount, notes } = req.body;
+
+      // Check if the property is available for these dates
+      const overlappingBookings = await db.query.bookings.findFirst({
+        where: and(
+          eq(bookings.propertyId, propertyId),
+          eq(bookings.status, "confirmed"),
+          or(
+            and(
+              lte(bookings.checkIn, new Date(checkIn)),
+              gte(bookings.checkOut, new Date(checkIn))
+            ),
+            and(
+              lte(bookings.checkIn, new Date(checkOut)),
+              gte(bookings.checkOut, new Date(checkOut))
+            ),
+            and(
+              gte(bookings.checkIn, new Date(checkIn)),
+              lte(bookings.checkOut, new Date(checkOut))
+            )
+          )
+        ),
+      });
+
+      if (overlappingBookings) {
+        return res.status(400).json({
+          message: "Property is not available for the selected dates",
+        });
+      }
+
+      // Create the booking
+      const [booking] = await db.insert(bookings).values({
+        propertyId,
+        guestId,
+        checkIn: new Date(checkIn),
+        checkOut: new Date(checkOut),
+        totalAmount,
+        notes,
+        status: "pending",
+      }).returning();
+
+      res.json(booking);
+    } catch (error) {
+      console.error('Error creating booking:', error);
+      res.status(500).send("Failed to create booking");
+    }
+  });
+
+  app.get("/api/bookings", async (req, res) => {
+    try {
+      const { propertyId, status } = req.query;
+      let query = db.select().from(bookings);
+
+      if (propertyId) {
+        query = query.where(eq(bookings.propertyId, parseInt(propertyId as string)));
+      }
+
+      if (status) {
+        query = query.where(eq(bookings.status, status as string));
+      }
+
+      const allBookings = await query;
+      res.json(allBookings);
+    } catch (error) {
+      console.error('Error fetching bookings:', error);
+      res.status(500).send("Failed to fetch bookings");
+    }
+  });
+
+  app.get("/api/properties/:id/availability", async (req, res) => {
+    try {
+      const propertyId = parseInt(req.params.id);
+      const { start, end } = req.query;
+
+      if (!start || !end) {
+        return res.status(400).send("Start and end dates are required");
+      }
+
+      const startDate = parseISO(start as string);
+      const endDate = parseISO(end as string);
+
+      // Get all confirmed bookings for this property within the date range
+      const existingBookings = await db.query.bookings.findMany({
+        where: and(
+          eq(bookings.propertyId, propertyId),
+          eq(bookings.status, "confirmed"),
+          or(
+            and(
+              lte(bookings.checkIn, startDate),
+              gte(bookings.checkOut, startDate)
+            ),
+            and(
+              lte(bookings.checkIn, endDate),
+              gte(bookings.checkOut, endDate)
+            ),
+            and(
+              gte(bookings.checkIn, startDate),
+              lte(bookings.checkOut, endDate)
+            )
+          )
+        ),
+      });
+
+      // Create an array of dates within the range
+      const dates = [];
+      let currentDate = startDate;
+      while (currentDate <= endDate) {
+        const isBooked = existingBookings.some(booking =>
+          isWithinInterval(currentDate, {
+            start: new Date(booking.checkIn),
+            end: new Date(booking.checkOut),
+          })
+        );
+
+        dates.push({
+          date: currentDate.toISOString(),
+          available: !isBooked,
+        });
+
+        currentDate = addDays(currentDate, 1);
+      }
+
+      res.json(dates);
+    } catch (error) {
+      console.error('Error checking availability:', error);
+      res.status(500).send("Failed to check availability");
+    }
+  });
+
+  app.patch("/api/bookings/:id", async (req, res) => {
+    try {
+      const bookingId = parseInt(req.params.id);
+      const [updatedBooking] = await db
+        .update(bookings)
+        .set(req.body)
+        .where(eq(bookings.id, bookingId))
+        .returning();
+
+      if (!updatedBooking) {
+        return res.status(404).send("Booking not found");
+      }
+
+      res.json(updatedBooking);
+    } catch (error) {
+      console.error('Error updating booking:', error);
+      res.status(500).send("Failed to update booking");
+    }
+  });
+
 
   const httpServer = createServer(app);
   return httpServer;
