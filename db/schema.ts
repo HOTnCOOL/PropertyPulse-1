@@ -8,11 +8,11 @@ export const properties = pgTable("properties", {
   name: text("name").notNull(),
   description: text("description").notNull(),
   type: text("type").notNull(),
-  capacity: integer("capacity").notNull(),
-  hourlyRate: numeric("hourly_rate"),
-  rate: numeric("rate").notNull(),
-  weeklyRate: numeric("weekly_rate"),
-  monthlyRate: numeric("monthly_rate"),
+  capacity: text("capacity").notNull(), // Changed from integer to text
+  hourlyRate: numeric("hourly_rate", { precision: 10, scale: 0 }), // Changed to integers
+  rate: numeric("rate", { precision: 10, scale: 0 }).notNull(), // Changed to integers
+  weeklyRate: numeric("weekly_rate", { precision: 10, scale: 0 }), // Changed to integers
+  monthlyRate: numeric("monthly_rate", { precision: 10, scale: 0 }), // Changed to integers
   isOccupied: boolean("is_occupied").default(false),
   imageUrl: text("image_url"),
   amenities: jsonb("amenities").default('{}').notNull(),
@@ -100,6 +100,14 @@ const basePropertySchema = createInsertSchema(properties);
 
 export const insertPropertySchema = basePropertySchema.extend({
   amenities: amenitiesSchema,
+  capacity: z.string().refine(
+    (val) => /^\d+(\+\d+)?$/.test(val),
+    "Capacity must be in format: number or number+number (e.g., '2' or '2+1')"
+  ),
+  hourlyRate: z.number().int().nullable(),
+  rate: z.number().int(),
+  weeklyRate: z.number().int().nullable(),
+  monthlyRate: z.number().int().nullable(),
 });
 
 export const selectPropertySchema = createSelectSchema(properties);

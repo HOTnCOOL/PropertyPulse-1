@@ -97,7 +97,7 @@ export default function Properties() {
   function onSubmit(values: z.infer<typeof insertPropertySchema>) {
     addProperty.mutate({
       ...values,
-      capacity: Number(values.capacity),
+      capacity: values.capacity,
       bathrooms: Number(values.bathrooms),
       hourlyRate: values.hourlyRate ? Number(values.hourlyRate) : null,
       rate: Number(values.rate),
@@ -230,8 +230,7 @@ export default function Properties() {
                           <FormLabel>Capacity</FormLabel>
                           <FormControl>
                             <Input
-                              type="number"
-                              min="1"
+                              placeholder="e.g., 2 or 2+1"
                               {...field}
                             />
                           </FormControl>
@@ -331,9 +330,9 @@ export default function Properties() {
                             <Input
                               type="number"
                               min="0"
-                              step="0.01"
+                              step="1"
                               {...field}
-                              onChange={(e) => field.onChange(e.target.valueAsNumber)}
+                              onChange={(e) => field.onChange(Math.floor(e.target.valueAsNumber))}
                             />
                           </FormControl>
                           <FormMessage />
@@ -351,9 +350,9 @@ export default function Properties() {
                             <Input
                               type="number"
                               min="0"
-                              step="0.01"
+                              step="1"
                               {...field}
-                              onChange={(e) => field.onChange(e.target.valueAsNumber)}
+                              onChange={(e) => field.onChange(Math.floor(e.target.valueAsNumber))}
                             />
                           </FormControl>
                           <FormMessage />
@@ -371,9 +370,9 @@ export default function Properties() {
                             <Input
                               type="number"
                               min="0"
-                              step="0.01"
+                              step="1"
                               {...field}
-                              onChange={(e) => field.onChange(e.target.valueAsNumber)}
+                              onChange={(e) => field.onChange(Math.floor(e.target.valueAsNumber))}
                             />
                           </FormControl>
                           <FormMessage />
@@ -391,9 +390,9 @@ export default function Properties() {
                             <Input
                               type="number"
                               min="0"
-                              step="0.01"
+                              step="1"
                               {...field}
-                              onChange={(e) => field.onChange(e.target.valueAsNumber)}
+                              onChange={(e) => field.onChange(Math.floor(e.target.valueAsNumber))}
                             />
                           </FormControl>
                           <FormMessage />
