@@ -8,13 +8,13 @@ export const properties = pgTable("properties", {
   name: text("name").notNull(),
   description: text("description").notNull(),
   type: text("type").notNull(),
-  capacity: text("capacity").notNull(), // Changed from integer to text
-  hourlyRate: numeric("hourly_rate", { precision: 10, scale: 0 }), // Changed to integers
-  rate: numeric("rate", { precision: 10, scale: 0 }).notNull(), // Changed to integers
-  weeklyRate: numeric("weekly_rate", { precision: 10, scale: 0 }), // Changed to integers
-  monthlyRate: numeric("monthly_rate", { precision: 10, scale: 0 }), // Changed to integers
+  capacity: text("capacity").notNull(),
+  hourlyRate: numeric("hourly_rate", { precision: 10, scale: 0 }),
+  rate: numeric("rate", { precision: 10, scale: 0 }).notNull(),
+  weeklyRate: numeric("weekly_rate", { precision: 10, scale: 0 }),
+  monthlyRate: numeric("monthly_rate", { precision: 10, scale: 0 }),
   isOccupied: boolean("is_occupied").default(false),
-  imageUrl: text("image_url"),
+  imageUrls: jsonb("image_urls").default('[]').notNull(),
   amenities: jsonb("amenities").default('{}').notNull(),
   bedType: text("bed_type"),
   bathrooms: integer("bathrooms").default(1),

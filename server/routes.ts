@@ -1,8 +1,36 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import multer from "multer";
+import path from "path";
 import { db } from "@db";
 import { properties, guests, payments, todos, assets } from "@db/schema";
 import { eq, and, gte, lte } from "drizzle-orm";
+
+// Configure multer for file upload
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, path.join(process.cwd(), "uploads"));
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.mimetype)) {
+      cb(new Error('Invalid file type. Only JPEG, PNG and WebP are allowed'));
+      return;
+    }
+    cb(null, true);
+  }
+});
 
 export function registerRoutes(app: Express): Server {
   // Properties endpoints
@@ -14,6 +42,46 @@ export function registerRoutes(app: Express): Server {
   app.post("/api/properties", async (req, res) => {
     const property = await db.insert(properties).values(req.body).returning();
     res.json(property[0]);
+  });
+
+  // New endpoint for uploading property images
+  app.post("/api/properties/:id/images", upload.array("images", 5), async (req, res) => {
+    const propertyId = parseInt(req.params.id);
+    const files = req.files as Express.Multer.File[];
+
+    if (!files || files.length === 0) {
+      return res.status(400).send("No files uploaded");
+    }
+
+    try {
+      // Get current property
+      const [property] = await db
+        .select()
+        .from(properties)
+        .where(eq(properties.id, propertyId))
+        .limit(1);
+
+      if (!property) {
+        return res.status(404).send("Property not found");
+      }
+
+      // Update property with new image URLs
+      const imageUrls = files.map(file => `/uploads/${file.filename}`);
+      const currentUrls = property.imageUrls as string[] || []; // Handle case where imageUrls is null
+
+      const updatedProperty = await db
+        .update(properties)
+        .set({
+          imageUrls: [...currentUrls, ...imageUrls]
+        })
+        .where(eq(properties.id, propertyId))
+        .returning();
+
+      res.json(updatedProperty[0]);
+    } catch (error) {
+      console.error(error);
+      res.status(500).send("Failed to upload images");
+    }
   });
 
   // Guests endpoints

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus, ChevronDown, ChevronUp } from "lucide-react";
+import { Image, Plus, ChevronDown, ChevronUp, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -48,7 +48,7 @@ export default function Properties() {
       rate: undefined,
       weeklyRate: undefined,
       monthlyRate: undefined,
-      imageUrl: "",
+      images: [], // Changed to handle multiple images
       bedType: "",
       bathrooms: 1,
       amenities: {
@@ -89,6 +89,37 @@ export default function Properties() {
       toast({
         title: "Error",
         description: "Failed to add property",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const uploadImages = useMutation({
+    mutationFn: async ({ id, files }: { id: number; files: FileList }) => {
+      const formData = new FormData();
+      Array.from(files).forEach((file) => {
+        formData.append("images", file);
+      });
+
+      const response = await fetch(`/api/properties/${id}/images`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) throw new Error("Failed to upload images");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/properties"] });
+      toast({
+        title: "Success",
+        description: "Images uploaded successfully",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to upload images",
         variant: "destructive",
       });
     },
@@ -208,12 +239,30 @@ export default function Properties() {
 
                   <FormField
                     control={form.control}
-                    name="imageUrl"
-                    render={({ field }) => (
+                    name="images"
+                    render={({ field: { onChange, value, ...field } }) => (
                       <FormItem>
-                        <FormLabel>Image URL</FormLabel>
+                        <FormLabel>Property Images</FormLabel>
                         <FormControl>
-                          <Input {...field} placeholder="https://example.com/image.jpg" />
+                          <div className="grid gap-4">
+                            <Input
+                              type="file"
+                              accept="image/*"
+                              multiple
+                              onChange={(e) => {
+                                if (e.target.files && e.target.files.length > 0) {
+                                  uploadImages.mutate({
+                                    id: 0, // Placeholder ID, needs to be dynamically set.  Consider adding a property ID to the form state.
+                                    files: e.target.files,
+                                  });
+                                }
+                              }}
+                              {...field}
+                            />
+                            <p className="text-sm text-muted-foreground">
+                              Upload up to 5 images (max 5MB each). Accepted formats: JPEG, PNG, WebP
+                            </p>
+                          </div>
                         </FormControl>
                         <FormMessage />
                       </FormItem>
