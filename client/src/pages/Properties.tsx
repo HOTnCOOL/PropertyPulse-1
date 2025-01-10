@@ -36,6 +36,7 @@ export default function Properties() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingProperty, setEditingProperty] = useState<Property | null>(null);
 
   const form = useForm({
     resolver: zodResolver(insertPropertySchema),
@@ -48,7 +49,7 @@ export default function Properties() {
       rate: undefined,
       weeklyRate: undefined,
       monthlyRate: undefined,
-      images: [], // Changed to handle multiple images
+      images: [],
       bedType: "",
       bathrooms: 1,
       amenities: {
@@ -94,6 +95,36 @@ export default function Properties() {
     },
   });
 
+  const editProperty = useMutation({
+    mutationFn: async (values: z.infer<typeof insertPropertySchema> & { id: number }) => {
+      const { id, ...propertyData } = values;
+      const response = await fetch(`/api/properties/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(propertyData),
+      });
+      if (!response.ok) throw new Error("Failed to update property");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/properties"] });
+      form.reset();
+      setEditingProperty(null);
+      setIsFormOpen(false);
+      toast({
+        title: "Success",
+        description: "Property has been updated successfully",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update property",
+        variant: "destructive",
+      });
+    },
+  });
+
   const uploadImages = useMutation({
     mutationFn: async ({ id, files }: { id: number; files: FileList }) => {
       const formData = new FormData();
@@ -126,22 +157,58 @@ export default function Properties() {
   });
 
   function onSubmit(values: z.infer<typeof insertPropertySchema>) {
-    addProperty.mutate({
-      ...values,
-      capacity: values.capacity,
-      bathrooms: Number(values.bathrooms),
-      hourlyRate: values.hourlyRate ? Number(values.hourlyRate) : null,
-      rate: Number(values.rate),
-      weeklyRate: values.weeklyRate ? Number(values.weeklyRate) : null,
-      monthlyRate: values.monthlyRate ? Number(values.monthlyRate) : null,
-    });
+    if (editingProperty) {
+      editProperty.mutate({
+        ...values,
+        id: editingProperty.id,
+        capacity: values.capacity,
+        bathrooms: Number(values.bathrooms),
+        hourlyRate: values.hourlyRate ? Number(values.hourlyRate) : null,
+        rate: Number(values.rate),
+        weeklyRate: values.weeklyRate ? Number(values.weeklyRate) : null,
+        monthlyRate: values.monthlyRate ? Number(values.monthlyRate) : null,
+      });
+    } else {
+      addProperty.mutate({
+        ...values,
+        capacity: values.capacity,
+        bathrooms: Number(values.bathrooms),
+        hourlyRate: values.hourlyRate ? Number(values.hourlyRate) : null,
+        rate: Number(values.rate),
+        weeklyRate: values.weeklyRate ? Number(values.weeklyRate) : null,
+        monthlyRate: values.monthlyRate ? Number(values.monthlyRate) : null,
+      });
+    }
   }
+
+  // Handle editing a property
+  const handleEdit = (property: Property) => {
+    setEditingProperty(property);
+    form.reset({
+      name: property.name,
+      description: property.description,
+      type: property.type,
+      capacity: property.capacity,
+      hourlyRate: property.hourlyRate ? Number(property.hourlyRate) : undefined,
+      rate: Number(property.rate),
+      weeklyRate: property.weeklyRate ? Number(property.weeklyRate) : undefined,
+      monthlyRate: property.monthlyRate ? Number(property.monthlyRate) : undefined,
+      bedType: property.bedType || "",
+      bathrooms: property.bathrooms || 1,
+      amenities: property.amenities as any,
+    });
+    setIsFormOpen(true);
+  };
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Properties</h1>
-        <Button onClick={() => setIsFormOpen(!isFormOpen)}>
+        <Button onClick={() => {
+          setEditingProperty(null);
+          form.reset();
+          setIsFormOpen(!isFormOpen);
+        }}>
           <Plus className="mr-2 h-4 w-4" />
           Add Property
         </Button>
@@ -150,11 +217,15 @@ export default function Properties() {
       {/* Property Grid */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {properties?.map((property) => (
-          <PropertyCard key={property.id} property={property} />
+          <PropertyCard
+            key={property.id}
+            property={property}
+            onEdit={handleEdit}
+          />
         ))}
       </div>
 
-      {/* Add Property Form */}
+      {/* Add/Edit Property Form */}
       <Collapsible open={isFormOpen} onOpenChange={setIsFormOpen}>
         <CollapsibleTrigger asChild>
           <Button variant="outline" className="w-full">
@@ -166,7 +237,7 @@ export default function Properties() {
             ) : (
               <>
                 <ChevronDown className="mr-2 h-4 w-4" />
-                Show Add Property Form
+                Show {editingProperty ? 'Edit' : 'Add'} Property Form
               </>
             )}
           </Button>
@@ -174,7 +245,7 @@ export default function Properties() {
         <CollapsibleContent>
           <Card className="mt-4">
             <CardHeader>
-              <CardTitle>Add New Property</CardTitle>
+              <CardTitle>{editingProperty ? 'Edit' : 'Add New'} Property</CardTitle>
             </CardHeader>
             <CardContent>
               <Form {...form}>
@@ -252,7 +323,7 @@ export default function Properties() {
                               onChange={(e) => {
                                 if (e.target.files && e.target.files.length > 0) {
                                   uploadImages.mutate({
-                                    id: 0, // Placeholder ID, needs to be dynamically set.  Consider adding a property ID to the form state.
+                                    id: editingProperty ? editingProperty.id : 0, 
                                     files: e.target.files,
                                   });
                                 }
@@ -451,7 +522,7 @@ export default function Properties() {
                   </div>
 
                   <Button type="submit" className="w-full">
-                    Add Property
+                    {editingProperty ? 'Update Property' : 'Add Property'}
                   </Button>
                 </form>
               </Form>

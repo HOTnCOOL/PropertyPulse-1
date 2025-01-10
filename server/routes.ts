@@ -5,6 +5,7 @@ import path from "path";
 import { db } from "@db";
 import { properties, guests, payments, todos, assets } from "@db/schema";
 import { eq, and, gte, lte } from "drizzle-orm";
+import express from "express";
 
 // Configure multer for file upload
 const storage = multer.diskStorage({
@@ -33,6 +34,9 @@ const upload = multer({
 });
 
 export function registerRoutes(app: Express): Server {
+  // Serve static files from uploads directory
+  app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+
   // Properties endpoints
   app.get("/api/properties", async (_req, res) => {
     const allProperties = await db.query.properties.findMany();
@@ -42,6 +46,35 @@ export function registerRoutes(app: Express): Server {
   app.post("/api/properties", async (req, res) => {
     const property = await db.insert(properties).values(req.body).returning();
     res.json(property[0]);
+  });
+
+  app.patch("/api/properties/:id", async (req, res) => {
+    const propertyId = parseInt(req.params.id);
+    const updatedProperty = await db
+      .update(properties)
+      .set(req.body)
+      .where(eq(properties.id, propertyId))
+      .returning();
+
+    if (!updatedProperty.length) {
+      return res.status(404).send("Property not found");
+    }
+
+    res.json(updatedProperty[0]);
+  });
+
+  app.delete("/api/properties/:id", async (req, res) => {
+    const propertyId = parseInt(req.params.id);
+    const deletedProperty = await db
+      .delete(properties)
+      .where(eq(properties.id, propertyId))
+      .returning();
+
+    if (!deletedProperty.length) {
+      return res.status(404).send("Property not found");
+    }
+
+    res.json(deletedProperty[0]);
   });
 
   // New endpoint for uploading property images
