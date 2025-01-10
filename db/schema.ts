@@ -21,6 +21,19 @@ export const properties = pgTable("properties", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const bookings = pgTable("bookings", {
+  id: serial("id").primaryKey(),
+  propertyId: integer("property_id").references(() => properties.id),
+  guestId: integer("guest_id").references(() => guests.id),
+  checkIn: timestamp("check_in").notNull(),
+  checkOut: timestamp("check_out").notNull(),
+  status: text("status").notNull(), // pending, confirmed, cancelled
+  totalAmount: numeric("total_amount", { precision: 10, scale: 0 }).notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const guests = pgTable("guests", {
   id: serial("id").primaryKey(),
   firstName: text("first_name").notNull(),
@@ -68,38 +81,16 @@ export const todos = pgTable("todos", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const bookings = pgTable("bookings", {
-  id: serial("id").primaryKey(),
-  propertyId: integer("property_id").references(() => properties.id),
-  guestId: integer("guest_id").references(() => guests.id),
-  checkIn: timestamp("check_in").notNull(),
-  checkOut: timestamp("check_out").notNull(),
-  status: text("status").notNull(), // pending, confirmed, cancelled
-  totalAmount: numeric("total_amount", { precision: 10, scale: 0 }).notNull(),
-  notes: text("notes"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
 // Relations
 export const propertiesRelations = relations(properties, ({ many }) => ({
   guests: many(guests),
   bookings: many(bookings),
 }));
 
-export const guestsRelations = relations(guests, ({ one, many }) => ({
+export const guestsRelations = relations(guests, ({ one }) => ({
   property: one(properties, {
     fields: [guests.propertyId],
     references: [properties.id],
-  }),
-  payments: many(payments),
-  bookings: many(bookings),
-}));
-
-export const paymentsRelations = relations(payments, ({ one }) => ({
-  guest: one(guests, {
-    fields: [payments.guestId],
-    references: [guests.id],
   }),
 }));
 
@@ -114,6 +105,14 @@ export const bookingsRelations = relations(bookings, ({ one }) => ({
   }),
 }));
 
+export const paymentsRelations = relations(payments, ({ one }) => ({
+  guest: one(guests, {
+    fields: [payments.guestId],
+    references: [guests.id],
+  }),
+}));
+
+
 // Schemas
 const amenitiesSchema = z.object({
   tv: z.boolean().default(false),
@@ -124,16 +123,26 @@ const amenitiesSchema = z.object({
   sofa: z.boolean().default(false),
 });
 
+export const insertBookingSchema = z.object({
+  propertyId: z.number(),
+  guestId: z.number().optional(),
+  checkIn: z.date(),
+  checkOut: z.date(),
+  status: z.string(),
+  totalAmount: z.number(),
+  notes: z.string().optional(),
+});
+
 export const insertPropertySchema = createInsertSchema(properties).extend({
   amenities: amenitiesSchema,
   capacity: z.string().refine(
     (val) => /^\d+(\+\d+)?$/.test(val),
     "Capacity must be in format: number or number+number (e.g., '2' or '2+1')"
   ),
-  hourlyRate: z.number().int().nullable(),
-  rate: z.number().int(),
-  weeklyRate: z.number().int().nullable(),
-  monthlyRate: z.number().int().nullable(),
+  hourlyRate: z.number().nullable(),
+  rate: z.number(),
+  weeklyRate: z.number().nullable(),
+  monthlyRate: z.number().nullable(),
 });
 
 export const selectPropertySchema = createSelectSchema(properties);
@@ -145,7 +154,6 @@ export const insertAssetSchema = createInsertSchema(assets);
 export const selectAssetSchema = createSelectSchema(assets);
 export const insertTodoSchema = createInsertSchema(todos);
 export const selectTodoSchema = createSelectSchema(todos);
-export const insertBookingSchema = createInsertSchema(bookings);
 export const selectBookingSchema = createSelectSchema(bookings);
 
 // Types
@@ -155,4 +163,4 @@ export type Payment = typeof payments.$inferSelect;
 export type Todo = typeof todos.$inferSelect;
 export type Asset = typeof assets.$inferSelect;
 export type Booking = typeof bookings.$inferSelect;
-export type NewBooking = typeof bookings.$inferInsert;
+export type NewBooking = z.infer<typeof insertBookingSchema>;
