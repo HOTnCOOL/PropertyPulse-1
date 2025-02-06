@@ -126,8 +126,12 @@ const amenitiesSchema = z.object({
 export const insertBookingSchema = z.object({
   propertyId: z.number(),
   guestId: z.number().optional(),
-  checkIn: z.coerce.date(),
-  checkOut: z.coerce.date(),
+  checkIn: z.string().refine((date) => !isNaN(new Date(date).getTime()), {
+    message: "Invalid check-in date format"
+  }),
+  checkOut: z.string().refine((date) => !isNaN(new Date(date).getTime()), {
+    message: "Invalid check-out date format"
+  }),
   status: z.string(),
   totalAmount: z.number(),
   notes: z.string().optional(),

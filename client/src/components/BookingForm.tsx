@@ -15,7 +15,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { type Property, insertBookingSchema, type NewBooking } from "@db/schema";
+import { type Property, insertBookingSchema } from "@db/schema";
 import * as z from "zod";
 
 interface BookingFormProps {
@@ -41,7 +41,7 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
     },
   });
 
-  const { data: availabilityData, isError: availabilityError } = useQuery({
+  const { data: availabilityData } = useQuery({
     queryKey: [
       `/api/properties/${property.id}/availability`,
       selectedDates?.from?.toISOString(),
@@ -49,7 +49,6 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
     ],
     queryFn: async () => {
       if (!selectedDates?.from || !selectedDates?.to) return null;
-
       try {
         const response = await fetch(
           `/api/properties/${property.id}/availability?start=${selectedDates.from.toISOString()}&end=${selectedDates.to.toISOString()}`
@@ -64,21 +63,35 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
       }
     },
     enabled: !!selectedDates?.from && !!selectedDates?.to,
-    retry: false,
   });
 
   const createBooking = useMutation({
     mutationFn: async (values: z.infer<typeof insertBookingSchema>) => {
       try {
+        if (!selectedDates.from || !selectedDates.to) {
+          throw new Error("Please select check-in and check-out dates");
+        }
+
+        const bookingData = {
+          propertyId: property.id,
+          checkIn: selectedDates.from.toISOString(),
+          checkOut: selectedDates.to.toISOString(),
+          status: "pending",
+          totalAmount: calculateTotalAmount(selectedDates.from, selectedDates.to),
+          notes: values.notes || "",
+        };
+
+        console.log('Submitting booking data:', bookingData);
+
         const response = await fetch("/api/bookings", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(values),
+          body: JSON.stringify(bookingData),
         });
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => null);
-          throw new Error(errorData?.message || "Failed to create booking");
+          const errorData = await response.json();
+          throw new Error(errorData.message || "Failed to create booking");
         }
 
         return response.json();
@@ -100,7 +113,7 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
     onError: (error: Error) => {
       toast({
         title: "Booking Failed",
-        description: error.message || "Failed to create booking. Please try again.",
+        description: error.message,
         variant: "destructive",
       });
     },
@@ -112,47 +125,10 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
   }
 
   async function onSubmit(values: z.infer<typeof insertBookingSchema>) {
-    if (!selectedDates?.from || !selectedDates?.to) {
-      toast({
-        title: "Error",
-        description: "Please select check-in and check-out dates",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (availabilityError) {
-      toast({
-        title: "Error",
-        description: "Failed to verify availability. Please try again.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const hasUnavailableDates = availabilityData?.some(
-      (date: { available: boolean }) => !date.available
-    );
-
-    if (hasUnavailableDates) {
-      toast({
-        title: "Error",
-        description: "Selected dates are not available",
-        variant: "destructive",
-      });
-      return;
-    }
-
     try {
-      await createBooking.mutateAsync({
-        ...values,
-        checkIn: selectedDates.from,
-        checkOut: selectedDates.to,
-        totalAmount: calculateTotalAmount(selectedDates.from, selectedDates.to),
-      });
+      await createBooking.mutateAsync(values);
     } catch (error) {
-      // Error is handled by mutation's onError callback
-      console.error('Booking submission error:', error);
+      console.error('Form submission error:', error);
     }
   }
 
@@ -173,25 +149,22 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
                     to: selectedDates.to,
                   }}
                   onSelect={(range) => {
+                    setSelectedDates({
+                      from: range?.from,
+                      to: range?.to,
+                    });
                     if (range?.from) {
-                      setSelectedDates({
-                        from: range.from,
-                        to: range.to,
-                      });
-                      form.setValue("checkIn", range.from);
+                      form.setValue("checkIn", range.from.toISOString());
                       if (range.to) {
-                        form.setValue("checkOut", range.to);
+                        form.setValue("checkOut", range.to.toISOString());
                       }
                     }
                   }}
                   disabled={(date) => {
-                    // Disable dates before today
                     if (date < new Date()) return true;
-
-                    // Disable unavailable dates from the API
                     if (availabilityData) {
                       const dateStr = date.toISOString().split('T')[0];
-                      const dateInfo = availabilityData.find((d: any) => 
+                      const dateInfo = availabilityData.find((d: any) =>
                         d.date.startsWith(dateStr)
                       );
                       return dateInfo ? !dateInfo.available : false;
@@ -230,8 +203,8 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
               )}
             />
 
-            <Button 
-              type="submit" 
+            <Button
+              type="submit"
               className="w-full"
               disabled={createBooking.isPending}
             >

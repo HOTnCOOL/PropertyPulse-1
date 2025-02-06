@@ -310,34 +310,50 @@ export function registerRoutes(app: Express): Server {
   // Bookings endpoints
   app.post("/api/bookings", async (req, res) => {
     try {
-      const { propertyId, guestId, checkIn, checkOut, totalAmount, notes } = req.body;
+      console.log('Received booking request:', req.body);
 
-      // Validate the request body
       const result = insertBookingSchema.safeParse(req.body);
       if (!result.success) {
+        console.error('Validation error:', result.error);
         return res.status(400).json({
           message: "Invalid booking data",
-          details: result.error.message,
+          details: result.error.errors,
+        });
+      }
+
+      const checkInDate = new Date(result.data.checkIn);
+      const checkOutDate = new Date(result.data.checkOut);
+
+      // Validate dates
+      if (isNaN(checkInDate.getTime()) || isNaN(checkOutDate.getTime())) {
+        return res.status(400).json({
+          message: "Invalid date format",
+        });
+      }
+
+      if (checkInDate >= checkOutDate) {
+        return res.status(400).json({
+          message: "Check-out date must be after check-in date",
         });
       }
 
       // Check if the property is available for these dates
       const overlappingBookings = await db.query.bookings.findFirst({
         where: and(
-          eq(bookings.propertyId, propertyId),
+          eq(bookings.propertyId, result.data.propertyId),
           eq(bookings.status, "confirmed"),
           or(
             and(
-              lte(bookings.checkIn, result.data.checkIn),
-              gte(bookings.checkOut, result.data.checkIn)
+              lte(bookings.checkIn, checkInDate),
+              gte(bookings.checkOut, checkInDate)
             ),
             and(
-              lte(bookings.checkIn, result.data.checkOut),
-              gte(bookings.checkOut, result.data.checkOut)
+              lte(bookings.checkIn, checkOutDate),
+              gte(bookings.checkOut, checkOutDate)
             ),
             and(
-              gte(bookings.checkIn, result.data.checkIn),
-              lte(bookings.checkOut, result.data.checkOut)
+              gte(bookings.checkIn, checkInDate),
+              lte(bookings.checkOut, checkOutDate)
             )
           )
         ),
@@ -352,16 +368,13 @@ export function registerRoutes(app: Express): Server {
       // Create the booking
       const [booking] = await db.insert(bookings)
         .values({
-          propertyId,
-          guestId,
-          checkIn: result.data.checkIn,
-          checkOut: result.data.checkOut,
-          totalAmount,
-          notes,
-          status: "pending",
+          ...result.data,
+          checkIn: checkInDate,
+          checkOut: checkOutDate,
         })
         .returning();
 
+      console.log('Created booking:', booking);
       res.json(booking);
     } catch (error) {
       console.error('Error creating booking:', error);
