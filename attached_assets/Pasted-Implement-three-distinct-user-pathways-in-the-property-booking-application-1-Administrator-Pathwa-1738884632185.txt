@@ -1,0 +1,52 @@
+Implement three distinct user pathways in the property booking application:
+1. Administrator Pathway (Current Implementation):
+- Maintain existing functionality with full CRUD capabilities
+- Access to all administrative features and dashboards
+- Complete control over properties, bookings, and guest management
+2. Public Pathway (Anonymous Users):
+Requirements:
+- Target users: Anonymous visitors and non-authenticated users
+- No registration/authentication required
+- Entry point: Properties page as landing page
+- Remove all administrative functions (create/edit/delete)
+- Display only essential property information
+- Show availability calendar (booked/free dates only, no booking details)
+- Add "Book Now" button on each property
+Flow:
+1. Properties page → View property details
+2. Book Now → Guest Registration (pre-filled property)
+3. Guest Registration → Payment page
+4. Payment completion → Guest Dashboard (with booking reference)
+3. Registered Guest Pathway:
+Requirements:
+- Access method: Email + Booking reference
+- Personal dashboard displaying:
+  * Booking details and reference number
+  * Payment information (past/due/upcoming)
+  * Check-in/out instructions
+  * Door access codes
+  * Location and directions
+  * Property-specific guest information
+Technical Specifications:
+1. Availability Calendar:
+- Visual display of booked dates
+- No sensitive booking details shown
+- Simple free/occupied status
+2. Payment Implementation:
+- Mock payment system
+- Payment options: cash, bank, credit card, Stripe
+- Allow partial (deposit) or full payment
+- Generate booking reference after successful payment
+3. Navigation Flow:
+- Book Now button redirects to Guest Registration
+- Pre-filled property selection
+- Successful payment redirects to Guest Dashboard
+- Guest Dashboard accessible via booking reference + email
+Database Schema:
+- Utilize existing tables: properties, guests, bookings, payments
+- Maintain current relations and data structure
+- Add necessary fields for guest access and booking references
+Security Considerations:
+- Restrict administrative functions
+- Protect sensitive booking information
+- Secure access to guest dashboard
