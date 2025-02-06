@@ -491,6 +491,52 @@ export function registerRoutes(app: Express): Server {
   });
 
 
+  // Add this endpoint after the existing bookings endpoints
+  app.get("/api/bookings/guest", async (req, res) => {
+    try {
+      const { ref, email } = req.query;
+
+      if (!ref || !email) {
+        return res.status(400).json({ message: "Booking reference and email are required" });
+      }
+
+      // Find the booking with related guest and property information
+      const booking = await db.query.bookings.findFirst({
+        where: and(
+          eq(bookings.bookingReference, String(ref))
+        ),
+        with: {
+          guest: true,
+          property: true,
+        },
+      });
+
+      if (!booking) {
+        return res.status(404).json({ message: "Booking not found" });
+      }
+
+      if (booking.guest?.email !== email) {
+        return res.status(404).json({ message: "Booking not found" });
+      }
+
+      // Get related payments
+      const bookingPayments = await db.query.payments.findMany({
+        where: eq(payments.guestId, booking.guest.id),
+      });
+
+      // Combine the data
+      const fullBookingData = {
+        ...booking,
+        payments: bookingPayments,
+      };
+
+      res.json(fullBookingData);
+    } catch (error) {
+      console.error('Error fetching guest booking:', error);
+      res.status(500).json({ message: "Failed to fetch booking details" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
