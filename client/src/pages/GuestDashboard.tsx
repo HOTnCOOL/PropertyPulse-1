@@ -1,4 +1,3 @@
-
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
@@ -104,43 +103,6 @@ export default function GuestDashboard() {
           </CardContent>
         </Card>
       </div>
-    </div>
-  );
-}
-import React from 'react';
-import { Card } from '@/components/ui/card';
-
-export default function GuestDashboard() {
-  return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Guest Dashboard</h1>
-      
-      <Card className="p-6">
-        <h2 className="text-xl font-semibold mb-4">Booking Information</h2>
-        <div className="space-y-2">
-          <p>Booking Reference: #12345</p>
-          <p>Check-in Date: 2024-02-15</p>
-          <p>Check-out Date: 2024-02-20</p>
-        </div>
-      </Card>
-
-      <Card className="p-6">
-        <h2 className="text-xl font-semibold mb-4">Payment Details</h2>
-        <div className="space-y-2">
-          <p>Total Amount: $500</p>
-          <p>Paid: $200</p>
-          <p>Remaining: $300</p>
-        </div>
-      </Card>
-
-      <Card className="p-6">
-        <h2 className="text-xl font-semibold mb-4">Property Information</h2>
-        <div className="space-y-2">
-          <p>Access Code: 1234</p>
-          <p>Address: 123 Main St</p>
-          <p>Check-in Instructions: Please use the provided access code at the main entrance.</p>
-        </div>
-      </Card>
     </div>
   );
 }
