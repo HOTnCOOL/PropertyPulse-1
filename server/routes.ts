@@ -312,6 +312,17 @@ export function registerRoutes(app: Express): Server {
     try {
       const { propertyId, guestId, checkIn, checkOut, totalAmount, notes } = req.body;
 
+      // Convert string dates to Date objects
+      const checkInDate = new Date(checkIn);
+      const checkOutDate = new Date(checkOut);
+
+      // Validate dates
+      if (isNaN(checkInDate.getTime()) || isNaN(checkOutDate.getTime())) {
+        return res.status(400).json({
+          message: "Invalid date format for check-in or check-out",
+        });
+      }
+
       // Check if the property is available for these dates
       const overlappingBookings = await db.query.bookings.findFirst({
         where: and(
@@ -319,16 +330,16 @@ export function registerRoutes(app: Express): Server {
           eq(bookings.status, "confirmed"),
           or(
             and(
-              lte(bookings.checkIn, new Date(checkIn)),
-              gte(bookings.checkOut, new Date(checkIn))
+              lte(bookings.checkIn, checkInDate),
+              gte(bookings.checkOut, checkInDate)
             ),
             and(
-              lte(bookings.checkIn, new Date(checkOut)),
-              gte(bookings.checkOut, new Date(checkOut))
+              lte(bookings.checkIn, checkOutDate),
+              gte(bookings.checkOut, checkOutDate)
             ),
             and(
-              gte(bookings.checkIn, new Date(checkIn)),
-              lte(bookings.checkOut, new Date(checkOut))
+              gte(bookings.checkIn, checkInDate),
+              lte(bookings.checkOut, checkOutDate)
             )
           )
         ),
@@ -345,8 +356,8 @@ export function registerRoutes(app: Express): Server {
         .values({
           propertyId,
           guestId,
-          checkIn: new Date(checkIn),
-          checkOut: new Date(checkOut),
+          checkIn: checkInDate,
+          checkOut: checkOutDate,
           totalAmount,
           notes,
           status: "pending",
@@ -356,7 +367,10 @@ export function registerRoutes(app: Express): Server {
       res.json(booking);
     } catch (error) {
       console.error('Error creating booking:', error);
-      res.status(500).send("Failed to create booking");
+      res.status(500).json({
+        message: "Failed to create booking",
+        details: error instanceof Error ? error.message : "Unknown error",
+      });
     }
   });
 

@@ -49,13 +49,19 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
     ],
     queryFn: async () => {
       if (!selectedDates?.from || !selectedDates?.to) return null;
-      const response = await fetch(
-        `/api/properties/${property.id}/availability?start=${selectedDates.from.toISOString()}&end=${selectedDates.to.toISOString()}`
-      );
-      if (!response.ok) {
-        throw new Error("Failed to fetch availability");
+
+      try {
+        const response = await fetch(
+          `/api/properties/${property.id}/availability?start=${selectedDates.from.toISOString()}&end=${selectedDates.to.toISOString()}`
+        );
+        if (!response.ok) {
+          throw new Error("Failed to fetch availability");
+        }
+        return response.json();
+      } catch (error) {
+        console.error('Error fetching availability:', error);
+        throw error;
       }
-      return response.json();
     },
     enabled: !!selectedDates?.from && !!selectedDates?.to,
     retry: false,
@@ -64,23 +70,28 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
   const createBooking = useMutation({
     mutationFn: async (values: NewBooking) => {
       try {
+        // Ensure dates are properly formatted as ISO strings
+        const bookingData = {
+          ...values,
+          checkIn: values.checkIn.toISOString(),
+          checkOut: values.checkOut.toISOString(),
+        };
+
         const response = await fetch("/api/bookings", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(values),
+          body: JSON.stringify(bookingData),
         });
 
         if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(errorText || "Failed to create booking");
+          const errorData = await response.json().catch(() => null);
+          throw new Error(errorData?.message || "Failed to create booking");
         }
 
         return response.json();
       } catch (error) {
-        if (error instanceof Error) {
-          throw new Error(error.message);
-        }
-        throw new Error("An unexpected error occurred");
+        console.error('Booking submission error:', error);
+        throw error;
       }
     },
     onSuccess: () => {
@@ -180,11 +191,19 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
                       }
                     }
                   }}
-                  disabled={{
-                    before: new Date(),
-                    dates: availabilityData
-                      ?.filter((date: { available: boolean }) => !date.available)
-                      .map((date: { date: string }) => new Date(date.date)),
+                  disabled={(date) => {
+                    // Disable dates before today
+                    if (date < new Date()) return true;
+
+                    // Disable unavailable dates from the API
+                    if (availabilityData) {
+                      const dateStr = date.toISOString().split('T')[0];
+                      const dateInfo = availabilityData.find((d: any) => 
+                        d.date.startsWith(dateStr)
+                      );
+                      return dateInfo ? !dateInfo.available : false;
+                    }
+                    return false;
                   }}
                   className="rounded-md border"
                 />
