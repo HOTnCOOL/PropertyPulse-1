@@ -6,7 +6,7 @@ import { db } from "@db";
 import { properties, guests, payments, todos, assets, bookings } from "@db/schema";
 import { eq, and, gte, lte, or } from "drizzle-orm";
 import express from "express";
-import { addDays, parseISO, isWithinInterval } from "date-fns";
+import { addDays, parseISO } from "date-fns";
 import { sql } from "drizzle-orm";
 
 // Configure multer for file upload
@@ -187,8 +187,31 @@ export function registerRoutes(app: Express): Server {
   });
 
   app.post("/api/guests", async (req, res) => {
-    const guest = await db.insert(guests).values(req.body).returning();
-    res.json(guest[0]);
+    try {
+      const checkInDate = new Date(req.body.checkIn);
+      const checkOutDate = new Date(req.body.checkOut);
+
+      // Validate dates
+      if (isNaN(checkInDate.getTime()) || isNaN(checkOutDate.getTime())) {
+        return res.status(400).json({
+          message: "Invalid date format",
+        });
+      }
+
+      const guest = await db.insert(guests).values({
+        ...req.body,
+        checkIn: checkInDate,
+        checkOut: checkOutDate,
+      }).returning();
+
+      res.json(guest[0]);
+    } catch (error) {
+      console.error('Error creating guest:', error);
+      res.status(500).json({
+        message: "Failed to create guest",
+        details: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
   });
 
   app.get("/api/guests/:id", async (req, res) => {
@@ -321,6 +344,7 @@ export function registerRoutes(app: Express): Server {
         });
       }
 
+      // Ensure dates are properly converted to Date objects
       const checkInDate = new Date(result.data.checkIn);
       const checkOutDate = new Date(result.data.checkOut);
 
@@ -369,6 +393,7 @@ export function registerRoutes(app: Express): Server {
       const [booking] = await db.insert(bookings)
         .values({
           propertyId: result.data.propertyId,
+          guestId: result.data.guestId,
           status: result.data.status,
           totalAmount: result.data.totalAmount,
           notes: result.data.notes,
