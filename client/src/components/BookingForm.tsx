@@ -41,7 +41,7 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
     },
   });
 
-  const { data: availabilityData } = useQuery({
+  const { data: availabilityData, isError: availabilityError } = useQuery({
     queryKey: [
       `/api/properties/${property.id}/availability`,
       selectedDates?.from?.toISOString(),
@@ -52,24 +52,36 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
       const response = await fetch(
         `/api/properties/${property.id}/availability?start=${selectedDates.from.toISOString()}&end=${selectedDates.to.toISOString()}`
       );
-      if (!response.ok) throw new Error("Failed to fetch availability");
+      if (!response.ok) {
+        throw new Error("Failed to fetch availability");
+      }
       return response.json();
     },
     enabled: !!selectedDates?.from && !!selectedDates?.to,
+    retry: false,
   });
 
   const createBooking = useMutation({
     mutationFn: async (values: NewBooking) => {
-      const response = await fetch("/api/bookings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(values),
-      });
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(error);
+      try {
+        const response = await fetch("/api/bookings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(values),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(errorText || "Failed to create booking");
+        }
+
+        return response.json();
+      } catch (error) {
+        if (error instanceof Error) {
+          throw new Error(error.message);
+        }
+        throw new Error("An unexpected error occurred");
       }
-      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/bookings"] });
@@ -83,8 +95,8 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
     },
     onError: (error: Error) => {
       toast({
-        title: "Error",
-        description: error.message || "Failed to create booking",
+        title: "Booking Failed",
+        description: error.message || "Failed to create booking. Please try again.",
         variant: "destructive",
       });
     },
@@ -95,11 +107,20 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
     return days * Number(property.rate);
   }
 
-  function onSubmit(values: NewBooking) {
+  async function onSubmit(values: NewBooking) {
     if (!selectedDates?.from || !selectedDates?.to) {
       toast({
         title: "Error",
         description: "Please select check-in and check-out dates",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (availabilityError) {
+      toast({
+        title: "Error",
+        description: "Failed to verify availability. Please try again.",
         variant: "destructive",
       });
       return;
@@ -118,12 +139,17 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
       return;
     }
 
-    createBooking.mutate({
-      ...values,
-      checkIn: selectedDates.from,
-      checkOut: selectedDates.to,
-      totalAmount: calculateTotalAmount(selectedDates.from, selectedDates.to),
-    });
+    try {
+      await createBooking.mutateAsync({
+        ...values,
+        checkIn: selectedDates.from,
+        checkOut: selectedDates.to,
+        totalAmount: calculateTotalAmount(selectedDates.from, selectedDates.to),
+      });
+    } catch (error) {
+      // Error is handled by mutation's onError callback
+      console.error('Booking submission error:', error);
+    }
   }
 
   return (
@@ -192,8 +218,12 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
               )}
             />
 
-            <Button type="submit" className="w-full">
-              Request Booking
+            <Button 
+              type="submit" 
+              className="w-full"
+              disabled={createBooking.isPending}
+            >
+              {createBooking.isPending ? "Submitting..." : "Request Booking"}
             </Button>
           </>
         )}
