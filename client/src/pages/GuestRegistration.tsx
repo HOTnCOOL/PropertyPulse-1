@@ -29,7 +29,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
-import { insertGuestSchema, type Property, type Guest } from "@db/schema";
+import { insertGuestSchema, type Property, type Guest, type Payment } from "@db/schema";
 import GuestList from "../components/GuestList";
 import PaymentEstimator from "../components/PaymentEstimator";
 import PaymentHistory from "../components/PaymentHistory";
@@ -51,7 +51,7 @@ export default function GuestRegistration() {
       lastName: "",
       email: "",
       phone: "",
-      propertyId: undefined,
+      propertyId: undefined as unknown as number,
       checkIn: undefined,
       checkOut: undefined,
     },
@@ -59,10 +59,20 @@ export default function GuestRegistration() {
 
   const { data: properties } = useQuery<Property[]>({
     queryKey: ["/api/properties"],
+    queryFn: async () => {
+      const response = await fetch("/api/properties");
+      if (!response.ok) throw new Error("Failed to fetch properties");
+      return response.json();
+    }
   });
 
   const { data: guests = [] } = useQuery<Guest[]>({
     queryKey: ["/api/guests"],
+    queryFn: async () => {
+      const response = await fetch("/api/guests");
+      if (!response.ok) throw new Error("Failed to fetch guests");
+      return response.json();
+    }
   });
 
   const selectedProperty = useMemo(() => {
@@ -70,14 +80,19 @@ export default function GuestRegistration() {
     return properties.find(p => p.id === form.getValues("propertyId"));
   }, [properties, form.watch("propertyId")]);
 
-  const { data: payments = [] } = useQuery({
+  const { data: payments = [] } = useQuery<Payment[]>({
     queryKey: ['/api/payments', activeGuest?.id],
+    queryFn: async () => {
+      if (!activeGuest?.id) return [];
+      const response = await fetch(`/api/payments?guestId=${activeGuest.id}`);
+      if (!response.ok) throw new Error("Failed to fetch payments");
+      return response.json();
+    },
     enabled: !!activeGuest,
   });
 
-
   const registerGuest = useMutation({
-    mutationFn: async (values: any) => {
+    mutationFn: async (values: typeof insertGuestSchema._type) => {
       const response = await fetch("/api/guests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -104,7 +119,7 @@ export default function GuestRegistration() {
     },
   });
 
-  function onSubmit(values: any) {
+  async function onSubmit(values: typeof insertGuestSchema._type) {
     registerGuest.mutate(values);
   }
 
@@ -184,8 +199,8 @@ export default function GuestRegistration() {
                     <FormItem>
                       <FormLabel>Property</FormLabel>
                       <Select
-                        onValueChange={(value: string) => field.onChange(parseInt(value))}
-                        value={field.value?.toString()}
+                        onValueChange={(value) => field.onChange(Number(value))}
+                        value={field.value?.toString() || ""}
                       >
                         <FormControl>
                           <SelectTrigger>
@@ -340,7 +355,7 @@ export default function GuestRegistration() {
                 />
               </div>
 
-              {activeGuest && (
+              {activeGuest && selectedProperty && (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="text-lg font-medium">
@@ -361,6 +376,8 @@ export default function GuestRegistration() {
                     <CardContent>
                       <PaymentRegistration
                         guestId={activeGuest.id}
+                        property={selectedProperty}
+                        booking={null}
                         onSuccess={() => {
                           queryClient.invalidateQueries({ 
                             queryKey: ['/api/payments', activeGuest.id] 

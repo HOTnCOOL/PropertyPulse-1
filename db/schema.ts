@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, numeric, integer, boolean, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, numeric, integer, boolean, jsonb, varchar } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -30,6 +30,7 @@ export const bookings = pgTable("bookings", {
   status: text("status").notNull(), // pending, confirmed, cancelled
   totalAmount: numeric("total_amount", { precision: 10, scale: 0 }).notNull(),
   notes: text("notes"),
+  bookingReference: varchar("booking_reference", { length: 10 }).notNull().unique(), // Added for guest access
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -43,6 +44,8 @@ export const guests = pgTable("guests", {
   propertyId: integer("property_id").references(() => properties.id),
   checkIn: timestamp("check_in").notNull(),
   checkOut: timestamp("check_out").notNull(),
+  accessCode: varchar("access_code", { length: 6 }), // Added for door access
+  bookingReference: varchar("booking_reference", { length: 10 }), // Reference to booking
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -131,6 +134,7 @@ export const insertBookingSchema = z.object({
   status: z.string(),
   totalAmount: z.number(),
   notes: z.string().optional(),
+  bookingReference: z.string().length(10),
 });
 
 export const insertPropertySchema = createInsertSchema(properties).extend({
@@ -154,6 +158,8 @@ export const insertGuestSchema = z.object({
   propertyId: z.number(),
   checkIn: z.coerce.date(),
   checkOut: z.coerce.date(),
+  accessCode: z.string().length(6).optional(),
+  bookingReference: z.string().length(10).optional(),
 });
 export const selectGuestSchema = createSelectSchema(guests);
 export const insertPaymentSchema = createInsertSchema(payments);

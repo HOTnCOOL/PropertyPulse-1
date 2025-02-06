@@ -38,6 +38,7 @@ import BookingForm from "./BookingForm";
 interface PropertyCardProps {
   property: Property;
   onEdit?: (property: Property) => void;
+  isPublic?: boolean;
 }
 
 interface EditableFieldProps {
@@ -113,7 +114,7 @@ function EditableField({
   );
 }
 
-export default function PropertyCard({ property, onEdit }: PropertyCardProps) {
+export default function PropertyCard({ property, onEdit, isPublic = false }: PropertyCardProps) {
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [editingField, setEditingField] = useState<string | null>(null);
@@ -228,22 +229,30 @@ export default function PropertyCard({ property, onEdit }: PropertyCardProps) {
 
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
-          <EditableField
-            isEditing={editingField === "name"}
-            value={property.name}
-            onEdit={() => setEditingField("name")}
-            onSave={(value) => updateField.mutate({ field: "name", value })}
-            onCancel={() => setEditingField(null)}
-          />
-          <div className="flex items-center gap-2 text-sm font-normal">
-            <Users className="h-4 w-4" />
+          {isPublic ? (
+            <span>{property.name}</span>
+          ) : (
             <EditableField
-              isEditing={editingField === "capacity"}
-              value={property.capacity}
-              onEdit={() => setEditingField("capacity")}
-              onSave={(value) => updateField.mutate({ field: "capacity", value })}
+              isEditing={editingField === "name"}
+              value={property.name}
+              onEdit={() => setEditingField("name")}
+              onSave={(value) => updateField.mutate({ field: "name", value })}
               onCancel={() => setEditingField(null)}
             />
+          )}
+          <div className="flex items-center gap-2 text-sm font-normal">
+            <Users className="h-4 w-4" />
+            {isPublic ? (
+              <span>{property.capacity}</span>
+            ) : (
+              <EditableField
+                isEditing={editingField === "capacity"}
+                value={property.capacity}
+                onEdit={() => setEditingField("capacity")}
+                onSave={(value) => updateField.mutate({ field: "capacity", value })}
+                onCancel={() => setEditingField(null)}
+              />
+            )}
           </div>
         </CardTitle>
       </CardHeader>
@@ -251,69 +260,83 @@ export default function PropertyCard({ property, onEdit }: PropertyCardProps) {
       <CardContent className="space-y-6">
         <div className="space-y-4">
           <div className="flex justify-between items-start">
-            <EditableField
-              isEditing={editingField === "description"}
-              value={property.description}
-              onEdit={() => setEditingField("description")}
-              onSave={(value) => updateField.mutate({ field: "description", value })}
-              onCancel={() => setEditingField(null)}
-            />
-            <div className="flex gap-2">
-              {onEdit && (
+            {isPublic ? (
+              <p>{property.description}</p>
+            ) : (
+              <EditableField
+                isEditing={editingField === "description"}
+                value={property.description}
+                onEdit={() => setEditingField("description")}
+                onSave={(value) => updateField.mutate({ field: "description", value })}
+                onCancel={() => setEditingField(null)}
+              />
+            )}
+            {!isPublic && (
+              <div className="flex gap-2">
+                {onEdit && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onEdit(property)}
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => onEdit(property)}
+                  onClick={() => {
+                    if (confirm("Are you sure you want to delete this property?")) {
+                      deleteProperty.mutate();
+                    }
+                  }}
                 >
-                  <Edit className="h-4 w-4" />
+                  <Trash2 className="h-4 w-4" />
                 </Button>
-              )}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  if (confirm("Are you sure you want to delete this property?")) {
-                    deleteProperty.mutate();
-                  }
-                }}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
+              </div>
+            )}
           </div>
 
           {/* Key Features */}
           <div className="flex flex-wrap gap-4">
             <div className="flex items-center gap-2">
               <Bed className="h-4 w-4" />
-              <EditableField
-                isEditing={editingField === "bedType"}
-                value={property.bedType || ""}
-                onEdit={() => setEditingField("bedType")}
-                onSave={(value) => updateField.mutate({ field: "bedType", value })}
-                onCancel={() => setEditingField(null)}
-                type="select"
-                options={[
-                  { value: "single", label: "Single" },
-                  { value: "double", label: "Double" },
-                  { value: "queen", label: "Queen" },
-                  { value: "king", label: "King" },
-                ]}
-              />
+              {isPublic ? (
+                <span>{property.bedType}</span>
+              ) : (
+                <EditableField
+                  isEditing={editingField === "bedType"}
+                  value={property.bedType || ""}
+                  onEdit={() => setEditingField("bedType")}
+                  onSave={(value) => updateField.mutate({ field: "bedType", value })}
+                  onCancel={() => setEditingField(null)}
+                  type="select"
+                  options={[
+                    { value: "single", label: "Single" },
+                    { value: "double", label: "Double" },
+                    { value: "queen", label: "Queen" },
+                    { value: "king", label: "King" },
+                  ]}
+                />
+              )}
             </div>
             {property.bathrooms && (
               <div className="flex items-center gap-2">
                 <Bath className="h-4 w-4" />
-                <EditableField
-                  isEditing={editingField === "bathrooms"}
-                  value={property.bathrooms}
-                  onEdit={() => setEditingField("bathrooms")}
-                  onSave={(value) =>
-                    updateField.mutate({ field: "bathrooms", value: Number(value) })
-                  }
-                  onCancel={() => setEditingField(null)}
-                  type="number"
-                />
+                {isPublic ? (
+                  <span>{property.bathrooms}</span>
+                ) : (
+                  <EditableField
+                    isEditing={editingField === "bathrooms"}
+                    value={property.bathrooms}
+                    onEdit={() => setEditingField("bathrooms")}
+                    onSave={(value) =>
+                      updateField.mutate({ field: "bathrooms", value: Number(value) })
+                    }
+                    onCancel={() => setEditingField(null)}
+                    type="number"
+                  />
+                )}
               </div>
             )}
           </div>
@@ -322,8 +345,7 @@ export default function PropertyCard({ property, onEdit }: PropertyCardProps) {
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
               <div className="text-lg font-semibold">
-                $
-                <EditableField
+                ${isPublic ? property.rate : <EditableField
                   isEditing={editingField === "rate"}
                   value={Number(property.rate)}
                   onEdit={() => setEditingField("rate")}
@@ -332,13 +354,11 @@ export default function PropertyCard({ property, onEdit }: PropertyCardProps) {
                   }
                   onCancel={() => setEditingField(null)}
                   type="number"
-                />
-                /night
+                />}/night
               </div>
               {property.hourlyRate && (
                 <div className="text-sm text-muted-foreground">
-                  $
-                  <EditableField
+                  ${isPublic ? property.hourlyRate : <EditableField
                     isEditing={editingField === "hourlyRate"}
                     value={Number(property.hourlyRate)}
                     onEdit={() => setEditingField("hourlyRate")}
@@ -347,16 +367,14 @@ export default function PropertyCard({ property, onEdit }: PropertyCardProps) {
                     }
                     onCancel={() => setEditingField(null)}
                     type="number"
-                  />
-                  /hour
+                  />}/hour
                 </div>
               )}
             </div>
             <div className="space-y-1 text-right">
               {property.weeklyRate && (
                 <div className="text-sm text-muted-foreground">
-                  $
-                  <EditableField
+                  ${isPublic ? property.weeklyRate : <EditableField
                     isEditing={editingField === "weeklyRate"}
                     value={Number(property.weeklyRate)}
                     onEdit={() => setEditingField("weeklyRate")}
@@ -365,14 +383,12 @@ export default function PropertyCard({ property, onEdit }: PropertyCardProps) {
                     }
                     onCancel={() => setEditingField(null)}
                     type="number"
-                  />
-                  /week
+                  />}/week
                 </div>
               )}
               {property.monthlyRate && (
                 <div className="text-sm text-muted-foreground">
-                  $
-                  <EditableField
+                  ${isPublic ? property.monthlyRate : <EditableField
                     isEditing={editingField === "monthlyRate"}
                     value={Number(property.monthlyRate)}
                     onEdit={() => setEditingField("monthlyRate")}
@@ -381,15 +397,14 @@ export default function PropertyCard({ property, onEdit }: PropertyCardProps) {
                     }
                     onCancel={() => setEditingField(null)}
                     type="number"
-                  />
-                  /month
+                  />}/month
                 </div>
               )}
             </div>
           </div>
         </div>
 
-        {/* Replace the old calendar section with the new BookingForm */}
+        {/* Booking Form */}
         <div className="border rounded-lg p-4">
           <h4 className="text-sm font-medium mb-2">Book this Property</h4>
           <BookingForm
