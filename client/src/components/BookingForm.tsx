@@ -31,7 +31,7 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
     to: Date | undefined;
   }>({ from: undefined, to: undefined });
 
-  const form = useForm<NewBooking>({
+  const form = useForm<z.infer<typeof insertBookingSchema>>({
     resolver: zodResolver(insertBookingSchema),
     defaultValues: {
       propertyId: property.id,
@@ -68,19 +68,12 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
   });
 
   const createBooking = useMutation({
-    mutationFn: async (values: NewBooking) => {
+    mutationFn: async (values: z.infer<typeof insertBookingSchema>) => {
       try {
-        // Ensure dates are properly formatted as ISO strings
-        const bookingData = {
-          ...values,
-          checkIn: values.checkIn.toISOString(),
-          checkOut: values.checkOut.toISOString(),
-        };
-
         const response = await fetch("/api/bookings", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(bookingData),
+          body: JSON.stringify(values),
         });
 
         if (!response.ok) {
@@ -118,7 +111,7 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
     return days * Number(property.rate);
   }
 
-  async function onSubmit(values: NewBooking) {
+  async function onSubmit(values: z.infer<typeof insertBookingSchema>) {
     if (!selectedDates?.from || !selectedDates?.to) {
       toast({
         title: "Error",

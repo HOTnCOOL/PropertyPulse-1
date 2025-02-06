@@ -312,14 +312,12 @@ export function registerRoutes(app: Express): Server {
     try {
       const { propertyId, guestId, checkIn, checkOut, totalAmount, notes } = req.body;
 
-      // Convert string dates to Date objects
-      const checkInDate = new Date(checkIn);
-      const checkOutDate = new Date(checkOut);
-
-      // Validate dates
-      if (isNaN(checkInDate.getTime()) || isNaN(checkOutDate.getTime())) {
+      // Validate the request body
+      const result = insertBookingSchema.safeParse(req.body);
+      if (!result.success) {
         return res.status(400).json({
-          message: "Invalid date format for check-in or check-out",
+          message: "Invalid booking data",
+          details: result.error.message,
         });
       }
 
@@ -330,16 +328,16 @@ export function registerRoutes(app: Express): Server {
           eq(bookings.status, "confirmed"),
           or(
             and(
-              lte(bookings.checkIn, checkInDate),
-              gte(bookings.checkOut, checkInDate)
+              lte(bookings.checkIn, result.data.checkIn),
+              gte(bookings.checkOut, result.data.checkIn)
             ),
             and(
-              lte(bookings.checkIn, checkOutDate),
-              gte(bookings.checkOut, checkOutDate)
+              lte(bookings.checkIn, result.data.checkOut),
+              gte(bookings.checkOut, result.data.checkOut)
             ),
             and(
-              gte(bookings.checkIn, checkInDate),
-              lte(bookings.checkOut, checkOutDate)
+              gte(bookings.checkIn, result.data.checkIn),
+              lte(bookings.checkOut, result.data.checkOut)
             )
           )
         ),
@@ -356,8 +354,8 @@ export function registerRoutes(app: Express): Server {
         .values({
           propertyId,
           guestId,
-          checkIn: checkInDate,
-          checkOut: checkOutDate,
+          checkIn: result.data.checkIn,
+          checkOut: result.data.checkOut,
           totalAmount,
           notes,
           status: "pending",

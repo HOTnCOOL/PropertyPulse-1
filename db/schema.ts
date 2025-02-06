@@ -126,8 +126,8 @@ const amenitiesSchema = z.object({
 export const insertBookingSchema = z.object({
   propertyId: z.number(),
   guestId: z.number().optional(),
-  checkIn: z.date(),
-  checkOut: z.date(),
+  checkIn: z.coerce.date(),
+  checkOut: z.coerce.date(),
   status: z.string(),
   totalAmount: z.number(),
   notes: z.string().optional(),
