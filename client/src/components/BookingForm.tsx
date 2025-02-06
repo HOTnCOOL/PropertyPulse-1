@@ -153,12 +153,6 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
                       from: range?.from,
                       to: range?.to,
                     });
-                    if (range?.from) {
-                      form.setValue("checkIn", range.from.toISOString());
-                      if (range.to) {
-                        form.setValue("checkOut", range.to.toISOString());
-                      }
-                    }
                   }}
                   disabled={(date) => {
                     if (date < new Date()) return true;

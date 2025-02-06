@@ -368,7 +368,10 @@ export function registerRoutes(app: Express): Server {
       // Create the booking
       const [booking] = await db.insert(bookings)
         .values({
-          ...result.data,
+          propertyId: result.data.propertyId,
+          status: result.data.status,
+          totalAmount: result.data.totalAmount,
+          notes: result.data.notes,
           checkIn: checkInDate,
           checkOut: checkOutDate,
         })
