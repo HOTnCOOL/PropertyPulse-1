@@ -44,6 +44,8 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
       lastName: "",
       email: "",
       phone: "",
+      checkIn: "",
+      checkOut: "",
     },
   });
 
@@ -81,7 +83,7 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
           guestId: guest.id,
           checkIn: selectedDates.from.toISOString(),
           checkOut: selectedDates.to.toISOString(),
-          status: "pending",
+          status: values.status,
           totalAmount: calculateTotalAmount(selectedDates.from, selectedDates.to),
           notes: values.notes || "",
         };
@@ -128,6 +130,19 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
 
   async function onSubmit(values: z.infer<typeof bookingFormSchema>) {
     try {
+      if (!selectedDates.from || !selectedDates.to) {
+        toast({
+          title: "Error",
+          description: "Please select check-in and check-out dates",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Update form values with ISO string dates
+      form.setValue("checkIn", selectedDates.from.toISOString());
+      form.setValue("checkOut", selectedDates.to.toISOString());
+
       await createBookingAndGuest.mutateAsync(values);
     } catch (error) {
       console.error('Form submission error:', error);
