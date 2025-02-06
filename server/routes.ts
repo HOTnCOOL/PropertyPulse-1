@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import multer from "multer";
 import path from "path";
 import { db } from "@db";
-import { properties, guests, payments, todos, assets, bookings } from "@db/schema";
+import { properties, guests, payments, todos, assets, bookings, insertBookingSchema } from "@db/schema";
 import { eq, and, gte, lte, or } from "drizzle-orm";
 import express from "express";
 import { addDays, parseISO } from "date-fns";
@@ -358,34 +358,6 @@ export function registerRoutes(app: Express): Server {
       if (checkInDate >= checkOutDate) {
         return res.status(400).json({
           message: "Check-out date must be after check-in date",
-        });
-      }
-
-      // Check if the property is available for these dates
-      const overlappingBookings = await db.query.bookings.findFirst({
-        where: and(
-          eq(bookings.propertyId, result.data.propertyId),
-          eq(bookings.status, "confirmed"),
-          or(
-            and(
-              lte(bookings.checkIn, checkInDate),
-              gte(bookings.checkOut, checkInDate)
-            ),
-            and(
-              lte(bookings.checkIn, checkOutDate),
-              gte(bookings.checkOut, checkOutDate)
-            ),
-            and(
-              gte(bookings.checkIn, checkInDate),
-              lte(bookings.checkOut, checkOutDate)
-            )
-          )
-        ),
-      });
-
-      if (overlappingBookings) {
-        return res.status(400).json({
-          message: "Property is not available for the selected dates",
         });
       }
 
