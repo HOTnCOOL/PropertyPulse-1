@@ -24,6 +24,7 @@ interface BookingFormProps {
 }
 
 const bookingFormSchema = insertBookingSchema.merge(insertGuestSchema);
+type BookingFormValues = z.infer<typeof bookingFormSchema>;
 
 export default function BookingForm({ property, onSuccess }: BookingFormProps) {
   const { toast } = useToast();
@@ -33,7 +34,7 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
     to: Date | undefined;
   }>({ from: undefined, to: undefined });
 
-  const form = useForm<z.infer<typeof bookingFormSchema>>({
+  const form = useForm<BookingFormValues>({
     resolver: zodResolver(bookingFormSchema),
     defaultValues: {
       propertyId: property.id,
@@ -44,13 +45,13 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
       lastName: "",
       email: "",
       phone: "",
-      checkIn: "",
-      checkOut: "",
+      checkIn: undefined,
+      checkOut: undefined,
     },
   });
 
   const createBookingAndGuest = useMutation({
-    mutationFn: async (values: z.infer<typeof bookingFormSchema>) => {
+    mutationFn: async (values: BookingFormValues) => {
       try {
         if (!selectedDates.from || !selectedDates.to) {
           throw new Error("Please select check-in and check-out dates");
@@ -66,8 +67,8 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
             email: values.email,
             phone: values.phone,
             propertyId: property.id,
-            checkIn: selectedDates.from.toISOString(),
-            checkOut: selectedDates.to.toISOString(),
+            checkIn: selectedDates.from,
+            checkOut: selectedDates.to,
           }),
         });
 
@@ -81,8 +82,8 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
         const bookingData = {
           propertyId: property.id,
           guestId: guest.id,
-          checkIn: selectedDates.from.toISOString(),
-          checkOut: selectedDates.to.toISOString(),
+          checkIn: selectedDates.from,
+          checkOut: selectedDates.to,
           status: values.status,
           totalAmount: calculateTotalAmount(selectedDates.from, selectedDates.to),
           notes: values.notes || "",
@@ -128,7 +129,7 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
     return days * Number(property.rate);
   }
 
-  async function onSubmit(values: z.infer<typeof bookingFormSchema>) {
+  async function onSubmit(values: BookingFormValues) {
     try {
       if (!selectedDates.from || !selectedDates.to) {
         toast({
@@ -139,11 +140,15 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
         return;
       }
 
-      // Update form values with ISO string dates
-      form.setValue("checkIn", selectedDates.from.toISOString());
-      form.setValue("checkOut", selectedDates.to.toISOString());
+      // Set the dates in the form values
+      form.setValue("checkIn", selectedDates.from);
+      form.setValue("checkOut", selectedDates.to);
 
-      await createBookingAndGuest.mutateAsync(values);
+      await createBookingAndGuest.mutateAsync({
+        ...values,
+        checkIn: selectedDates.from,
+        checkOut: selectedDates.to,
+      });
     } catch (error) {
       console.error('Form submission error:', error);
     }
@@ -170,6 +175,13 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
                       from: range?.from,
                       to: range?.to,
                     });
+                    // Update form values when dates are selected
+                    if (range?.from) {
+                      form.setValue("checkIn", range.from);
+                      if (range.to) {
+                        form.setValue("checkOut", range.to);
+                      }
+                    }
                   }}
                   disabled={(date) => date < new Date()}
                   className="rounded-md border"

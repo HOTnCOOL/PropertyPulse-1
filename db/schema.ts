@@ -126,12 +126,8 @@ const amenitiesSchema = z.object({
 export const insertBookingSchema = z.object({
   propertyId: z.number(),
   guestId: z.number().optional(),
-  checkIn: z.string().refine((date) => !isNaN(new Date(date).getTime()), {
-    message: "Invalid check-in date format"
-  }),
-  checkOut: z.string().refine((date) => !isNaN(new Date(date).getTime()), {
-    message: "Invalid check-out date format"
-  }),
+  checkIn: z.coerce.date(),
+  checkOut: z.coerce.date(),
   status: z.string(),
   totalAmount: z.number(),
   notes: z.string().optional(),
@@ -156,12 +152,8 @@ export const insertGuestSchema = z.object({
   email: z.string().email("Invalid email address"),
   phone: z.string().min(1, "Phone number is required"),
   propertyId: z.number(),
-  checkIn: z.string().refine((date) => !isNaN(new Date(date).getTime()), {
-    message: "Invalid check-in date format"
-  }),
-  checkOut: z.string().refine((date) => !isNaN(new Date(date).getTime()), {
-    message: "Invalid check-out date format"
-  }),
+  checkIn: z.coerce.date(),
+  checkOut: z.coerce.date(),
 });
 export const selectGuestSchema = createSelectSchema(guests);
 export const insertPaymentSchema = createInsertSchema(payments);
