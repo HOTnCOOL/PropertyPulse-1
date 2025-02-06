@@ -150,7 +150,19 @@ export const insertPropertySchema = createInsertSchema(properties).extend({
 });
 
 export const selectPropertySchema = createSelectSchema(properties);
-export const insertGuestSchema = createInsertSchema(guests);
+export const insertGuestSchema = z.object({
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
+  email: z.string().email("Invalid email address"),
+  phone: z.string().min(1, "Phone number is required"),
+  propertyId: z.number(),
+  checkIn: z.string().refine((date) => !isNaN(new Date(date).getTime()), {
+    message: "Invalid check-in date format"
+  }),
+  checkOut: z.string().refine((date) => !isNaN(new Date(date).getTime()), {
+    message: "Invalid check-out date format"
+  }),
+});
 export const selectGuestSchema = createSelectSchema(guests);
 export const insertPaymentSchema = createInsertSchema(payments);
 export const selectPaymentSchema = createSelectSchema(payments);

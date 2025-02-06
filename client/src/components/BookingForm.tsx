@@ -15,13 +15,15 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { type Property, insertBookingSchema } from "@db/schema";
+import { type Property, insertBookingSchema, insertGuestSchema } from "@db/schema";
 import * as z from "zod";
 
 interface BookingFormProps {
   property: Property;
   onSuccess?: () => void;
 }
+
+const bookingFormSchema = insertBookingSchema.merge(insertGuestSchema);
 
 export default function BookingForm({ property, onSuccess }: BookingFormProps) {
   const { toast } = useToast();
@@ -31,49 +33,52 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
     to: Date | undefined;
   }>({ from: undefined, to: undefined });
 
-  const form = useForm<z.infer<typeof insertBookingSchema>>({
-    resolver: zodResolver(insertBookingSchema),
+  const form = useForm<z.infer<typeof bookingFormSchema>>({
+    resolver: zodResolver(bookingFormSchema),
     defaultValues: {
       propertyId: property.id,
       notes: "",
       status: "pending",
       totalAmount: 0,
+      firstName: "",
+      lastName: "",
+      email: "",
+      phone: "",
     },
   });
 
-  const { data: availabilityData } = useQuery({
-    queryKey: [
-      `/api/properties/${property.id}/availability`,
-      selectedDates?.from?.toISOString(),
-      selectedDates?.to?.toISOString(),
-    ],
-    queryFn: async () => {
-      if (!selectedDates?.from || !selectedDates?.to) return null;
-      try {
-        const response = await fetch(
-          `/api/properties/${property.id}/availability?start=${selectedDates.from.toISOString()}&end=${selectedDates.to.toISOString()}`
-        );
-        if (!response.ok) {
-          throw new Error("Failed to fetch availability");
-        }
-        return response.json();
-      } catch (error) {
-        console.error('Error fetching availability:', error);
-        throw error;
-      }
-    },
-    enabled: !!selectedDates?.from && !!selectedDates?.to,
-  });
-
-  const createBooking = useMutation({
-    mutationFn: async (values: z.infer<typeof insertBookingSchema>) => {
+  const createBookingAndGuest = useMutation({
+    mutationFn: async (values: z.infer<typeof bookingFormSchema>) => {
       try {
         if (!selectedDates.from || !selectedDates.to) {
           throw new Error("Please select check-in and check-out dates");
         }
 
+        // First create the guest
+        const guestResponse = await fetch("/api/guests", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            firstName: values.firstName,
+            lastName: values.lastName,
+            email: values.email,
+            phone: values.phone,
+            propertyId: property.id,
+            checkIn: selectedDates.from.toISOString(),
+            checkOut: selectedDates.to.toISOString(),
+          }),
+        });
+
+        if (!guestResponse.ok) {
+          throw new Error("Failed to register guest");
+        }
+
+        const guest = await guestResponse.json();
+
+        // Then create the booking with the guest ID
         const bookingData = {
           propertyId: property.id,
+          guestId: guest.id,
           checkIn: selectedDates.from.toISOString(),
           checkOut: selectedDates.to.toISOString(),
           status: "pending",
@@ -81,22 +86,19 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
           notes: values.notes || "",
         };
 
-        console.log('Submitting booking data:', bookingData);
-
-        const response = await fetch("/api/bookings", {
+        const bookingResponse = await fetch("/api/bookings", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(bookingData),
         });
 
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || "Failed to create booking");
+        if (!bookingResponse.ok) {
+          throw new Error("Failed to create booking");
         }
 
-        return response.json();
+        return bookingResponse.json();
       } catch (error) {
-        console.error('Booking submission error:', error);
+        console.error('Form submission error:', error);
         throw error;
       }
     },
@@ -106,13 +108,13 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
       setSelectedDates({ from: undefined, to: undefined });
       toast({
         title: "Success",
-        description: "Booking request submitted successfully",
+        description: "Booking and guest registration completed successfully",
       });
       onSuccess?.();
     },
     onError: (error: Error) => {
       toast({
-        title: "Booking Failed",
+        title: "Error",
         description: error.message,
         variant: "destructive",
       });
@@ -124,9 +126,9 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
     return days * Number(property.rate);
   }
 
-  async function onSubmit(values: z.infer<typeof insertBookingSchema>) {
+  async function onSubmit(values: z.infer<typeof bookingFormSchema>) {
     try {
-      await createBooking.mutateAsync(values);
+      await createBookingAndGuest.mutateAsync(values);
     } catch (error) {
       console.error('Form submission error:', error);
     }
@@ -154,17 +156,7 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
                       to: range?.to,
                     });
                   }}
-                  disabled={(date) => {
-                    if (date < new Date()) return true;
-                    if (availabilityData) {
-                      const dateStr = date.toISOString().split('T')[0];
-                      const dateInfo = availabilityData.find((d: any) =>
-                        d.date.startsWith(dateStr)
-                      );
-                      return dateInfo ? !dateInfo.available : false;
-                    }
-                    return false;
-                  }}
+                  disabled={(date) => date < new Date()}
                   className="rounded-md border"
                 />
               </FormControl>
@@ -181,6 +173,70 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
               <p className="font-semibold mt-2">
                 Total: ${calculateTotalAmount(selectedDates.from, selectedDates.to)}
               </p>
+            </div>
+
+            {/* Guest Information */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">Guest Information</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="firstName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>First Name</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="lastName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Last Name</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email</FormLabel>
+                      <FormControl>
+                        <Input type="email" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="phone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Phone</FormLabel>
+                      <FormControl>
+                        <Input type="tel" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
             </div>
 
             <FormField
@@ -200,9 +256,9 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
             <Button
               type="submit"
               className="w-full"
-              disabled={createBooking.isPending}
+              disabled={createBookingAndGuest.isPending}
             >
-              {createBooking.isPending ? "Submitting..." : "Request Booking"}
+              {createBookingAndGuest.isPending ? "Submitting..." : "Complete Booking"}
             </Button>
           </>
         )}
