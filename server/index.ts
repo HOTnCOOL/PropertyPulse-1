@@ -36,7 +36,7 @@ app.use((req, res, next) => {
   next();
 });
 
-async function startServer(port = 5000, retries = 3) {
+async function startServer(retries = 3) {
   try {
     const server = registerRoutes(app);
 
@@ -54,16 +54,18 @@ async function startServer(port = 5000, retries = 3) {
       serveStatic(app);
     }
 
+    const PORT = process.env.PORT || 5000;
+
     await new Promise<void>((resolve, reject) => {
-      server.listen(port, () => {
-        log(`serving on port ${port}`);
+      server.listen(PORT, "0.0.0.0", () => {
+        log(`serving on port ${PORT}`);
         resolve();
       }).on('error', (err: NodeJS.ErrnoException) => {
         if (err.code === 'EADDRINUSE' && retries > 0) {
-          log(`Port ${port} is in use, trying port ${port + 1}...`);
+          log(`Port ${PORT} is in use, retrying in 1s...`);
           server.close();
           setTimeout(() => {
-            startServer(port + 1, retries - 1).then(resolve).catch(reject);
+            startServer(retries - 1).then(resolve).catch(reject);
           }, 1000);
         } else {
           reject(err);
