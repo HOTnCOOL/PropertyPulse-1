@@ -31,276 +31,97 @@ import { useToast } from "@/hooks/use-toast";
 import { insertPaymentSchema } from "@db/schema";
 import * as z from "zod";
 
+const PaymentForm = ({ property, booking, onSuccess }) => {
+  const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [paymentAmount, setPaymentAmount] = useState('partial');
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const handlePayment = async () => {
+    try {
+      // Mock payment processing
+      const response = await fetch('/api/payments/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bookingId: booking.id,
+          method: paymentMethod,
+          amount: paymentAmount === 'full' ? booking.totalAmount : booking.depositAmount,
+          status: 'confirmed'
+        })
+      });
+
+      if (!response.ok) throw new Error('Payment failed');
+
+      const result = await response.json();
+      queryClient.invalidateQueries({ queryKey: ['/api/bookings'] });
+      toast({
+        title: 'Success',
+        description: 'Payment processed successfully'
+      });
+      window.location.href = `/guest-dashboard?ref=${booking.reference}&email=${booking.guest.email}`;
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Payment processing failed',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h3 className="text-sm font-medium mb-2">Payment Method</h3>
+        <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="cash">Cash</SelectItem>
+            <SelectItem value="bank">Bank Transfer</SelectItem>
+            <SelectItem value="card">Credit Card</SelectItem>
+            <SelectItem value="stripe">Stripe</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-2">Payment Amount</h3>
+        <Select value={paymentAmount} onValueChange={setPaymentAmount}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="partial">Deposit Only (${booking.depositAmount})</SelectItem>
+            <SelectItem value="full">Full Amount (${booking.totalAmount})</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <Button onClick={handlePayment} className="w-full">
+        Process Payment
+      </Button>
+    </div>
+  );
+};
+
+
 interface PaymentRegistrationProps {
   guestId: number;
   onSuccess?: () => void;
+  property: any; //Added property prop
+  booking: any; //Added booking prop
 }
 
-export default function PaymentRegistration({ guestId, onSuccess }: PaymentRegistrationProps) {
+export default function PaymentRegistration({ guestId, onSuccess, property, booking }: PaymentRegistrationProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const form = useForm({
-    resolver: zodResolver(insertPaymentSchema),
-    defaultValues: {
-      guestId,
-      amount: "",
-      type: "rent",
-      method: "cash",
-      status: "pending",
-      dueDate: new Date(),
-      date: new Date(),
-      description: "",
-      reference: "",
-    },
-  });
-
-  const registerPayment = useMutation({
-    mutationFn: async (values: z.infer<typeof insertPaymentSchema>) => {
-      const response = await fetch("/api/payments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(values),
-      });
-      if (!response.ok) throw new Error("Failed to register payment");
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/payments"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/assets"] });
-      form.reset();
-      toast({
-        title: "Success",
-        description: "Payment has been registered successfully",
-      });
-      onSuccess?.();
-    },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to register payment",
-        variant: "destructive",
-      });
-    },
-    onSettled: () => {
-      setIsSubmitting(false);
-    },
-  });
-
-  function onSubmit(values: z.infer<typeof insertPaymentSchema>) {
-    setIsSubmitting(true);
-    registerPayment.mutate(values);
-  }
+  //Removed existing form and mutation logic
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <FormField
-            control={form.control}
-            name="amount"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Amount</FormLabel>
-                <FormControl>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    placeholder="0.00"
-                    {...field}
-                    onChange={(e) => field.onChange(e.target.valueAsNumber)}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="type"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Payment Type</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select payment type" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="rent">Rent</SelectItem>
-                    <SelectItem value="deposit">Deposit</SelectItem>
-                    <SelectItem value="service">Service</SelectItem>
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <FormField
-            control={form.control}
-            name="method"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Payment Method</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select payment method" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="cash">Cash</SelectItem>
-                    <SelectItem value="bank">Bank Transfer</SelectItem>
-                    <SelectItem value="card">Card</SelectItem>
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="status"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Status</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select status" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="confirmed">Confirmed</SelectItem>
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
-
-        <FormField
-          control={form.control}
-          name="reference"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Reference Number (for bank/card payments)</FormLabel>
-              <FormControl>
-                <Input {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <div className="grid grid-cols-2 gap-4">
-          <FormField
-            control={form.control}
-            name="date"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Payment Date</FormLabel>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <FormControl>
-                      <Button
-                        variant="outline"
-                        className={`w-full pl-3 text-left font-normal ${
-                          !field.value && "text-muted-foreground"
-                        }`}
-                      >
-                        {field.value ? (
-                          format(field.value, "PPP")
-                        ) : (
-                          <span>Pick a date</span>
-                        )}
-                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                      </Button>
-                    </FormControl>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={field.value}
-                      onSelect={field.onChange}
-                      disabled={(date) => date > new Date()}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="dueDate"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Due Date</FormLabel>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <FormControl>
-                      <Button
-                        variant="outline"
-                        className={`w-full pl-3 text-left font-normal ${
-                          !field.value && "text-muted-foreground"
-                        }`}
-                      >
-                        {field.value ? (
-                          format(field.value, "PPP")
-                        ) : (
-                          <span>Pick a date</span>
-                        )}
-                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                      </Button>
-                    </FormControl>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={field.value}
-                      onSelect={field.onChange}
-                      disabled={(date) => date < new Date()}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
-
-        <FormField
-          control={form.control}
-          name="description"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Description</FormLabel>
-              <FormControl>
-                <Input {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <Button type="submit" className="w-full" disabled={isSubmitting}>
-          Register Payment
-        </Button>
-      </form>
-    </Form>
+    <PaymentForm property={property} booking={booking} onSuccess={onSuccess}/>
   );
 }

@@ -15,6 +15,7 @@ function App() {
           <Route path="/guests" component={GuestRegistration} />
           <Route path="/properties" component={Properties} />
           <Route path="/financials" component={Financials} />
+          <Route path="/guest-dashboard" component={GuestDashboard} />
         </Switch>
       </main>
     </div>
