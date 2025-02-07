@@ -2,10 +2,10 @@ import { Home, Users, Building2, DollarSign } from "lucide-react";
 import { Link, useLocation } from "wouter";
 
 const navItems = [
-  { icon: Home, label: "Dashboard", href: "/" },
-  { icon: Users, label: "Guests", href: "/guests" },
-  { icon: Building2, label: "Properties", href: "/properties" },
-  { icon: DollarSign, label: "Financials", href: "/financials" },
+  { icon: Home, label: "Dashboard", href: "/admin" },
+  { icon: Users, label: "Guests", href: "/admin/guests" },
+  { icon: Building2, label: "Properties", href: "/admin/properties" },
+  { icon: DollarSign, label: "Financials", href: "/admin/financials" },
 ];
 
 export default function Sidebar() {

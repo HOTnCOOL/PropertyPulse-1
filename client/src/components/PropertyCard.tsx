@@ -21,16 +21,15 @@ import {
 import { useState } from "react";
 import { useLocation } from "wouter";
 import type { Property } from "@db/schema";
-import { type DateRange } from "react-day-picker"; //Retained from original
-
+import { type DateRange } from "react-day-picker";
 
 interface PropertyCardProps {
   property: Property;
-  onEdit?: (property: Property) => void; //Retained from original
+  onEdit?: (property: Property) => void;
   isPublic?: boolean;
 }
 
-interface EditableFieldProps { //Retained from original
+interface EditableFieldProps {
   isEditing: boolean;
   value: string | number;
   onEdit: () => void;
@@ -40,7 +39,7 @@ interface EditableFieldProps { //Retained from original
   options?: { value: string; label: string }[];
 }
 
-function EditableField({ //Retained from original
+function EditableField({
   isEditing,
   value,
   onEdit,
@@ -107,12 +106,12 @@ function EditableField({ //Retained from original
 export default function PropertyCard({ property, onEdit, isPublic = false }: PropertyCardProps) {
   const [, setLocation] = useLocation();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [editingField, setEditingField] = useState<string | null>(null); //Retained from original
+  const [editingField, setEditingField] = useState<string | null>(null);
   const amenities = property.amenities as Record<string, boolean>;
   const imageUrls = (property.imageUrls as string[]) || [];
 
   const handleBookNow = () => {
-    setLocation(`/guest-registration?propertyId=${property.id}`);
+    setLocation(`/register?propertyId=${property.id}`);
   };
 
   const nextImage = () => {
