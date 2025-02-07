@@ -283,6 +283,7 @@ export function registerRoutes(app: Express): Server {
 
   app.post("/api/guests", async (req, res) => {
     try {
+      console.log('Received guest registration request:', req.body);
       const checkInDate = new Date(req.body.checkIn);
       const checkOutDate = new Date(req.body.checkOut);
 
@@ -293,13 +294,54 @@ export function registerRoutes(app: Express): Server {
         });
       }
 
-      const guest = await db.insert(guests).values({
-        ...req.body,
-        checkIn: checkInDate,
-        checkOut: checkOutDate,
-      }).returning();
+      // Generate a unique booking reference
+      const bookingReference = 'BOOK' + Math.random().toString(36).substring(2, 8).toUpperCase();
 
-      res.json(guest[0]);
+      // Start a transaction
+      const result = await db.transaction(async (tx) => {
+        // Create guest first
+        const [guest] = await tx
+          .insert(guests)
+          .values({
+            ...req.body,
+            checkIn: checkInDate,
+            checkOut: checkOutDate,
+            bookingReference, // Add booking reference to guest
+          })
+          .returning();
+
+        // Calculate total amount (you may want to adjust this calculation)
+        const property = await tx.query.properties.findFirst({
+          where: eq(properties.id, guest.propertyId),
+        });
+
+        if (!property) {
+          throw new Error("Property not found");
+        }
+
+        const numberOfDays = Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24));
+        const totalAmount = Number(property.rate) * numberOfDays;
+
+        // Create booking
+        const [booking] = await tx
+          .insert(bookings)
+          .values({
+            propertyId: guest.propertyId,
+            guestId: guest.id,
+            checkIn: checkInDate,
+            checkOut: checkOutDate,
+            status: 'pending',
+            totalAmount,
+            bookingReference,
+            notes: `Booking for ${guest.firstName} ${guest.lastName}`,
+          })
+          .returning();
+
+        return { guest, booking };
+      });
+
+      console.log('Registration successful:', result);
+      res.json(result);
     } catch (error) {
       console.error('Error creating guest:', error);
       res.status(500).json({

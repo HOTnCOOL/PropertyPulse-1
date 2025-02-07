@@ -111,7 +111,7 @@ export default function GuestRegistration() {
       console.log('Registration response:', data);
       return data;
     },
-    onSuccess: (guest) => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/guests"] });
       form.reset();
       setSelectedDates({});
@@ -119,12 +119,13 @@ export default function GuestRegistration() {
         title: "Success",
         description: "Guest has been registered successfully",
       });
+
       // Redirect to payment page with the booking reference and email
-      if (guest.bookingReference) {
-        console.log('Redirecting to payment page with:', guest);
-        setLocation(`/payment?ref=${guest.bookingReference}&email=${guest.email}`);
+      if (data.booking?.bookingReference && data.guest?.email) {
+        console.log('Redirecting to payment page with:', data);
+        setLocation(`/payment?ref=${data.booking.bookingReference}&email=${data.guest.email}`);
       } else {
-        console.error('No booking reference in response:', guest);
+        console.error('Missing booking reference or email in response:', data);
       }
     },
     onError: (error) => {
