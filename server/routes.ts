@@ -6,7 +6,7 @@ import { db } from "@db";
 import { properties, guests, payments, todos, assets, bookings, insertBookingSchema, admins, loginAdminSchema, loginGuestSchema } from "@db/schema";
 import { eq, and, gte, lte, or } from "drizzle-orm";
 import express from "express";
-import { addDays, parseISO } from "date-fns";
+import { addDays, addMonths, addWeeks, differenceInDays, differenceInCalendarMonths, startOfDay } from "date-fns";
 import { sql } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
@@ -39,6 +39,80 @@ const upload = multer({
     cb(null, true);
   }
 });
+
+interface PricePeriod {
+  type: 'monthly' | 'weekly' | 'daily';
+  startDate: Date;
+  endDate: Date;
+  amount: number;
+  baseRate: number;
+  duration: number;
+}
+
+function calculatePricePeriods(property: any, checkIn: Date, checkOut: Date): PricePeriod[] {
+  const periods: PricePeriod[] = [];
+  let currentDate = startOfDay(new Date(checkIn));
+  const endDate = startOfDay(new Date(checkOut));
+
+  // Helper function to calculate period end date
+  const calculatePeriodEnd = (date: Date, type: 'monthly' | 'weekly'): Date => {
+    const tentativeEnd = type === 'monthly'
+      ? addMonths(date, 1)
+      : addWeeks(date, 1);
+    return tentativeEnd <= endDate ? tentativeEnd : endDate;
+  };
+
+  while (currentDate < endDate) {
+    // Try monthly package first
+    if (property.monthlyRate &&
+        differenceInCalendarMonths(endDate, currentDate) >= 1) {
+      const periodEnd = calculatePeriodEnd(currentDate, 'monthly');
+      periods.push({
+        type: 'monthly',
+        startDate: currentDate,
+        endDate: periodEnd,
+        amount: Number(property.monthlyRate),
+        baseRate: Number(property.monthlyRate),
+        duration: 1 // 1 month
+      });
+      currentDate = periodEnd;
+      continue;
+    }
+
+    // Try weekly package
+    if (property.weeklyRate &&
+        differenceInDays(endDate, currentDate) >= 7) {
+      const periodEnd = calculatePeriodEnd(currentDate, 'weekly');
+      periods.push({
+        type: 'weekly',
+        startDate: currentDate,
+        endDate: periodEnd,
+        amount: Number(property.weeklyRate),
+        baseRate: Number(property.weeklyRate),
+        duration: 1 // 1 week
+      });
+      currentDate = periodEnd;
+      continue;
+    }
+
+    // Use daily rate for remaining days
+    const daysLeft = differenceInDays(endDate, currentDate);
+    if (daysLeft > 0) {
+      const periodEnd = endDate;
+      periods.push({
+        type: 'daily',
+        startDate: currentDate,
+        endDate: periodEnd,
+        amount: Number(property.rate) * daysLeft,
+        baseRate: Number(property.rate),
+        duration: daysLeft
+      });
+      currentDate = periodEnd;
+    }
+  }
+
+  return periods;
+}
 
 export function registerRoutes(app: Express): Server {
   // Set up session middleware
@@ -310,7 +384,7 @@ export function registerRoutes(app: Express): Server {
           })
           .returning();
 
-        // Calculate total amount (you may want to adjust this calculation)
+        // Get property details
         const property = await tx.query.properties.findFirst({
           where: eq(properties.id, guest.propertyId),
         });
@@ -319,8 +393,9 @@ export function registerRoutes(app: Express): Server {
           throw new Error("Property not found");
         }
 
-        const numberOfDays = Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24));
-        const totalAmount = Number(property.rate) * numberOfDays;
+        // Calculate total amount using the new price calculation
+        const pricePeriods = calculatePricePeriods(property, checkInDate, checkOutDate);
+        const totalAmount = pricePeriods.reduce((sum, period) => sum + period.amount, 0);
 
         // Create booking
         const [booking] = await tx
@@ -337,10 +412,10 @@ export function registerRoutes(app: Express): Server {
           })
           .returning();
 
+        console.log('Registration successful:', { guest, booking });
         return { guest, booking };
       });
 
-      console.log('Registration successful:', result);
       res.json(result);
     } catch (error) {
       console.error('Error creating guest:', error);
