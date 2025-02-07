@@ -12,6 +12,7 @@ import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
+import { pool } from "@db"; // Import pool from db/index.ts
 
 // Configure multer for file upload
 const storage = multer.diskStorage({
@@ -45,8 +46,7 @@ export function registerRoutes(app: Express): Server {
   app.use(
     session({
       store: new PostgresStore({
-        // @ts-ignore
-        pool: db.config.pool,
+        pool: pool, // Use the imported pool
         tableName: 'session'
       }),
       secret: process.env.REPL_ID || 'your-secret-key',
