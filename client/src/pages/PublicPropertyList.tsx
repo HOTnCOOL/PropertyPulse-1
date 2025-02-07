@@ -15,17 +15,30 @@ export function PublicPropertyList() {
 
   if (isLoading) {
     return (
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {[...Array(6)].map((_, i) => (
-          <Skeleton key={i} className="h-[300px] w-full" />
-        ))}
+      <div className="container mx-auto py-8 px-4">
+        <div className="text-center mb-12">
+          <h1 className="text-4xl font-bold mb-4">Find Your Perfect Stay</h1>
+          <p className="text-lg text-muted-foreground">
+            Browse our selection of premium properties and book your next getaway
+          </p>
+        </div>
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {[...Array(6)].map((_, i) => (
+            <Skeleton key={i} className="h-[500px] w-full rounded-lg" />
+          ))}
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto py-8">
-      <h1 className="mb-8 text-3xl font-bold">Available Properties</h1>
+    <div className="container mx-auto py-8 px-4">
+      <div className="text-center mb-12">
+        <h1 className="text-4xl font-bold mb-4">Find Your Perfect Stay</h1>
+        <p className="text-lg text-muted-foreground">
+          Browse our selection of premium properties and book your next getaway
+        </p>
+      </div>
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {properties?.map((property) => (
           <PropertyCard
