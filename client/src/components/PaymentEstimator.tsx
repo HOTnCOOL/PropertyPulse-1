@@ -6,8 +6,6 @@ import {
   differenceInCalendarMonths,
   addMonths,
   addWeeks,
-  isBefore,
-  isAfter,
   startOfDay
 } from "date-fns";
 import type { Property } from "@db/schema";
@@ -25,12 +23,17 @@ interface PricePeriod {
   amount: number;
   baseRate: number;
   duration: number;
+  daysInPeriod: number;
+  effectiveDailyRate: number;
+  normalDailyTotal: number;
+  discountPercentage: number;
 }
 
 function calculatePricePeriods(property: Property, checkIn: Date, checkOut: Date): PricePeriod[] {
   const periods: PricePeriod[] = [];
   let currentDate = startOfDay(new Date(checkIn));
   const endDate = startOfDay(new Date(checkOut));
+  const normalDailyRate = Number(property.rate);
 
   // Helper function to calculate period end date for monthly package
   const calculateMonthlyEnd = (date: Date): Date => {
@@ -45,17 +48,28 @@ function calculatePricePeriods(property: Property, checkIn: Date, checkOut: Date
     return nextWeek <= endDate ? nextWeek : endDate;
   };
 
+  // Helper function to calculate period metrics
+  const calculatePeriodMetrics = (start: Date, end: Date, amount: number): Pick<PricePeriod, 'daysInPeriod' | 'effectiveDailyRate' | 'normalDailyTotal' | 'discountPercentage'> => {
+    const daysInPeriod = differenceInDays(end, start);
+    const effectiveDailyRate = amount / daysInPeriod;
+    const normalDailyTotal = normalDailyRate * daysInPeriod;
+    const discountPercentage = ((normalDailyRate - effectiveDailyRate) / normalDailyRate) * 100;
+    return { daysInPeriod, effectiveDailyRate, normalDailyTotal, discountPercentage };
+  };
+
   // First try to fit monthly package
   if (property.monthlyRate) {
     const monthlyEnd = calculateMonthlyEnd(currentDate);
     if (differenceInCalendarMonths(endDate, currentDate) >= 1) {
+      const metrics = calculatePeriodMetrics(currentDate, monthlyEnd, Number(property.monthlyRate));
       periods.push({
         type: 'monthly',
         startDate: currentDate,
         endDate: monthlyEnd,
         amount: Number(property.monthlyRate),
         baseRate: Number(property.monthlyRate),
-        duration: 1 // 1 month
+        duration: 1, // 1 month
+        ...metrics
       });
       currentDate = monthlyEnd;
     }
@@ -65,13 +79,15 @@ function calculatePricePeriods(property: Property, checkIn: Date, checkOut: Date
   if (property.weeklyRate) {
     while (differenceInDays(endDate, currentDate) >= 7) {
       const weeklyEnd = calculateWeeklyEnd(currentDate);
+      const metrics = calculatePeriodMetrics(currentDate, weeklyEnd, Number(property.weeklyRate));
       periods.push({
         type: 'weekly',
         startDate: currentDate,
         endDate: weeklyEnd,
         amount: Number(property.weeklyRate),
         baseRate: Number(property.weeklyRate),
-        duration: 1 // 1 week
+        duration: 1, // 1 week
+        ...metrics
       });
       currentDate = weeklyEnd;
     }
@@ -80,13 +96,15 @@ function calculatePricePeriods(property: Property, checkIn: Date, checkOut: Date
   // Use daily rate for any remaining days
   const remainingDays = differenceInDays(endDate, currentDate);
   if (remainingDays > 0) {
+    const metrics = calculatePeriodMetrics(currentDate, endDate, normalDailyRate * remainingDays);
     periods.push({
       type: 'daily',
       startDate: currentDate,
       endDate: endDate,
-      amount: Number(property.rate) * remainingDays,
-      baseRate: Number(property.rate),
-      duration: remainingDays
+      amount: normalDailyRate * remainingDays,
+      baseRate: normalDailyRate,
+      duration: remainingDays,
+      ...metrics
     });
   }
 
@@ -125,19 +143,35 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
         <div className="space-y-4">
           <div className="space-y-2">
             {estimates.periods.map((period, index) => (
-              <div key={index} className="flex justify-between text-sm">
-                <span>
-                  {period.type === 'monthly' && 'Monthly Rate'}
-                  {period.type === 'weekly' && 'Weekly Rate'}
-                  {period.type === 'daily' && 'Daily Rate'}
-                  {' '}
-                  ({format(period.startDate, "MMM d")} - {format(period.endDate, "MMM d")})
-                  {period.duration > 1 && period.type === 'daily' && ` (${period.duration} days)`}
-                </span>
-                <span className="font-medium">${period.amount.toLocaleString()}</span>
+              <div key={index} className="space-y-1">
+                <div className="flex justify-between text-sm">
+                  <span>
+                    {period.type === 'monthly' && 'Monthly Rate'}
+                    {period.type === 'weekly' && 'Weekly Rate'}
+                    {period.type === 'daily' && 'Daily Rate'}
+                    {' '}
+                    ({format(period.startDate, "MMM d")} - {format(period.endDate, "MMM d")})
+                    {period.duration > 1 && period.type === 'daily' && ` (${period.duration} days)`}
+                  </span>
+                  <span className="font-medium">${period.amount.toLocaleString()}</span>
+                </div>
+                <div className="text-xs text-muted-foreground flex justify-between">
+                  <span>
+                    <span className="line-through">${period.normalDailyTotal.toLocaleString()}</span>
+                    {' '}→{' '}
+                    <span className="text-green-600">${Math.round(period.effectiveDailyRate)}/day</span>
+                    {' '}
+                    {period.discountPercentage > 0 && (
+                      <span className="text-green-600">
+                        ({Math.round(period.discountPercentage)}% off)
+                      </span>
+                    )}
+                  </span>
+                  <span>{period.daysInPeriod} days</span>
+                </div>
               </div>
             ))}
-            <div className="flex justify-between text-sm">
+            <div className="flex justify-between text-sm pt-2 border-t">
               <span>Security Deposit (refundable)</span>
               <span className="font-medium">${estimates.deposit.toLocaleString()}</span>
             </div>
