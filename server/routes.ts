@@ -4,11 +4,9 @@ import multer from "multer";
 import path from "path";
 import { db } from "@db";
 import { properties, guests, payments, todos, assets, bookings, insertBookingSchema, admins, loginAdminSchema, loginGuestSchema } from "@db/schema";
-import { eq, and, gte, lte, or } from "drizzle-orm";
+import { eq, and, gte, lte, or, asc, desc, sql } from "drizzle-orm";
 import express from "express";
 import { addDays, addMonths, addWeeks, differenceInDays, differenceInCalendarMonths, startOfDay } from "date-fns";
-import { sql } from "drizzle-orm";
-import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
@@ -146,6 +144,39 @@ const upload = multer({
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
     if (!allowedTypes.includes(file.mimetype)) {
       cb(new Error('Invalid file type. Only JPEG, PNG and WebP are allowed'));
+      return;
+    }
+    cb(null, true);
+  }
+});
+
+// Add this near the multer configuration
+const paymentDocsStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, path.join(process.cwd(), "uploads/payment-docs"));
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, 'payment-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const uploadPaymentDocs = multer({
+  storage: paymentDocsStorage,
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = [
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ];
+    if (!allowedTypes.includes(file.mimetype)) {
+      cb(new Error('Invalid file type. Only JPEG, PNG, WebP, PDF and DOC files are allowed'));
       return;
     }
     cb(null, true);
@@ -546,6 +577,95 @@ export function registerRoutes(app: Express): Server {
 
     res.json(payment);
   });
+
+  // Add this new endpoint after the existing payments endpoints
+  app.post("/api/payments/:id/documents", uploadPaymentDocs.array("documents", 5), async (req, res) => {
+    const paymentId = parseInt(req.params.id);
+    const files = req.files as Express.Multer.File[];
+
+    if (!files || files.length === 0) {
+      return res.status(400).send("No files uploaded");
+    }
+
+    try {
+      // Get current payment
+      const [payment] = await db
+        .select()
+        .from(payments)
+        .where(eq(payments.id, paymentId))
+        .limit(1);
+
+      if (!payment) {
+        return res.status(404).send("Payment not found");
+      }
+
+      // Update payment with document URLs
+      const documentUrls = files.map(file => `/uploads/payment-docs/${file.filename}`);
+      const updatedPayment = await db
+        .update(payments)
+        .set({
+          documentUrls: sql`array_cat(COALESCE(${sql.raw('document_urls')}, ARRAY[]::text[]), ${sql.array(documentUrls, 'text')})::text[]`
+        })
+        .where(eq(payments.id, paymentId))
+        .returning();
+
+      res.json(updatedPayment[0]);
+    } catch (error) {
+      console.error(error);
+      res.status(500).send("Failed to upload documents");
+    }
+  });
+
+  // Add a new endpoint to get payment details with documents
+  app.get("/api/payments/:id/details", async (req, res) => {
+    try {
+      const paymentId = parseInt(req.params.id);
+      const payment = await db.query.payments.findFirst({
+        where: eq(payments.id, paymentId),
+        with: {
+          guest: {
+            with: {
+              property: true
+            }
+          }
+        }
+      });
+
+      if (!payment) {
+        return res.status(404).send("Payment not found");
+      }
+
+      // Get next payment due
+      const nextPayment = await db.query.payments.findFirst({
+        where: and(
+          eq(payments.guestId, payment.guestId),
+          gt(payments.dueDate, new Date()),
+          eq(payments.status, 'pending')
+        ),
+        orderBy: asc(payments.dueDate)
+      });
+
+      // Get payment history
+      const paymentHistory = await db.query.payments.findMany({
+        where: and(
+          eq(payments.guestId, payment.guestId),
+          lt(payments.dueDate, new Date())
+        ),
+        orderBy: desc(payments.dueDate),
+        limit: 5
+      });
+
+      res.json({
+        current: payment,
+        next: nextPayment,
+        history: paymentHistory
+      });
+    } catch (error) {
+      console.error('Error fetching payment details:', error);
+      res.status(500).send("Failed to fetch payment details");
+    }
+  });
+
 
   // Assets endpoints
   app.get("/api/assets", async (req, res) => {

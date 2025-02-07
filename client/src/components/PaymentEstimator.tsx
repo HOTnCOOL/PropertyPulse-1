@@ -28,26 +28,13 @@ interface PricePeriod {
   effectiveDailyRate: number;
   normalDailyTotal: number;
   discountPercentage: number;
+  discountAmount?: number;
 }
 
-interface PricePeriod {
-  type: 'monthly' | 'weekly' | 'daily';
-  startDate: Date;
-  endDate: Date;
-  baseRate: number;
-  amount: number;
-  duration: number;
-  daysInPeriod: number;
-  effectiveDailyRate: number;
-  normalDailyTotal: number;
-  discountPercentage: number;
-  prepaymentDiscount?: number;
-}
-
-const calculatePrepaymentDiscount = (periodIndex: number): number => {
-  // 10% per period, max 50%
-  const discount = Math.min(periodIndex * 10, 50);
-  return discount;
+const calculateDiscountedRate = (baseRate: number, periodIndex: number): { amount: number; discountPercent: number } => {
+  const discountPercent = Math.min(periodIndex * 10, 50);
+  const amount = baseRate * (1 - discountPercent / 100);
+  return { amount, discountPercent };
 };
 
 const calculatePricePeriods = (property: Property, checkIn: Date, checkOut: Date): PricePeriod[] => {
@@ -57,64 +44,91 @@ const calculatePricePeriods = (property: Property, checkIn: Date, checkOut: Date
   const totalDays = differenceInDays(endDate, currentDate);
   const normalDailyRate = Number(property.rate);
 
-  const calculatePeriodMetrics = (start: Date, end: Date, amount: number): Pick<PricePeriod, 'daysInPeriod' | 'effectiveDailyRate' | 'normalDailyTotal' | 'discountPercentage'> => {
+  const calculatePeriodMetrics = (start: Date, end: Date, amount: number, baseAmount: number): Pick<PricePeriod, 'daysInPeriod' | 'effectiveDailyRate' | 'normalDailyTotal' | 'discountPercentage' | 'discountAmount'> => {
     const daysInPeriod = differenceInDays(end, start);
     const effectiveDailyRate = amount / daysInPeriod;
-    const normalDailyTotal = normalDailyRate * daysInPeriod;
-    const discountPercentage = ((normalDailyRate - effectiveDailyRate) / normalDailyRate) * 100;
-    return { daysInPeriod, effectiveDailyRate, normalDailyTotal, discountPercentage };
+    const normalDailyTotal = baseAmount;
+    const discountPercentage = ((baseAmount - amount) / baseAmount) * 100;
+    const discountAmount = baseAmount - amount;
+    return { 
+      daysInPeriod, 
+      effectiveDailyRate, 
+      normalDailyTotal, 
+      discountPercentage,
+      discountAmount
+    };
   };
 
-  // Helper to add a period
-  const addPeriod = (type: 'monthly' | 'weekly' | 'daily', duration: number, rate: number) => {
-    const periodEnd = type === 'monthly' 
-      ? addMonths(currentDate, duration)
-      : type === 'weekly'
-        ? addWeeks(currentDate, duration)
-        : new Date(currentDate.getTime() + duration * 24 * 60 * 60 * 1000);
+  let periodIndex = 0;
 
-    const amount = rate * duration;
-    const metrics = calculatePeriodMetrics(currentDate, periodEnd, amount);
+  // Try to fit complete months
+  while (currentDate < endDate) {
+    if (property.monthlyRate && differenceInCalendarMonths(endDate, currentDate) >= 1) {
+      const monthlyEnd = addMonths(currentDate, 1);
+      const isCompleteMonth = differenceInCalendarMonths(monthlyEnd, currentDate) === 1;
 
-    periods.push({
-      type,
-      startDate: currentDate,
-      endDate: periodEnd,
-      amount,
-      baseRate: rate,
-      duration,
-      ...metrics
-    });
+      if (isCompleteMonth && monthlyEnd <= endDate) {
+        const baseRate = Number(property.monthlyRate);
+        const { amount, discountPercent } = calculateDiscountedRate(baseRate, periodIndex);
+        const metrics = calculatePeriodMetrics(currentDate, monthlyEnd, amount, baseRate);
 
-    currentDate = periodEnd;
-  };
+        periods.push({
+          type: 'monthly',
+          startDate: currentDate,
+          endDate: monthlyEnd,
+          amount,
+          baseRate,
+          duration: 1,
+          ...metrics
+        });
 
-  let remainingDays = totalDays;
-
-  // Try to fit complete months - only if the stay period exactly matches a month
-  if (property.monthlyRate) {
-    const monthStart = startOfDay(currentDate);
-    const monthEnd = startOfDay(addMonths(monthStart, 1));
-    const isExactMonth = monthEnd.getTime() === endDate.getTime();
-
-    if (isExactMonth) {
-      addPeriod('monthly', 1, Number(property.monthlyRate));
-      remainingDays = 0;
+        currentDate = monthlyEnd;
+        periodIndex++;
+        continue;
+      }
     }
-  }
 
-  // If we couldn't use monthly rate, try to fit complete weeks
-  if (remainingDays >= 7 && property.weeklyRate) {
-    const completeWeeks = Math.floor(remainingDays / 7);
-    if (completeWeeks > 0) {
-      addPeriod('weekly', completeWeeks, Number(property.weeklyRate));
-      remainingDays = differenceInDays(endDate, currentDate);
+    // Try weeks if months don't fit
+    if (property.weeklyRate && differenceInDays(endDate, currentDate) >= 7) {
+      const weeklyEnd = addWeeks(currentDate, 1);
+      const baseRate = Number(property.weeklyRate);
+      const { amount, discountPercent } = calculateDiscountedRate(baseRate, periodIndex);
+      const metrics = calculatePeriodMetrics(currentDate, weeklyEnd, amount, baseRate);
+
+      periods.push({
+        type: 'weekly',
+        startDate: currentDate,
+        endDate: weeklyEnd,
+        amount,
+        baseRate,
+        duration: 1,
+        ...metrics
+      });
+
+      currentDate = weeklyEnd;
+      periodIndex++;
+      continue;
     }
-  }
 
-  // Use daily rate for any remaining days
-  if (remainingDays > 0) {
-    addPeriod('daily', remainingDays, normalDailyRate);
+    // Use daily rate for remaining days
+    const remainingDays = differenceInDays(endDate, currentDate);
+    if (remainingDays > 0) {
+      const baseRate = normalDailyRate * remainingDays;
+      const { amount, discountPercent } = calculateDiscountedRate(baseRate, periodIndex);
+      const metrics = calculatePeriodMetrics(currentDate, endDate, amount, baseRate);
+
+      periods.push({
+        type: 'daily',
+        startDate: currentDate,
+        endDate: endDate,
+        amount,
+        baseRate,
+        duration: remainingDays,
+        ...metrics
+      });
+
+      currentDate = endDate;
+    }
   }
 
   return periods;
@@ -125,33 +139,15 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
     if (!property || !checkIn || !checkOut) return null;
 
     const pricePeriods = calculatePricePeriods(property, checkIn, checkOut);
-    const accommodationTotal = pricePeriods.reduce((sum, period) => sum + period.amount, 0);
-
-    // Find the longest period pack actually used in this booking
-    const longestPeriodUsed = pricePeriods.reduce((longest, current) => {
-      const currentBaseAmount = current.baseRate;
-      const longestBaseAmount = longest ? longest.baseRate : 0;
-      return currentBaseAmount > longestBaseAmount ? current : longest;
-    }, null as PricePeriod | null);
-
-    const securityDeposit = longestPeriodUsed ? longestPeriodUsed.baseRate : Number(property.rate);
-
-    // Calculate prepayment discounts
-    const periodsWithDiscounts = pricePeriods.map((period, index) => ({
-      ...period,
-      prepaymentDiscount: calculatePrepaymentDiscount(index),
-      amount: period.amount * (1 - calculatePrepaymentDiscount(index) / 100)
-    }));
-
-    const discountedTotal = periodsWithDiscounts.reduce((sum, period) => sum + period.amount, 0);
+    const totalBaseAmount = pricePeriods.reduce((sum, period) => sum + period.baseRate, 0);
+    const totalDiscountAmount = pricePeriods.reduce((sum, period) => sum + (period.discountAmount || 0), 0);
+    const finalAmount = pricePeriods.reduce((sum, period) => sum + period.amount, 0);
 
     return {
-      periods: periodsWithDiscounts,
-      accommodationTotal: discountedTotal,
-      securityDeposit,
-      grandTotal: discountedTotal + securityDeposit,
-      originalTotal: accommodationTotal,
-      totalSavings: accommodationTotal - discountedTotal
+      periods: pricePeriods,
+      totalBaseAmount,
+      totalDiscountAmount,
+      finalAmount
     };
   }, [property, checkIn, checkOut]);
 
@@ -164,65 +160,67 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
       </CardHeader>
       <CardContent>
         <div className="space-y-6">
-          {/* Accommodation Charges Section */}
+          {/* Period Details */}
           <div className="space-y-2">
-            <h3 className="text-sm font-semibold">Accommodation Charges</h3>
-            <div className="space-y-2">
+            <h3 className="text-sm font-semibold">Payment Schedule</h3>
+            <div className="divide-y">
               {estimates.periods.map((period, index) => (
-                <div key={index} className="space-y-1">
+                <div key={index} className="py-2 space-y-1">
                   <div className="flex justify-between text-sm">
                     <span>
-                      {period.type === 'monthly' && `${period.duration} Month${period.duration > 1 ? 's' : ''}`}
-                      {period.type === 'weekly' && `${period.duration} Week${period.duration > 1 ? 's' : ''}`}
+                      {period.type === 'monthly' && `Month ${index + 1}`}
+                      {period.type === 'weekly' && `Week ${index + 1}`}
                       {period.type === 'daily' && `${period.duration} Day${period.duration > 1 ? 's' : ''}`}
-                      {' '}
-                      ({format(period.startDate, "MMM d")} - {format(period.endDate, "MMM d")})
                     </span>
                     <span className="font-medium">${period.amount.toLocaleString()}</span>
                   </div>
+
                   <div className="text-xs text-muted-foreground flex justify-between">
+                    <span>{format(period.startDate, "MMM d")} - {format(period.endDate, "MMM d")}</span>
                     <span>
-                      <span className="line-through">${period.normalDailyTotal.toLocaleString()}</span>
-                      {' '}→{' '}
-                      <span className="text-green-600">${Math.round(period.effectiveDailyRate)}/day</span>
-                      {' '}
                       {period.discountPercentage > 0 && (
                         <span className="text-green-600">
-                          ({Math.round(period.discountPercentage)}% off)
+                          Save ${period.discountAmount?.toLocaleString()} ({Math.round(period.discountPercentage)}% off)
                         </span>
                       )}
                     </span>
-                    <span>{period.daysInPeriod} days</span>
+                  </div>
+
+                  <div className="text-xs text-muted-foreground">
+                    <span>
+                      Effective daily rate: ${Math.round(period.effectiveDailyRate)}/day
+                      {period.discountPercentage > 0 && (
+                        <span className="text-green-600">
+                          {' '}(down from ${Math.round(period.normalDailyTotal/period.daysInPeriod)}/day)
+                        </span>
+                      )}
+                    </span>
                   </div>
                 </div>
               ))}
             </div>
-            <div className="flex justify-between text-sm font-medium pt-2 border-t">
-              <span>Accommodation Total</span>
-              <span>${estimates.accommodationTotal.toLocaleString()}</span>
-            </div>
           </div>
 
-          {/* Security Deposit Section */}
-          <div className="space-y-2 pt-4 border-t border-dashed">
-            <h3 className="text-sm font-semibold flex items-center justify-between">
-              <span>Security Deposit</span>
-              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Fully Refundable</span>
-            </h3>
+          {/* Total Summary */}
+          <div className="pt-4 border-t space-y-2">
             <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Based on longest period rate used</span>
-              <span className="font-medium">${estimates.securityDeposit.toLocaleString()}</span>
+              <span>Base Price</span>
+              <span>${estimates.totalBaseAmount.toLocaleString()}</span>
             </div>
-          </div>
 
-          {/* Grand Total Section */}
-          <div className="pt-4 border-t">
-            <div className="flex justify-between font-semibold text-lg">
-              <span>Total Due Now</span>
-              <span>${estimates.grandTotal.toLocaleString()}</span>
+            <div className="flex justify-between text-sm text-green-600">
+              <span>Total Savings</span>
+              <span>-${estimates.totalDiscountAmount.toLocaleString()}</span>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Includes accommodation charges and refundable security deposit
+
+            <div className="flex justify-between font-semibold text-lg pt-2 border-t">
+              <span>Final Price</span>
+              <span>${estimates.finalAmount.toLocaleString()}</span>
+            </div>
+
+            <p className="text-xs text-muted-foreground mt-2">
+              * Early payment discounts are applied progressively: 10% off for each prepaid period, up to 50% maximum discount.
+              The displayed amounts reflect the discounted rates if paid according to schedule.
             </p>
           </div>
         </div>
