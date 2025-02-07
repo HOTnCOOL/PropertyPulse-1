@@ -41,18 +41,29 @@ export default function Auth() {
   async function onAdminSubmit(values: typeof loginAdminSchema._type) {
     try {
       setIsLoading(true);
+      console.log('Attempting admin login with:', { email: values.email });
+
       const response = await fetch("/api/auth/admin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(values),
       });
 
+      console.log('Admin login response status:', response.status);
+      const data = await response.json();
+      console.log('Admin login response data:', data);
+
       if (!response.ok) {
-        throw new Error("Invalid credentials");
+        throw new Error(data.message || "Invalid credentials");
       }
 
+      toast({
+        title: "Success",
+        description: "Logged in successfully",
+      });
       setLocation("/admin");
     } catch (error) {
+      console.error('Admin login error:', error);
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Login failed",
@@ -66,18 +77,32 @@ export default function Auth() {
   async function onGuestSubmit(values: typeof loginGuestSchema._type) {
     try {
       setIsLoading(true);
+      console.log('Attempting guest login with:', { 
+        email: values.email, 
+        bookingRef: values.bookingReference 
+      });
+
       const response = await fetch("/api/auth/guest", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(values),
       });
 
+      console.log('Guest login response status:', response.status);
+      const data = await response.json();
+      console.log('Guest login response data:', data);
+
       if (!response.ok) {
-        throw new Error("Invalid credentials");
+        throw new Error(data.message || "Invalid credentials");
       }
 
-      setLocation("/guest-dashboard");
+      toast({
+        title: "Success",
+        description: "Logged in successfully",
+      });
+      setLocation(`/guest-dashboard?ref=${values.bookingReference}&email=${values.email}`);
     } catch (error) {
+      console.error('Guest login error:', error);
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Login failed",
@@ -114,7 +139,7 @@ export default function Auth() {
                       <FormItem>
                         <FormLabel>Email</FormLabel>
                         <FormControl>
-                          <Input {...field} type="email" />
+                          <Input {...field} type="email" placeholder="guest@test.com" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -127,14 +152,14 @@ export default function Auth() {
                       <FormItem>
                         <FormLabel>Booking Reference</FormLabel>
                         <FormControl>
-                          <Input {...field} />
+                          <Input {...field} placeholder="BOOK123456" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
                   <Button type="submit" className="w-full" disabled={isLoading}>
-                    Sign In
+                    {isLoading ? "Signing in..." : "Sign In"}
                   </Button>
                 </form>
               </Form>
@@ -150,7 +175,7 @@ export default function Auth() {
                       <FormItem>
                         <FormLabel>Email</FormLabel>
                         <FormControl>
-                          <Input {...field} type="email" />
+                          <Input {...field} type="email" placeholder="admin@test.com" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -163,14 +188,14 @@ export default function Auth() {
                       <FormItem>
                         <FormLabel>Password</FormLabel>
                         <FormControl>
-                          <Input {...field} type="password" />
+                          <Input {...field} type="password" placeholder="password123" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
                   <Button type="submit" className="w-full" disabled={isLoading}>
-                    Sign In
+                    {isLoading ? "Signing in..." : "Sign In"}
                   </Button>
                 </form>
               </Form>

@@ -10,6 +10,8 @@ import { addDays, parseISO } from "date-fns";
 import { sql } from "drizzle-orm";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
+import session from "express-session";
+import connectPgSimple from "connect-pg-simple";
 
 // Configure multer for file upload
 const storage = multer.diskStorage({
@@ -38,8 +40,99 @@ const upload = multer({
 });
 
 export function registerRoutes(app: Express): Server {
+  // Set up session middleware
+  const PostgresStore = connectPgSimple(session);
+  app.use(
+    session({
+      store: new PostgresStore({
+        // @ts-ignore
+        pool: db.config.pool,
+        tableName: 'session'
+      }),
+      secret: process.env.REPL_ID || 'your-secret-key',
+      resave: false,
+      saveUninitialized: false,
+      cookie: {
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+      }
+    })
+  );
+
   // Serve static files from uploads directory
   app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+
+  // Authentication endpoints
+  app.post("/api/auth/admin", async (req, res) => {
+    try {
+      console.log('Admin login attempt:', req.body);
+      const result = loginAdminSchema.safeParse(req.body);
+      if (!result.success) {
+        console.log('Admin validation failed:', result.error);
+        return res.status(400).json({ message: "Invalid credentials" });
+      }
+
+      const [admin] = await db
+        .select()
+        .from(admins)
+        .where(eq(admins.email, result.data.email))
+        .limit(1);
+
+      console.log('Admin found:', admin);
+
+      if (!admin) {
+        return res.status(401).json({ message: "Invalid credentials" });
+      }
+
+      if (admin.password !== result.data.password) {
+        return res.status(401).json({ message: "Invalid credentials" });
+      }
+
+      // Set session
+      if (req.session) {
+        req.session.adminId = admin.id;
+      }
+      res.json({ admin: { id: admin.id, email: admin.email, name: admin.name } });
+    } catch (error) {
+      console.error('Admin login error:', error);
+      res.status(500).json({ message: "Login failed" });
+    }
+  });
+
+  app.post("/api/auth/guest", async (req, res) => {
+    try {
+      console.log('Guest login attempt:', req.body);
+      const result = loginGuestSchema.safeParse(req.body);
+      if (!result.success) {
+        console.log('Guest validation failed:', result.error);
+        return res.status(400).json({ message: "Invalid credentials" });
+      }
+
+      const booking = await db.query.bookings.findFirst({
+        where: and(
+          eq(bookings.bookingReference, result.data.bookingReference),
+        ),
+        with: {
+          guest: true,
+        },
+      });
+
+      console.log('Guest booking found:', booking);
+
+      if (!booking || !booking.guest || booking.guest.email !== result.data.email) {
+        return res.status(401).json({ message: "Invalid credentials" });
+      }
+
+      // Set session
+      if (req.session) {
+        req.session.guestId = booking.guest.id;
+      }
+      res.json({ guest: booking.guest });
+    } catch (error) {
+      console.error('Guest login error:', error);
+      res.status(500).json({ message: "Login failed" });
+    }
+  });
 
   // Properties endpoints
   app.get("/api/properties", async (_req, res) => {
@@ -539,67 +632,6 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Authentication endpoints
-  app.post("/api/auth/admin", async (req, res) => {
-    try {
-      const result = loginAdminSchema.safeParse(req.body);
-      if (!result.success) {
-        return res.status(400).json({ message: "Invalid credentials" });
-      }
-
-      const [admin] = await db
-        .select()
-        .from(admins)
-        .where(eq(admins.email, result.data.email))
-        .limit(1);
-
-      if (!admin) {
-        return res.status(401).json({ message: "Invalid credentials" });
-      }
-
-      // In a real app, we would hash the password and compare
-      if (admin.password !== result.data.password) {
-        return res.status(401).json({ message: "Invalid credentials" });
-      }
-
-      // Set session
-      req.session.adminId = admin.id;
-      res.json({ admin: { id: admin.id, email: admin.email, name: admin.name } });
-    } catch (error) {
-      console.error('Admin login error:', error);
-      res.status(500).json({ message: "Login failed" });
-    }
-  });
-
-  app.post("/api/auth/guest", async (req, res) => {
-    try {
-      const result = loginGuestSchema.safeParse(req.body);
-      if (!result.success) {
-        return res.status(400).json({ message: "Invalid credentials" });
-      }
-
-      const booking = await db.query.bookings.findFirst({
-        where: and(
-          eq(bookings.bookingReference, result.data.bookingReference),
-        ),
-        with: {
-          guest: true,
-        },
-      });
-
-      if (!booking || !booking.guest || booking.guest.email !== result.data.email) {
-        return res.status(401).json({ message: "Invalid credentials" });
-      }
-
-      // Set session
-      req.session.guestId = booking.guest.id;
-      res.json({ guest: booking.guest });
-    } catch (error) {
-      console.error('Guest login error:', error);
-      res.status(500).json({ message: "Login failed" });
-    }
-  });
-
   app.post("/api/auth/logout", (req, res) => {
     req.session.destroy((err) => {
       if (err) {
@@ -612,10 +644,10 @@ export function registerRoutes(app: Express): Server {
   });
 
   app.get("/api/auth/session", (req, res) => {
-    if (req.session.adminId) {
+    if (req.session?.adminId) {
       return res.json({ type: "admin", id: req.session.adminId });
     }
-    if (req.session.guestId) {
+    if (req.session?.guestId) {
       return res.json({ type: "guest", id: req.session.guestId });
     }
     res.status(401).json({ message: "Not authenticated" });
