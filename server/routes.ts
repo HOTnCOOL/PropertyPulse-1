@@ -59,7 +59,6 @@ function calculatePricePeriods(property: any, checkIn: Date, checkOut: Date): Pr
   // Helper function to calculate period end date for monthly package
   const calculateMonthlyEnd = (date: Date): Date => {
     const nextMonth = addMonths(date, 1);
-    // Ensure we maintain the same day of month for monthly packages
     return nextMonth <= endDate ? nextMonth : endDate;
   };
 
@@ -73,11 +72,31 @@ function calculatePricePeriods(property: any, checkIn: Date, checkOut: Date): Pr
     const remainingDays = differenceInDays(endDate, currentDate);
     console.log('Processing remaining days:', remainingDays);
 
-    // For periods less than a month but at least a week, use weekly rate
+    // Try to fit a complete month first
+    if (property.monthlyRate) {
+      const monthlyEnd = calculateMonthlyEnd(currentDate);
+      // Check if we have a complete month (compare calendar months)
+      if (differenceInCalendarMonths(monthlyEnd, currentDate) === 1) {
+        const period = {
+          type: 'monthly' as const,
+          startDate: currentDate,
+          endDate: monthlyEnd,
+          amount: Number(property.monthlyRate),
+          baseRate: Number(property.monthlyRate),
+          duration: 1 // 1 month
+        };
+        console.log('Adding monthly period:', period);
+        periods.push(period);
+        currentDate = monthlyEnd;
+        continue;
+      }
+    }
+
+    // If we can't fit a month, try to fit a week
     if (property.weeklyRate && remainingDays >= 7) {
       const weeklyEnd = calculateWeeklyEnd(currentDate);
       const period = {
-        type: 'weekly',
+        type: 'weekly' as const,
         startDate: currentDate,
         endDate: weeklyEnd,
         amount: Number(property.weeklyRate),
@@ -90,14 +109,14 @@ function calculatePricePeriods(property: any, checkIn: Date, checkOut: Date): Pr
       continue;
     }
 
-    // For periods less than a week, use daily rate
+    // For remaining days, use daily rate
     if (remainingDays > 0) {
       const period = {
-        type: 'daily',
+        type: 'daily' as const,
         startDate: currentDate,
         endDate: endDate,
-        amount: Number(property.rate) * remainingDays,
-        baseRate: Number(property.rate),
+        amount: normalDailyRate * remainingDays,
+        baseRate: normalDailyRate,
         duration: remainingDays
       };
       console.log('Adding daily period:', period);
