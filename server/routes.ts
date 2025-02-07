@@ -73,9 +73,9 @@ function calculatePricePeriods(property: any, checkIn: Date, checkOut: Date): Pr
     console.log('Processing remaining days:', remainingDays);
 
     // Try to fit a complete month first
-    if (property.monthlyRate) {
+    if (property.monthlyRate && differenceInCalendarMonths(endDate, currentDate) >= 1) {
       const monthlyEnd = calculateMonthlyEnd(currentDate);
-      // Check if we have a complete month (compare calendar months)
+      // Only use monthly rate if we have a complete month
       if (differenceInCalendarMonths(monthlyEnd, currentDate) === 1) {
         const period = {
           type: 'monthly' as const,
@@ -83,7 +83,7 @@ function calculatePricePeriods(property: any, checkIn: Date, checkOut: Date): Pr
           endDate: monthlyEnd,
           amount: Number(property.monthlyRate),
           baseRate: Number(property.monthlyRate),
-          duration: 1 // 1 month
+          duration: 1
         };
         console.log('Adding monthly period:', period);
         periods.push(period);
@@ -92,8 +92,8 @@ function calculatePricePeriods(property: any, checkIn: Date, checkOut: Date): Pr
       }
     }
 
-    // If we can't fit a month, try to fit a week
-    if (property.weeklyRate && remainingDays >= 7) {
+    // For the remaining period, try to fit as many complete weeks as possible
+    while (property.weeklyRate && differenceInDays(endDate, currentDate) >= 7) {
       const weeklyEnd = calculateWeeklyEnd(currentDate);
       const period = {
         type: 'weekly' as const,
@@ -101,23 +101,23 @@ function calculatePricePeriods(property: any, checkIn: Date, checkOut: Date): Pr
         endDate: weeklyEnd,
         amount: Number(property.weeklyRate),
         baseRate: Number(property.weeklyRate),
-        duration: 1 // 1 week
+        duration: 1
       };
       console.log('Adding weekly period:', period);
       periods.push(period);
       currentDate = weeklyEnd;
-      continue;
     }
 
-    // For remaining days, use daily rate
-    if (remainingDays > 0) {
+    // Use daily rate for any remaining days
+    const remainingDaysCount = differenceInDays(endDate, currentDate);
+    if (remainingDaysCount > 0) {
       const period = {
         type: 'daily' as const,
         startDate: currentDate,
         endDate: endDate,
-        amount: normalDailyRate * remainingDays,
+        amount: normalDailyRate * remainingDaysCount,
         baseRate: normalDailyRate,
-        duration: remainingDays
+        duration: remainingDaysCount
       };
       console.log('Adding daily period:', period);
       periods.push(period);
