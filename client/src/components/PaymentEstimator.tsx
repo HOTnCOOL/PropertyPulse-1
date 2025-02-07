@@ -71,17 +71,20 @@ const calculatePricePeriods = (property: Property, checkIn: Date, checkOut: Date
 
   let remainingDays = totalDays;
 
-  // Try to fit as many complete months as possible
+  // Try to fit complete months - only if the stay period exactly matches a month
   if (property.monthlyRate) {
-    const completeMonths = Math.floor(differenceInCalendarMonths(endDate, currentDate));
-    if (completeMonths > 0) {
-      addPeriod('monthly', completeMonths, Number(property.monthlyRate));
-      remainingDays = differenceInDays(endDate, currentDate);
+    const monthStart = startOfDay(currentDate);
+    const monthEnd = startOfDay(addMonths(monthStart, 1));
+    const isExactMonth = monthEnd.getTime() === endDate.getTime();
+
+    if (isExactMonth) {
+      addPeriod('monthly', 1, Number(property.monthlyRate));
+      remainingDays = 0;
     }
   }
 
-  // Then try to fit complete weeks in the remaining time
-  if (property.weeklyRate && remainingDays >= 7) {
+  // If we couldn't use monthly rate, try to fit complete weeks
+  if (remainingDays >= 7 && property.weeklyRate) {
     const completeWeeks = Math.floor(remainingDays / 7);
     if (completeWeeks > 0) {
       addPeriod('weekly', completeWeeks, Number(property.weeklyRate));
