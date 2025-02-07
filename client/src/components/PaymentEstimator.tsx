@@ -30,6 +30,26 @@ interface PricePeriod {
   discountPercentage: number;
 }
 
+interface PricePeriod {
+  type: 'monthly' | 'weekly' | 'daily';
+  startDate: Date;
+  endDate: Date;
+  baseRate: number;
+  amount: number;
+  duration: number;
+  daysInPeriod: number;
+  effectiveDailyRate: number;
+  normalDailyTotal: number;
+  discountPercentage: number;
+  prepaymentDiscount?: number;
+}
+
+const calculatePrepaymentDiscount = (periodIndex: number): number => {
+  // 10% per period, max 50%
+  const discount = Math.min(periodIndex * 10, 50);
+  return discount;
+};
+
 const calculatePricePeriods = (property: Property, checkIn: Date, checkOut: Date): PricePeriod[] => {
   const periods: PricePeriod[] = [];
   let currentDate = startOfDay(new Date(checkIn));
@@ -116,11 +136,22 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
 
     const securityDeposit = longestPeriodUsed ? longestPeriodUsed.baseRate : Number(property.rate);
 
+    // Calculate prepayment discounts
+    const periodsWithDiscounts = pricePeriods.map((period, index) => ({
+      ...period,
+      prepaymentDiscount: calculatePrepaymentDiscount(index),
+      amount: period.amount * (1 - calculatePrepaymentDiscount(index) / 100)
+    }));
+
+    const discountedTotal = periodsWithDiscounts.reduce((sum, period) => sum + period.amount, 0);
+
     return {
-      periods: pricePeriods,
-      accommodationTotal,
+      periods: periodsWithDiscounts,
+      accommodationTotal: discountedTotal,
       securityDeposit,
-      grandTotal: accommodationTotal + securityDeposit,
+      grandTotal: discountedTotal + securityDeposit,
+      originalTotal: accommodationTotal,
+      totalSavings: accommodationTotal - discountedTotal
     };
   }, [property, checkIn, checkOut]);
 

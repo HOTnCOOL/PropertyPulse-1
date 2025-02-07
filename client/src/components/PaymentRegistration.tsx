@@ -39,7 +39,24 @@ const PaymentForm = ({ property, booking, onSuccess }) => {
 
   const handlePayment = async () => {
     try {
-      // Mock payment processing
+      // Validate sequential payment rule
+      const unpaidPeriods = await fetch(`/api/payments/unpaid-periods?bookingId=${booking.id}`).then(r => r.json());
+      
+      if (unpaidPeriods.hasPriorUnpaid) {
+        toast({
+          title: "Payment Error",
+          description: "You must pay for all prior periods before making this payment",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Calculate prepayment discount
+      const periodIndex = unpaidPeriods.paidPeriodsCount;
+      const discount = Math.min(periodIndex * 10, 50);
+      const discountedAmount = paymentAmount === 'full' ? 
+        booking.totalAmount * (1 - discount/100) : 
+        booking.depositAmount;
       const response = await fetch('/api/payments/process', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
