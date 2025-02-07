@@ -35,7 +35,17 @@ import GuestList from "../components/GuestList";
 import PaymentEstimator from "../components/PaymentEstimator";
 import PaymentHistory from "../components/PaymentHistory";
 import PaymentRegistration from "../components/PaymentRegistration";
+import DocumentUpload from "../components/DocumentUpload";
+import AdditionalServices from "../components/AdditionalServices";
+import BookingSummaryWidget from "../components/BookingSummaryWidget";
+import type { Service } from "../components/AdditionalServices";
 
+// Add type for accompanying guest
+interface AccompanyingGuest {
+  firstName: string;
+  lastName: string;
+  documentFiles: File[];
+}
 
 export default function GuestRegistration() {
   const { toast } = useToast();
@@ -46,21 +56,29 @@ export default function GuestRegistration() {
     checkOut?: Date;
   }>({});
   const [activeGuest, setActiveGuest] = useState<Guest | null>(null);
+  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [selectedServices, setSelectedServices] = useState<Service[]>([]);
+  const [showAccompanying, setShowAccompanying] = useState(false);
+  const [accompanyingGuests, setAccompanyingGuests] = useState<AccompanyingGuest[]>([{
+    firstName: "",
+    lastName: "",
+    documentFiles: [] as File[]
+  }]);
 
   // Get propertyId from URL if it exists
   const params = new URLSearchParams(window.location.search);
   const preSelectedPropertyId = params.get('propertyId');
 
-  const form = useForm({
+  const form = useForm<typeof insertGuestSchema._type>({
     resolver: zodResolver(insertGuestSchema),
     defaultValues: {
       firstName: "",
       lastName: "",
       email: "",
       phone: "",
-      propertyId: preSelectedPropertyId ? Number(preSelectedPropertyId) : undefined as unknown as number,
-      checkIn: undefined,
-      checkOut: undefined,
+      propertyId: preSelectedPropertyId ? Number(preSelectedPropertyId) : undefined,
+      checkIn: undefined as unknown as Date,
+      checkOut: undefined as unknown as Date,
     },
   });
 
@@ -99,17 +117,13 @@ export default function GuestRegistration() {
   });
 
   const registerGuest = useMutation({
-    mutationFn: async (values: typeof insertGuestSchema._type) => {
-      console.log('Registering guest with values:', values);
+    mutationFn: async (values: FormData) => {
       const response = await fetch("/api/guests", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(values),
+        body: values,
       });
       if (!response.ok) throw new Error("Failed to register guest");
-      const data = await response.json();
-      console.log('Registration response:', data);
-      return data;
+      return response.json();
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/guests"] });
@@ -122,7 +136,6 @@ export default function GuestRegistration() {
 
       // Redirect to payment page with the booking reference and email
       if (data.booking?.bookingReference && data.guest?.email) {
-        console.log('Redirecting to payment page with:', data);
         setLocation(`/payment?ref=${data.booking.bookingReference}&email=${data.guest.email}`);
       } else {
         console.error('Missing booking reference or email in response:', data);
@@ -139,8 +152,53 @@ export default function GuestRegistration() {
   });
 
   async function onSubmit(values: typeof insertGuestSchema._type) {
-    registerGuest.mutate(values);
+    const formData = new FormData();
+
+    // Convert form values to appropriate string format
+    Object.entries(values).forEach(([key, value]) => {
+      if (value instanceof Date) {
+        formData.append(key, value.toISOString());
+      } else if (typeof value === 'number') {
+        formData.append(key, value.toString());
+      } else if (value) {
+        formData.append(key, value);
+      }
+    });
+
+    // Append main guest documents
+    uploadedFiles.forEach(file => {
+      formData.append('documents', file);
+    });
+
+    // Append accompanying guests data and documents
+    if (showAccompanying) {
+      accompanyingGuests.forEach((guest, index) => {
+        formData.append(`accompanyingGuests[${index}][firstName]`, guest.firstName);
+        formData.append(`accompanyingGuests[${index}][lastName]`, guest.lastName);
+        guest.documentFiles.forEach(file => {
+          formData.append(`accompanyingGuests[${index}][documents]`, file);
+        });
+      });
+    }
+
+    // Append selected services
+    formData.append('services', JSON.stringify(selectedServices));
+
+    registerGuest.mutate(formData);
   }
+
+  const { data: estimates } = useQuery({
+    queryKey: ["/api/estimates", selectedProperty?.id, form.watch("checkIn"), form.watch("checkOut")],
+    queryFn: async () => {
+      if (!selectedProperty?.id || !form.watch("checkIn") || !form.watch("checkOut")) {
+        return null
+      }
+      const response = await fetch(`/api/estimates?propertyId=${selectedProperty.id}&checkIn=${form.watch("checkIn")}&checkOut=${form.watch("checkOut")}`);
+      if (!response.ok) throw new Error("Failed to fetch estimates");
+      return response.json();
+    },
+    enabled: !!selectedProperty && !!form.watch("checkIn") && !!form.watch("checkOut"),
+  });
 
   return (
     <div className="space-y-6">
@@ -351,90 +409,175 @@ export default function GuestRegistration() {
           </CardContent>
         </Card>
 
-        {selectedProperty && (
-          <PaymentEstimator
-            property={selectedProperty}
-            checkIn={form.watch("checkIn")}
-            checkOut={form.watch("checkOut")}
-          />
-        )}
+        <DocumentUpload
+          onUpload={setUploadedFiles}
+          uploadedFiles={uploadedFiles}
+        />
 
-        <Card className="md:col-span-2">
+        <Card>
           <CardHeader>
-            <CardTitle>Recent Registrations & Payments</CardTitle>
+            <CardTitle className="flex justify-between items-center">
+              <span>Accompanying Guests</span>
+              <Button
+                variant="outline"
+                onClick={() => setShowAccompanying(!showAccompanying)}
+              >
+                {showAccompanying ? "Hide" : "Add"} Accompanying Guests
+              </Button>
+            </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-lg font-medium mb-4">Recent Guests</h3>
-                <GuestList
-                  guests={guests.slice(0, 5)}
-                  onSelectGuest={(guest) => setActiveGuest(guest)}
-                  selectedGuestId={activeGuest?.id}
-                />
-              </div>
-
-              {activeGuest && selectedProperty && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-medium">
-                      Payments for {activeGuest.firstName} {activeGuest.lastName}
-                    </h3>
-                    <Button
-                      variant="outline"
-                      onClick={() => setActiveGuest(null)}
-                    >
-                      Clear Selection
-                    </Button>
-                  </div>
-
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Register New Payment</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <PaymentRegistration
-                        guestId={activeGuest.id}
-                        property={selectedProperty}
-                        booking={null}
-                        onSuccess={() => {
-                          queryClient.invalidateQueries({
-                            queryKey: ['/api/payments', activeGuest.id]
-                          });
+          {showAccompanying && (
+            <CardContent>
+              {accompanyingGuests.map((guest, index) => (
+                <div key={index} className="space-y-4 mb-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <FormLabel>First Name</FormLabel>
+                      <Input
+                        value={guest.firstName}
+                        onChange={(e) => {
+                          const newGuests = [...accompanyingGuests];
+                          newGuests[index].firstName = e.target.value;
+                          setAccompanyingGuests(newGuests);
                         }}
                       />
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Payment History & Pending Payments</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        <div>
-                          <h4 className="font-medium mb-2">Pending Payments</h4>
-                          <PaymentHistory
-                            payments={payments.filter(p => p.status === 'pending')}
-                            showActions
-                          />
-                        </div>
-
-                        <div>
-                          <h4 className="font-medium mb-2">Payment History</h4>
-                          <PaymentHistory
-                            payments={payments.filter(p => p.status !== 'pending')}
-                          />
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+                    <div>
+                      <FormLabel>Last Name</FormLabel>
+                      <Input
+                        value={guest.lastName}
+                        onChange={(e) => {
+                          const newGuests = [...accompanyingGuests];
+                          newGuests[index].lastName = e.target.value;
+                          setAccompanyingGuests(newGuests);
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <DocumentUpload
+                    onUpload={(files) => {
+                      const newGuests = [...accompanyingGuests];
+                      newGuests[index].documentFiles = files;
+                      setAccompanyingGuests(newGuests);
+                    }}
+                    uploadedFiles={guest.documentFiles}
+                  />
                 </div>
-              )}
-            </div>
-          </CardContent>
+              ))}
+              <Button
+                variant="outline"
+                className="mt-4"
+                onClick={() => setAccompanyingGuests([...accompanyingGuests, {
+                  firstName: "",
+                  lastName: "",
+                  documentFiles: []
+                }])}
+              >
+                Add Another Guest
+              </Button>
+            </CardContent>
+          )}
         </Card>
+
+        <div className="md:col-span-2">
+          <AdditionalServices onServicesChange={setSelectedServices} />
+        </div>
+
+        <BookingSummaryWidget
+          baseAmount={estimates?.finalAmount || 0}
+          selectedServices={selectedServices}
+          onProceedToPayment={() => {
+            if (form.formState.isValid) {
+              form.handleSubmit(onSubmit)();
+            }
+          }}
+          minimumPayment={estimates?.periods[0]?.amount || 0}
+        />
       </div>
+
+      {selectedProperty && (
+        <PaymentEstimator
+          property={selectedProperty}
+          checkIn={form.watch("checkIn")}
+          checkOut={form.watch("checkOut")}
+        />
+      )}
+
+      <Card className="md:col-span-2">
+        <CardHeader>
+          <CardTitle>Recent Registrations & Payments</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-lg font-medium mb-4">Recent Guests</h3>
+              <GuestList
+                guests={guests.slice(0, 5)}
+                onSelectGuest={(guest) => setActiveGuest(guest)}
+                selectedGuestId={activeGuest?.id}
+              />
+            </div>
+
+            {activeGuest && selectedProperty && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-medium">
+                    Payments for {activeGuest.firstName} {activeGuest.lastName}
+                  </h3>
+                  <Button
+                    variant="outline"
+                    onClick={() => setActiveGuest(null)}
+                  >
+                    Clear Selection
+                  </Button>
+                </div>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Register New Payment</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <PaymentRegistration
+                      guestId={activeGuest.id}
+                      property={selectedProperty}
+                      booking={null}
+                      onSuccess={() => {
+                        queryClient.invalidateQueries({
+                          queryKey: ['/api/payments', activeGuest.id]
+                        });
+                      }}
+                    />
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Payment History & Pending Payments</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <div>
+                        <h4 className="font-medium mb-2">Pending Payments</h4>
+                        <PaymentHistory
+                          payments={payments.filter(p => p.status === 'pending')}
+                          showActions
+                        />
+                      </div>
+
+                      <div>
+                        <h4 className="font-medium mb-2">Payment History</h4>
+                        <PaymentHistory
+                          payments={payments.filter(p => p.status !== 'pending')}
+                        />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
