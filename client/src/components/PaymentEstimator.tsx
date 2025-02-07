@@ -114,30 +114,15 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
     const pricePeriods = calculatePricePeriods(property, checkIn, checkOut);
     const totalAmount = pricePeriods.reduce((sum, period) => sum + period.amount, 0);
 
-    // Calculate deposit based on the next available longer package rate
-    let deposit: number;
-    const stayDuration = differenceInDays(checkOut, checkIn);
+    // Calculate deposit based on the longest rate period actually used in the booking
+    const longestPeriodUsed = pricePeriods.reduce((longest, current) => {
+      const currentBaseAmount = current.baseRate;
+      const longestBaseAmount = longest ? longest.baseRate : 0;
+      return currentBaseAmount > longestBaseAmount ? current : longest;
+    }, null as PricePeriod | null);
 
-    if (property.monthlyRate && stayDuration < 30) {
-      // For stays shorter than a month, use monthly rate as deposit if available
-      deposit = Number(property.monthlyRate);
-    } else if (property.weeklyRate && stayDuration < 7) {
-      // For stays shorter than a week, use weekly rate as deposit if available
-      deposit = Number(property.weeklyRate);
-    } else {
-      // Find the longest period actually used in the booking
-      const hasMonthlyPeriod = pricePeriods.some(p => p.type === 'monthly');
-      const hasWeeklyPeriod = pricePeriods.some(p => p.type === 'weekly');
-
-      if (hasMonthlyPeriod && property.monthlyRate) {
-        deposit = Number(property.monthlyRate);
-      } else if (hasWeeklyPeriod && property.weeklyRate) {
-        deposit = Number(property.weeklyRate);
-      } else {
-        // If no package rates available, use one week of daily rate as minimum
-        deposit = Number(property.rate) * 7;
-      }
-    }
+    // Use the base rate of the longest period used as deposit
+    const deposit = longestPeriodUsed ? longestPeriodUsed.baseRate : Number(property.rate);
 
     return {
       periods: pricePeriods,
