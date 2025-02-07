@@ -1,8 +1,10 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
+import { createWorker, Worker, RecognizeResult } from 'tesseract.js';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Upload, FileCheck } from "lucide-react";
+import { Upload, FileCheck, Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 interface DocumentUploadProps {
   onUpload: (files: File[]) => void;
@@ -10,9 +12,70 @@ interface DocumentUploadProps {
 }
 
 export default function DocumentUpload({ onUpload, uploadedFiles }: DocumentUploadProps) {
-  const onDrop = useCallback((acceptedFiles: File[]) => {
-    onUpload(acceptedFiles);
-  }, [onUpload]);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const { toast } = useToast();
+
+  const processOCR = async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      return null;
+    }
+
+    const worker = await createWorker();
+    try {
+      await worker.loadLanguage('eng');
+      await worker.initialize('eng');
+
+      const imageUrl = URL.createObjectURL(file);
+      const result = await worker.recognize(imageUrl);
+
+      URL.revokeObjectURL(imageUrl);
+      await worker.terminate();
+
+      return result.data.text;
+    } catch (error) {
+      console.error('OCR processing error:', error);
+      return null;
+    }
+  };
+
+  const onDrop = useCallback(async (acceptedFiles: File[]) => {
+    setIsProcessing(true);
+    try {
+      const results = await Promise.all(
+        acceptedFiles.map(async (file) => {
+          const ocrText = await processOCR(file);
+          if (ocrText) {
+            // Extract relevant information (you can enhance this based on your needs)
+            const lines = ocrText.split('\n');
+            let extractedInfo = {
+              documentType: lines.find(line => line.toLowerCase().includes('passport') || line.toLowerCase().includes('identity'))?.trim(),
+              documentNumber: lines.find(line => /^[A-Z0-9]{6,}$/)?.trim(),
+              name: lines.find(line => /^[A-Z\s]{2,}$/)?.trim(),
+            };
+
+            toast({
+              title: "Document Processed",
+              description: `Successfully extracted information from ${file.name}`,
+            });
+
+            console.log('Extracted information:', extractedInfo);
+          }
+          return file;
+        })
+      );
+
+      onUpload(results);
+    } catch (error) {
+      console.error('File processing error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to process document",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [onUpload, toast]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -37,14 +100,26 @@ export default function DocumentUpload({ onUpload, uploadedFiles }: DocumentUplo
             ${isDragActive ? 'border-primary bg-accent/50' : 'border-muted-foreground/25'}`}
         >
           <input {...getInputProps()} />
-          <Upload className="mx-auto h-8 w-8 text-muted-foreground/50 mb-2" />
-          <p className="text-sm text-muted-foreground">
-            {isDragActive ? (
-              "Drop your documents here"
-            ) : (
-              "Drag & drop passport or ID (both sides), or click to select"
-            )}
-          </p>
+          {isProcessing ? (
+            <div className="flex flex-col items-center">
+              <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" />
+              <p className="text-sm text-muted-foreground">Processing document...</p>
+            </div>
+          ) : (
+            <>
+              <Upload className="mx-auto h-8 w-8 text-muted-foreground/50 mb-2" />
+              <p className="text-sm text-muted-foreground">
+                {isDragActive ? (
+                  "Drop your documents here"
+                ) : (
+                  "Drag & drop passport or ID (both sides), or click to select"
+                )}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Supports automatic information extraction
+              </p>
+            </>
+          )}
         </div>
 
         {uploadedFiles.length > 0 && (
