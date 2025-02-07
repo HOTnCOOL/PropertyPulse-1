@@ -54,61 +54,62 @@ function calculatePricePeriods(property: any, checkIn: Date, checkOut: Date): Pr
   let currentDate = startOfDay(new Date(checkIn));
   const endDate = startOfDay(new Date(checkOut));
 
-  // Helper function to calculate period end date
-  const calculatePeriodEnd = (date: Date, type: 'monthly' | 'weekly'): Date => {
-    const tentativeEnd = type === 'monthly'
-      ? addMonths(date, 1)
-      : addWeeks(date, 1);
-    return tentativeEnd <= endDate ? tentativeEnd : endDate;
+  // Helper function to calculate period end date for monthly package
+  const calculateMonthlyEnd = (date: Date): Date => {
+    const nextMonth = addMonths(date, 1);
+    // Ensure we maintain the same day of month for monthly packages
+    return nextMonth <= endDate ? nextMonth : endDate;
   };
 
-  while (currentDate < endDate) {
-    // Try monthly package first
-    if (property.monthlyRate &&
-        differenceInCalendarMonths(endDate, currentDate) >= 1) {
-      const periodEnd = calculatePeriodEnd(currentDate, 'monthly');
+  // Helper function to calculate period end date for weekly package
+  const calculateWeeklyEnd = (date: Date): Date => {
+    const nextWeek = addWeeks(date, 1);
+    return nextWeek <= endDate ? nextWeek : endDate;
+  };
+
+  // First try to fit monthly package
+  if (property.monthlyRate) {
+    const monthlyEnd = calculateMonthlyEnd(currentDate);
+    if (differenceInCalendarMonths(endDate, currentDate) >= 1) {
       periods.push({
         type: 'monthly',
         startDate: currentDate,
-        endDate: periodEnd,
+        endDate: monthlyEnd,
         amount: Number(property.monthlyRate),
         baseRate: Number(property.monthlyRate),
         duration: 1 // 1 month
       });
-      currentDate = periodEnd;
-      continue;
+      currentDate = monthlyEnd;
     }
+  }
 
-    // Try weekly package
-    if (property.weeklyRate &&
-        differenceInDays(endDate, currentDate) >= 7) {
-      const periodEnd = calculatePeriodEnd(currentDate, 'weekly');
+  // Then fit as many weekly packages as possible
+  if (property.weeklyRate) {
+    while (differenceInDays(endDate, currentDate) >= 7) {
+      const weeklyEnd = calculateWeeklyEnd(currentDate);
       periods.push({
         type: 'weekly',
         startDate: currentDate,
-        endDate: periodEnd,
+        endDate: weeklyEnd,
         amount: Number(property.weeklyRate),
         baseRate: Number(property.weeklyRate),
         duration: 1 // 1 week
       });
-      currentDate = periodEnd;
-      continue;
+      currentDate = weeklyEnd;
     }
+  }
 
-    // Use daily rate for remaining days
-    const daysLeft = differenceInDays(endDate, currentDate);
-    if (daysLeft > 0) {
-      const periodEnd = endDate;
-      periods.push({
-        type: 'daily',
-        startDate: currentDate,
-        endDate: periodEnd,
-        amount: Number(property.rate) * daysLeft,
-        baseRate: Number(property.rate),
-        duration: daysLeft
-      });
-      currentDate = periodEnd;
-    }
+  // Use daily rate for any remaining days
+  const remainingDays = differenceInDays(endDate, currentDate);
+  if (remainingDays > 0) {
+    periods.push({
+      type: 'daily',
+      startDate: currentDate,
+      endDate: endDate,
+      amount: Number(property.rate) * remainingDays,
+      baseRate: Number(property.rate),
+      duration: remainingDays
+    });
   }
 
   return periods;
