@@ -7,6 +7,8 @@ import {
   addMonths,
   addWeeks,
   startOfDay,
+  isBefore,
+  isAfter,
 } from "date-fns";
 import type { Property } from "@db/schema";
 
@@ -37,12 +39,12 @@ function calculatePricePeriods(property: Property, checkIn: Date, checkOut: Date
 
   const calculateMonthlyEnd = (date: Date): Date => {
     const nextMonth = addMonths(date, 1);
-    return nextMonth <= endDate ? nextMonth : endDate;
+    return isBefore(nextMonth, endDate) ? nextMonth : endDate;
   };
 
   const calculateWeeklyEnd = (date: Date): Date => {
     const nextWeek = addWeeks(date, 1);
-    return nextWeek <= endDate ? nextWeek : endDate;
+    return isBefore(nextWeek, endDate) ? nextWeek : endDate;
   };
 
   const calculatePeriodMetrics = (start: Date, end: Date, amount: number): Pick<PricePeriod, 'daysInPeriod' | 'effectiveDailyRate' | 'normalDailyTotal' | 'discountPercentage'> => {
@@ -54,8 +56,10 @@ function calculatePricePeriods(property: Property, checkIn: Date, checkOut: Date
   };
 
   while (currentDate < endDate) {
+    // Only use monthly rate if we have a full month ahead
     if (property.monthlyRate && differenceInCalendarMonths(endDate, currentDate) >= 1) {
       const monthlyEnd = calculateMonthlyEnd(currentDate);
+      // Only apply monthly rate for complete months
       if (differenceInCalendarMonths(monthlyEnd, currentDate) === 1) {
         const metrics = calculatePeriodMetrics(currentDate, monthlyEnd, Number(property.monthlyRate));
         periods.push({
@@ -72,6 +76,7 @@ function calculatePricePeriods(property: Property, checkIn: Date, checkOut: Date
       }
     }
 
+    // Weekly rate for complete weeks
     if (property.weeklyRate && differenceInDays(endDate, currentDate) >= 7) {
       const weeklyEnd = calculateWeeklyEnd(currentDate);
       const metrics = calculatePeriodMetrics(currentDate, weeklyEnd, Number(property.weeklyRate));
@@ -88,6 +93,7 @@ function calculatePricePeriods(property: Property, checkIn: Date, checkOut: Date
       continue;
     }
 
+    // Remaining days at daily rate
     const remainingDaysCount = differenceInDays(endDate, currentDate);
     if (remainingDaysCount > 0) {
       const metrics = calculatePeriodMetrics(currentDate, endDate, normalDailyRate * remainingDaysCount);
