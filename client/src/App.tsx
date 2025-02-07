@@ -8,17 +8,17 @@ import { PublicPropertyList } from "./pages/PublicPropertyList";
 import Sidebar from "./components/Sidebar";
 
 function App() {
-  // Check if we're on the public or guest dashboard paths
-  const isPublicPath = window.location.pathname === "/properties/public";
-  const isGuestPath = window.location.pathname.startsWith("/guest-dashboard");
+  // Check if we're on the public or guest paths
+  const isPublicPath = window.location.pathname === "/properties/public" ||
+                      window.location.pathname === "/guest-dashboard";
 
   // Only show sidebar for admin routes
-  const showSidebar = !isPublicPath && !isGuestPath;
+  const showSidebar = !isPublicPath;
 
   return (
     <div className="flex h-screen bg-background">
       {showSidebar && <Sidebar />}
-      <main className="flex-1 overflow-y-auto p-8">
+      <main className={`flex-1 overflow-y-auto ${showSidebar ? 'p-8' : ''}`}>
         <Switch>
           {/* Admin routes */}
           <Route path="/" component={Dashboard} />
@@ -28,8 +28,6 @@ function App() {
 
           {/* Public routes */}
           <Route path="/properties/public" component={PublicPropertyList} />
-
-          {/* Guest routes */}
           <Route path="/guest-dashboard" component={GuestDashboard} />
         </Switch>
       </main>
