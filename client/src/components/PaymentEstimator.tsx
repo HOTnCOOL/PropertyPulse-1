@@ -35,19 +35,16 @@ function calculatePricePeriods(property: Property, checkIn: Date, checkOut: Date
   const endDate = startOfDay(new Date(checkOut));
   const normalDailyRate = Number(property.rate);
 
-  // Helper function to calculate period end date for monthly package
   const calculateMonthlyEnd = (date: Date): Date => {
     const nextMonth = addMonths(date, 1);
     return nextMonth <= endDate ? nextMonth : endDate;
   };
 
-  // Helper function to calculate period end date for weekly package
   const calculateWeeklyEnd = (date: Date): Date => {
     const nextWeek = addWeeks(date, 1);
     return nextWeek <= endDate ? nextWeek : endDate;
   };
 
-  // Helper function to calculate period metrics
   const calculatePeriodMetrics = (start: Date, end: Date, amount: number): Pick<PricePeriod, 'daysInPeriod' | 'effectiveDailyRate' | 'normalDailyTotal' | 'discountPercentage'> => {
     const daysInPeriod = differenceInDays(end, start);
     const effectiveDailyRate = amount / daysInPeriod;
@@ -57,10 +54,8 @@ function calculatePricePeriods(property: Property, checkIn: Date, checkOut: Date
   };
 
   while (currentDate < endDate) {
-    // Try to fit complete months first
     if (property.monthlyRate && differenceInCalendarMonths(endDate, currentDate) >= 1) {
       const monthlyEnd = calculateMonthlyEnd(currentDate);
-      // Only use monthly rate if we have a complete month
       if (differenceInCalendarMonths(monthlyEnd, currentDate) === 1) {
         const metrics = calculatePeriodMetrics(currentDate, monthlyEnd, Number(property.monthlyRate));
         periods.push({
@@ -77,7 +72,6 @@ function calculatePricePeriods(property: Property, checkIn: Date, checkOut: Date
       }
     }
 
-    // For the remaining period, try to fit complete weeks
     if (property.weeklyRate && differenceInDays(endDate, currentDate) >= 7) {
       const weeklyEnd = calculateWeeklyEnd(currentDate);
       const metrics = calculatePeriodMetrics(currentDate, weeklyEnd, Number(property.weeklyRate));
@@ -94,7 +88,6 @@ function calculatePricePeriods(property: Property, checkIn: Date, checkOut: Date
       continue;
     }
 
-    // Use daily rate for any remaining days
     const remainingDaysCount = differenceInDays(endDate, currentDate);
     if (remainingDaysCount > 0) {
       const metrics = calculatePeriodMetrics(currentDate, endDate, normalDailyRate * remainingDaysCount);
@@ -121,12 +114,15 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
     const pricePeriods = calculatePricePeriods(property, checkIn, checkOut);
     const totalAmount = pricePeriods.reduce((sum, period) => sum + period.amount, 0);
 
-    // Add security deposit
-    const deposit = property.monthlyRate 
-      ? Number(property.monthlyRate)
-      : property.weeklyRate 
-        ? Number(property.weeklyRate)
-        : Number(property.rate) * 7;
+    let deposit = Number(property.rate) * 7; 
+    const hasMonthlyPeriod = pricePeriods.some(p => p.type === 'monthly');
+    const hasWeeklyPeriod = pricePeriods.some(p => p.type === 'weekly');
+
+    if (hasMonthlyPeriod && property.monthlyRate) {
+      deposit = Number(property.monthlyRate); 
+    } else if (hasWeeklyPeriod && property.weeklyRate) {
+      deposit = Number(property.weeklyRate); 
+    }
 
     return {
       periods: pricePeriods,
