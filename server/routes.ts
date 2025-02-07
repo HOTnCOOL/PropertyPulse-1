@@ -50,9 +50,11 @@ interface PricePeriod {
 }
 
 function calculatePricePeriods(property: any, checkIn: Date, checkOut: Date): PricePeriod[] {
+  console.log('Calculating price periods for stay:', { checkIn, checkOut });
   const periods: PricePeriod[] = [];
   let currentDate = startOfDay(new Date(checkIn));
   const endDate = startOfDay(new Date(checkOut));
+  const normalDailyRate = Number(property.rate);
 
   // Helper function to calculate period end date for monthly package
   const calculateMonthlyEnd = (date: Date): Date => {
@@ -69,56 +71,42 @@ function calculatePricePeriods(property: any, checkIn: Date, checkOut: Date): Pr
 
   while (currentDate < endDate) {
     const remainingDays = differenceInDays(endDate, currentDate);
-    const remainingMonths = differenceInCalendarMonths(endDate, currentDate);
-
-    // Only use monthly rate if the remaining period is exactly one month or longer
-    // AND the next monthly end date would not exceed the checkout date
-    if (property.monthlyRate && remainingMonths >= 1) {
-      const monthlyEnd = calculateMonthlyEnd(currentDate);
-      // Verify that this monthly period actually fits
-      if (monthlyEnd <= endDate && differenceInCalendarMonths(monthlyEnd, currentDate) === 1) {
-        periods.push({
-          type: 'monthly',
-          startDate: currentDate,
-          endDate: monthlyEnd,
-          amount: Number(property.monthlyRate),
-          baseRate: Number(property.monthlyRate),
-          duration: 1 // 1 month
-        });
-        currentDate = monthlyEnd;
-        continue;
-      }
-    }
+    console.log('Processing remaining days:', remainingDays);
 
     // For periods less than a month but at least a week, use weekly rate
     if (property.weeklyRate && remainingDays >= 7) {
       const weeklyEnd = calculateWeeklyEnd(currentDate);
-      periods.push({
+      const period = {
         type: 'weekly',
         startDate: currentDate,
         endDate: weeklyEnd,
         amount: Number(property.weeklyRate),
         baseRate: Number(property.weeklyRate),
         duration: 1 // 1 week
-      });
+      };
+      console.log('Adding weekly period:', period);
+      periods.push(period);
       currentDate = weeklyEnd;
       continue;
     }
 
     // For periods less than a week, use daily rate
     if (remainingDays > 0) {
-      periods.push({
+      const period = {
         type: 'daily',
         startDate: currentDate,
         endDate: endDate,
         amount: Number(property.rate) * remainingDays,
         baseRate: Number(property.rate),
         duration: remainingDays
-      });
+      };
+      console.log('Adding daily period:', period);
+      periods.push(period);
       currentDate = endDate;
     }
   }
 
+  console.log('Final price periods:', periods);
   return periods;
 }
 

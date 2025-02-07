@@ -35,13 +35,6 @@ function calculatePricePeriods(property: Property, checkIn: Date, checkOut: Date
   const endDate = startOfDay(new Date(checkOut));
   const normalDailyRate = Number(property.rate);
 
-  // Helper function to calculate period end date for monthly package
-  const calculateMonthlyEnd = (date: Date): Date => {
-    const nextMonth = addMonths(date, 1);
-    // Ensure we maintain the same day of month for monthly packages
-    return nextMonth <= endDate ? nextMonth : endDate;
-  };
-
   // Helper function to calculate period end date for weekly package
   const calculateWeeklyEnd = (date: Date): Date => {
     const nextWeek = addWeeks(date, 1);
@@ -59,28 +52,6 @@ function calculatePricePeriods(property: Property, checkIn: Date, checkOut: Date
 
   while (currentDate < endDate) {
     const remainingDays = differenceInDays(endDate, currentDate);
-    const remainingMonths = differenceInCalendarMonths(endDate, currentDate);
-
-    // Only use monthly rate if the remaining period is exactly one month or longer
-    // AND the next monthly end date would not exceed the checkout date
-    if (property.monthlyRate && remainingMonths >= 1) {
-      const monthlyEnd = calculateMonthlyEnd(currentDate);
-      // Verify that this monthly period actually fits
-      if (monthlyEnd <= endDate && differenceInCalendarMonths(monthlyEnd, currentDate) === 1) {
-        const metrics = calculatePeriodMetrics(currentDate, monthlyEnd, Number(property.monthlyRate));
-        periods.push({
-          type: 'monthly',
-          startDate: currentDate,
-          endDate: monthlyEnd,
-          amount: Number(property.monthlyRate),
-          baseRate: Number(property.monthlyRate),
-          duration: 1, // 1 month
-          ...metrics
-        });
-        currentDate = monthlyEnd;
-        continue;
-      }
-    }
 
     // For periods less than a month but at least a week, use weekly rate
     if (property.weeklyRate && remainingDays >= 7) {
