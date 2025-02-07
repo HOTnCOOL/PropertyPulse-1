@@ -8,7 +8,6 @@ import {
   addWeeks,
   startOfDay,
   isBefore,
-  isAfter,
 } from "date-fns";
 import type { Property } from "@db/schema";
 
@@ -35,17 +34,8 @@ const calculatePricePeriods = (property: Property, checkIn: Date, checkOut: Date
   const periods: PricePeriod[] = [];
   let currentDate = startOfDay(new Date(checkIn));
   const endDate = startOfDay(new Date(checkOut));
+  const totalDays = differenceInDays(endDate, currentDate);
   const normalDailyRate = Number(property.rate);
-
-  const calculateMonthlyEnd = (date: Date): Date => {
-    const nextMonth = addMonths(date, 1);
-    return isBefore(nextMonth, endDate) ? nextMonth : endDate;
-  };
-
-  const calculateWeeklyEnd = (date: Date): Date => {
-    const nextWeek = addWeeks(date, 1);
-    return isBefore(nextWeek, endDate) ? nextWeek : endDate;
-  };
 
   const calculatePeriodMetrics = (start: Date, end: Date, amount: number): Pick<PricePeriod, 'daysInPeriod' | 'effectiveDailyRate' | 'normalDailyTotal' | 'discountPercentage'> => {
     const daysInPeriod = differenceInDays(end, start);
@@ -55,67 +45,53 @@ const calculatePricePeriods = (property: Property, checkIn: Date, checkOut: Date
     return { daysInPeriod, effectiveDailyRate, normalDailyTotal, discountPercentage };
   };
 
-  while (currentDate < endDate) {
-    // For monthly periods, we need to ensure we're getting complete months
-    if (property.monthlyRate) {
-      const monthsUntilEnd = differenceInCalendarMonths(endDate, currentDate);
-      if (monthsUntilEnd >= 1) {
-        const monthlyEnd = calculateMonthlyEnd(currentDate);
-        // Only apply monthly rate if it's a complete month
-        const completeMonth = differenceInCalendarMonths(monthlyEnd, currentDate) === 1;
-        if (completeMonth) {
-          const metrics = calculatePeriodMetrics(currentDate, monthlyEnd, Number(property.monthlyRate));
-          periods.push({
-            type: 'monthly',
-            startDate: currentDate,
-            endDate: monthlyEnd,
-            amount: Number(property.monthlyRate),
-            baseRate: Number(property.monthlyRate),
-            duration: 1,
-            ...metrics
-          });
-          currentDate = monthlyEnd;
-          continue;
-        }
-      }
-    }
+  // Helper to add a period
+  const addPeriod = (type: 'monthly' | 'weekly' | 'daily', duration: number, rate: number) => {
+    const periodEnd = type === 'monthly' 
+      ? addMonths(currentDate, duration)
+      : type === 'weekly'
+        ? addWeeks(currentDate, duration)
+        : new Date(currentDate.getTime() + duration * 24 * 60 * 60 * 1000);
 
-    // For weekly periods
-    if (property.weeklyRate) {
-      const daysUntilEnd = differenceInDays(endDate, currentDate);
-      if (daysUntilEnd >= 7) {
-        const weeklyEnd = calculateWeeklyEnd(currentDate);
-        const metrics = calculatePeriodMetrics(currentDate, weeklyEnd, Number(property.weeklyRate));
-        periods.push({
-          type: 'weekly',
-          startDate: currentDate,
-          endDate: weeklyEnd,
-          amount: Number(property.weeklyRate),
-          baseRate: Number(property.weeklyRate),
-          duration: 1,
-          ...metrics
-        });
-        currentDate = weeklyEnd;
-        continue;
-      }
-    }
+    const amount = rate * duration;
+    const metrics = calculatePeriodMetrics(currentDate, periodEnd, amount);
 
-    // Remaining days at daily rate
-    const remainingDays = differenceInDays(endDate, currentDate);
-    if (remainingDays > 0) {
-      const dailyAmount = normalDailyRate * remainingDays;
-      const metrics = calculatePeriodMetrics(currentDate, endDate, dailyAmount);
-      periods.push({
-        type: 'daily',
-        startDate: currentDate,
-        endDate,
-        amount: dailyAmount,
-        baseRate: normalDailyRate,
-        duration: remainingDays,
-        ...metrics
-      });
-      currentDate = endDate;
+    periods.push({
+      type,
+      startDate: currentDate,
+      endDate: periodEnd,
+      amount,
+      baseRate: rate,
+      duration,
+      ...metrics
+    });
+
+    currentDate = periodEnd;
+  };
+
+  let remainingDays = totalDays;
+
+  // Try to fit as many complete months as possible
+  if (property.monthlyRate) {
+    const completeMonths = Math.floor(differenceInCalendarMonths(endDate, currentDate));
+    if (completeMonths > 0) {
+      addPeriod('monthly', completeMonths, Number(property.monthlyRate));
+      remainingDays = differenceInDays(endDate, currentDate);
     }
+  }
+
+  // Then try to fit complete weeks in the remaining time
+  if (property.weeklyRate && remainingDays >= 7) {
+    const completeWeeks = Math.floor(remainingDays / 7);
+    if (completeWeeks > 0) {
+      addPeriod('weekly', completeWeeks, Number(property.weeklyRate));
+      remainingDays = differenceInDays(endDate, currentDate);
+    }
+  }
+
+  // Use daily rate for any remaining days
+  if (remainingDays > 0) {
+    addPeriod('daily', remainingDays, normalDailyRate);
   }
 
   return periods;
@@ -128,7 +104,7 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
     const pricePeriods = calculatePricePeriods(property, checkIn, checkOut);
     const accommodationTotal = pricePeriods.reduce((sum, period) => sum + period.amount, 0);
 
-    // Calculate deposit based on the longest rate period actually used in the booking
+    // Find the longest period pack actually used in this booking
     const longestPeriodUsed = pricePeriods.reduce((longest, current) => {
       const currentBaseAmount = current.baseRate;
       const longestBaseAmount = longest ? longest.baseRate : 0;
@@ -162,12 +138,11 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                 <div key={index} className="space-y-1">
                   <div className="flex justify-between text-sm">
                     <span>
-                      {period.type === 'monthly' && 'Monthly Rate'}
-                      {period.type === 'weekly' && 'Weekly Rate'}
-                      {period.type === 'daily' && 'Daily Rate'}
+                      {period.type === 'monthly' && `${period.duration} Month${period.duration > 1 ? 's' : ''}`}
+                      {period.type === 'weekly' && `${period.duration} Week${period.duration > 1 ? 's' : ''}`}
+                      {period.type === 'daily' && `${period.duration} Day${period.duration > 1 ? 's' : ''}`}
                       {' '}
                       ({format(period.startDate, "MMM d")} - {format(period.endDate, "MMM d")})
-                      {period.duration > 1 && period.type === 'daily' && ` (${period.duration} days)`}
                     </span>
                     <span className="font-medium">${period.amount.toLocaleString()}</span>
                   </div>
@@ -201,7 +176,7 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
               <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Fully Refundable</span>
             </h3>
             <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">One-time refundable deposit</span>
+              <span className="text-muted-foreground">Based on longest period rate used</span>
               <span className="font-medium">${estimates.securityDeposit.toLocaleString()}</span>
             </div>
           </div>
@@ -215,26 +190,6 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
             <p className="text-xs text-muted-foreground mt-1">
               Includes accommodation charges and refundable security deposit
             </p>
-          </div>
-
-          <div className="text-sm text-muted-foreground space-y-4">
-            <div>
-              <h4 className="font-medium mb-2">Security Deposit Terms:</h4>
-              <ul className="list-disc list-inside space-y-1">
-                <li>Fully refundable upon check-out if no damages or additional charges</li>
-                <li>May be used to cover damages, late check-out, or other incidental charges</li>
-                <li>Refund processed within 7 business days after check-out</li>
-              </ul>
-            </div>
-
-            <div>
-              <h4 className="font-medium mb-2">Payment Schedule:</h4>
-              <ul className="list-disc list-inside space-y-1">
-                <li>Security Deposit: Due at booking</li>
-                <li>First Payment: Due before check-in</li>
-                <li>Subsequent payments: Due on the 1st of each period</li>
-              </ul>
-            </div>
           </div>
         </div>
       </CardContent>
