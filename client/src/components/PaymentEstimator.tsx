@@ -112,7 +112,7 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
     if (!property || !checkIn || !checkOut) return null;
 
     const pricePeriods = calculatePricePeriods(property, checkIn, checkOut);
-    const totalAmount = pricePeriods.reduce((sum, period) => sum + period.amount, 0);
+    const accommodationTotal = pricePeriods.reduce((sum, period) => sum + period.amount, 0);
 
     // Calculate deposit based on the longest rate period actually used in the booking
     const longestPeriodUsed = pricePeriods.reduce((longest, current) => {
@@ -121,13 +121,13 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
       return currentBaseAmount > longestBaseAmount ? current : longest;
     }, null as PricePeriod | null);
 
-    // Use the base rate of the longest period used as deposit
-    const deposit = longestPeriodUsed ? longestPeriodUsed.baseRate : Number(property.rate);
+    const securityDeposit = longestPeriodUsed ? longestPeriodUsed.baseRate : Number(property.rate);
 
     return {
       periods: pricePeriods,
-      deposit,
-      total: totalAmount + deposit,
+      accommodationTotal,
+      securityDeposit,
+      grandTotal: accommodationTotal + securityDeposit,
     };
   }, [property, checkIn, checkOut]);
 
@@ -139,57 +139,88 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
         <CardTitle>Payment Estimation</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="space-y-4">
+        <div className="space-y-6">
+          {/* Accommodation Charges Section */}
           <div className="space-y-2">
-            {estimates.periods.map((period, index) => (
-              <div key={index} className="space-y-1">
-                <div className="flex justify-between text-sm">
-                  <span>
-                    {period.type === 'monthly' && 'Monthly Rate'}
-                    {period.type === 'weekly' && 'Weekly Rate'}
-                    {period.type === 'daily' && 'Daily Rate'}
-                    {' '}
-                    ({format(period.startDate, "MMM d")} - {format(period.endDate, "MMM d")})
-                    {period.duration > 1 && period.type === 'daily' && ` (${period.duration} days)`}
-                  </span>
-                  <span className="font-medium">${period.amount.toLocaleString()}</span>
+            <h3 className="text-sm font-semibold">Accommodation Charges</h3>
+            <div className="space-y-2">
+              {estimates.periods.map((period, index) => (
+                <div key={index} className="space-y-1">
+                  <div className="flex justify-between text-sm">
+                    <span>
+                      {period.type === 'monthly' && 'Monthly Rate'}
+                      {period.type === 'weekly' && 'Weekly Rate'}
+                      {period.type === 'daily' && 'Daily Rate'}
+                      {' '}
+                      ({format(period.startDate, "MMM d")} - {format(period.endDate, "MMM d")})
+                      {period.duration > 1 && period.type === 'daily' && ` (${period.duration} days)`}
+                    </span>
+                    <span className="font-medium">${period.amount.toLocaleString()}</span>
+                  </div>
+                  <div className="text-xs text-muted-foreground flex justify-between">
+                    <span>
+                      <span className="line-through">${period.normalDailyTotal.toLocaleString()}</span>
+                      {' '}→{' '}
+                      <span className="text-green-600">${Math.round(period.effectiveDailyRate)}/day</span>
+                      {' '}
+                      {period.discountPercentage > 0 && (
+                        <span className="text-green-600">
+                          ({Math.round(period.discountPercentage)}% off)
+                        </span>
+                      )}
+                    </span>
+                    <span>{period.daysInPeriod} days</span>
+                  </div>
                 </div>
-                <div className="text-xs text-muted-foreground flex justify-between">
-                  <span>
-                    <span className="line-through">${period.normalDailyTotal.toLocaleString()}</span>
-                    {' '}→{' '}
-                    <span className="text-green-600">${Math.round(period.effectiveDailyRate)}/day</span>
-                    {' '}
-                    {period.discountPercentage > 0 && (
-                      <span className="text-green-600">
-                        ({Math.round(period.discountPercentage)}% off)
-                      </span>
-                    )}
-                  </span>
-                  <span>{period.daysInPeriod} days</span>
-                </div>
-              </div>
-            ))}
-            <div className="flex justify-between text-sm pt-2 border-t">
-              <span>Security Deposit (refundable)</span>
-              <span className="font-medium">${estimates.deposit.toLocaleString()}</span>
+              ))}
+            </div>
+            <div className="flex justify-between text-sm font-medium pt-2 border-t">
+              <span>Accommodation Total</span>
+              <span>${estimates.accommodationTotal.toLocaleString()}</span>
             </div>
           </div>
 
+          {/* Security Deposit Section */}
+          <div className="space-y-2 pt-4 border-t border-dashed">
+            <h3 className="text-sm font-semibold flex items-center justify-between">
+              <span>Security Deposit</span>
+              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Fully Refundable</span>
+            </h3>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">One-time refundable deposit</span>
+              <span className="font-medium">${estimates.securityDeposit.toLocaleString()}</span>
+            </div>
+          </div>
+
+          {/* Grand Total Section */}
           <div className="pt-4 border-t">
-            <div className="flex justify-between font-semibold">
-              <span>Total Amount</span>
-              <span>${estimates.total.toLocaleString()}</span>
+            <div className="flex justify-between font-semibold text-lg">
+              <span>Total Due Now</span>
+              <span>${estimates.grandTotal.toLocaleString()}</span>
             </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Includes accommodation charges and refundable security deposit
+            </p>
           </div>
 
-          <div className="text-sm text-muted-foreground">
-            <p>Payment Schedule:</p>
-            <ul className="list-disc list-inside space-y-1 mt-2">
-              <li>Security Deposit: Due at booking</li>
-              <li>First Payment: Due before check-in</li>
-              <li>Subsequent payments: Due on the 1st of each period</li>
-            </ul>
+          <div className="text-sm text-muted-foreground space-y-4">
+            <div>
+              <h4 className="font-medium mb-2">Security Deposit Terms:</h4>
+              <ul className="list-disc list-inside space-y-1">
+                <li>Fully refundable upon check-out if no damages or additional charges</li>
+                <li>May be used to cover damages, late check-out, or other incidental charges</li>
+                <li>Refund processed within 7 business days after check-out</li>
+              </ul>
+            </div>
+
+            <div>
+              <h4 className="font-medium mb-2">Payment Schedule:</h4>
+              <ul className="list-disc list-inside space-y-1">
+                <li>Security Deposit: Due at booking</li>
+                <li>First Payment: Due before check-in</li>
+                <li>Subsequent payments: Due on the 1st of each period</li>
+              </ul>
+            </div>
           </div>
         </div>
       </CardContent>
