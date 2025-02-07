@@ -72,7 +72,7 @@ function calculatePricePeriods(property: any, checkIn: Date, checkOut: Date): Pr
     const remainingDays = differenceInDays(endDate, currentDate);
     console.log('Processing remaining days:', remainingDays);
 
-    // Try to fit a complete month first
+    // Try to fit complete months first
     if (property.monthlyRate && differenceInCalendarMonths(endDate, currentDate) >= 1) {
       const monthlyEnd = calculateMonthlyEnd(currentDate);
       // Only use monthly rate if we have a complete month
@@ -92,8 +92,8 @@ function calculatePricePeriods(property: any, checkIn: Date, checkOut: Date): Pr
       }
     }
 
-    // For the remaining period, try to fit as many complete weeks as possible
-    while (property.weeklyRate && differenceInDays(endDate, currentDate) >= 7) {
+    // For the remaining period, try to fit complete weeks
+    if (property.weeklyRate && differenceInDays(endDate, currentDate) >= 7) {
       const weeklyEnd = calculateWeeklyEnd(currentDate);
       const period = {
         type: 'weekly' as const,
@@ -106,6 +106,7 @@ function calculatePricePeriods(property: any, checkIn: Date, checkOut: Date): Pr
       console.log('Adding weekly period:', period);
       periods.push(period);
       currentDate = weeklyEnd;
+      continue;
     }
 
     // Use daily rate for any remaining days
