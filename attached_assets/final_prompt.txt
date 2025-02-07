@@ -1,0 +1,73 @@
+
+# Property Booking Payment System Enhancement
+
+## Core Requirements
+
+1. Payment Deadlines
+- All package payments must be completed by 12:00 (noon) on activation day
+- Full payment and matching deposit required for activation
+
+2. Prepayment Discount System
+- 10% incremental discount for each prepaid period
+- Maximum discount cap of 50%
+- Sequential payment required (no skipping periods)
+- All prior periods must be paid before prepaying future periods
+
+3. Package Duration Rules
+- Daily/Weekly/Monthly packages available
+- Longer packages can be split into shorter ones
+- Deposit equals package amount with flexible reduction options
+
+## Implementation Tasks
+
+1. Backend Updates
+- Extend payment schema to track prepayment status
+- Add discount calculation logic in price estimation
+- Implement sequential payment validation
+- Handle package conversion logic
+
+2. Frontend Updates
+- Update PaymentEstimator to show prepayment discounts
+- Enhance PaymentRegistration to handle early payments
+- Add validation for sequential payments
+- Display package conversion options
+
+3. Database Schema Extensions
+- Add prepayment tracking fields
+- Store discount history
+- Track package conversions
+
+## Example Scenarios
+
+1. Standard Payment:
+   Daily package at $100/day, paid on activation = $100 (no discount)
+
+2. Prepayment Example:
+   10-day package prepayment calculation:
+   - Day 1: $100 (0% off)
+   - Day 2: $90 (10% off)
+   - Day 3: $80 (20% off)
+   - Day 4: $70 (30% off)
+   - Day 5: $60 (40% off)
+   - Days 6-10: $50 each (50% off)
+   Total: $600 instead of $1000
+
+3. Package Conversion:
+   Monthly package can be converted to weekly/daily packages while maintaining value
+
+## Technical Considerations
+
+1. Data Validation
+- Ensure all prior periods are paid
+- Validate payment sequences
+- Track discount applications
+
+2. User Experience
+- Clear display of available discounts
+- Transparent payment history
+- Easy package conversion interface
+
+3. Business Rules
+- Deposit handling
+- Early exit scenarios
+- Payment deadline enforcement
