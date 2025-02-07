@@ -31,7 +31,7 @@ interface PricePeriod {
   discountPercentage: number;
 }
 
-function calculatePricePeriods(property: Property, checkIn: Date, checkOut: Date): PricePeriod[] {
+const calculatePricePeriods = (property: Property, checkIn: Date, checkOut: Date): PricePeriod[] => {
   const periods: PricePeriod[] = [];
   let currentDate = startOfDay(new Date(checkIn));
   const endDate = startOfDay(new Date(checkOut));
@@ -56,54 +56,62 @@ function calculatePricePeriods(property: Property, checkIn: Date, checkOut: Date
   };
 
   while (currentDate < endDate) {
-    // Only use monthly rate if we have a full month ahead
-    if (property.monthlyRate && differenceInCalendarMonths(endDate, currentDate) >= 1) {
-      const monthlyEnd = calculateMonthlyEnd(currentDate);
-      // Only apply monthly rate for complete months
-      if (differenceInCalendarMonths(monthlyEnd, currentDate) === 1) {
-        const metrics = calculatePeriodMetrics(currentDate, monthlyEnd, Number(property.monthlyRate));
+    // For monthly periods, we need to ensure we're getting complete months
+    if (property.monthlyRate) {
+      const monthsUntilEnd = differenceInCalendarMonths(endDate, currentDate);
+      if (monthsUntilEnd >= 1) {
+        const monthlyEnd = calculateMonthlyEnd(currentDate);
+        // Only apply monthly rate if it's a complete month
+        const completeMonth = differenceInCalendarMonths(monthlyEnd, currentDate) === 1;
+        if (completeMonth) {
+          const metrics = calculatePeriodMetrics(currentDate, monthlyEnd, Number(property.monthlyRate));
+          periods.push({
+            type: 'monthly',
+            startDate: currentDate,
+            endDate: monthlyEnd,
+            amount: Number(property.monthlyRate),
+            baseRate: Number(property.monthlyRate),
+            duration: 1,
+            ...metrics
+          });
+          currentDate = monthlyEnd;
+          continue;
+        }
+      }
+    }
+
+    // For weekly periods
+    if (property.weeklyRate) {
+      const daysUntilEnd = differenceInDays(endDate, currentDate);
+      if (daysUntilEnd >= 7) {
+        const weeklyEnd = calculateWeeklyEnd(currentDate);
+        const metrics = calculatePeriodMetrics(currentDate, weeklyEnd, Number(property.weeklyRate));
         periods.push({
-          type: 'monthly',
+          type: 'weekly',
           startDate: currentDate,
-          endDate: monthlyEnd,
-          amount: Number(property.monthlyRate),
-          baseRate: Number(property.monthlyRate),
+          endDate: weeklyEnd,
+          amount: Number(property.weeklyRate),
+          baseRate: Number(property.weeklyRate),
           duration: 1,
           ...metrics
         });
-        currentDate = monthlyEnd;
+        currentDate = weeklyEnd;
         continue;
       }
     }
 
-    // Weekly rate for complete weeks
-    if (property.weeklyRate && differenceInDays(endDate, currentDate) >= 7) {
-      const weeklyEnd = calculateWeeklyEnd(currentDate);
-      const metrics = calculatePeriodMetrics(currentDate, weeklyEnd, Number(property.weeklyRate));
-      periods.push({
-        type: 'weekly',
-        startDate: currentDate,
-        endDate: weeklyEnd,
-        amount: Number(property.weeklyRate),
-        baseRate: Number(property.weeklyRate),
-        duration: 1,
-        ...metrics
-      });
-      currentDate = weeklyEnd;
-      continue;
-    }
-
     // Remaining days at daily rate
-    const remainingDaysCount = differenceInDays(endDate, currentDate);
-    if (remainingDaysCount > 0) {
-      const metrics = calculatePeriodMetrics(currentDate, endDate, normalDailyRate * remainingDaysCount);
+    const remainingDays = differenceInDays(endDate, currentDate);
+    if (remainingDays > 0) {
+      const dailyAmount = normalDailyRate * remainingDays;
+      const metrics = calculatePeriodMetrics(currentDate, endDate, dailyAmount);
       periods.push({
         type: 'daily',
         startDate: currentDate,
         endDate,
-        amount: normalDailyRate * remainingDaysCount,
+        amount: dailyAmount,
         baseRate: normalDailyRate,
-        duration: remainingDaysCount,
+        duration: remainingDays,
         ...metrics
       });
       currentDate = endDate;
@@ -111,7 +119,7 @@ function calculatePricePeriods(property: Property, checkIn: Date, checkOut: Date
   }
 
   return periods;
-}
+};
 
 export default function PaymentEstimator({ property, checkIn, checkOut }: PaymentEstimatorProps) {
   const estimates = useMemo(() => {
