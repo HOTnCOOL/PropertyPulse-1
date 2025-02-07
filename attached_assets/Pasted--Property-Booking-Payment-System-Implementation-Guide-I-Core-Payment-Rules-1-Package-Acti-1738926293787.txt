@@ -1,0 +1,102 @@
+
+# Property Booking Payment System - Implementation Guide
+
+## I. Core Payment Rules
+
+1. Package Activation Requirements
+   - Payment deadline: 12:00 (noon) on activation day
+   - Required deposit: Equal to package amount
+   - All payments must be completed before activation
+
+2. Prepayment Discount Structure
+   - Base rule: 10% discount per period paid in advance
+   - Maximum discount: 50%
+   - Strict sequential payment enforcement
+   - Example calculation for 10-day package ($100/day):
+     ```
+     Day 1: $100 (0% off)
+     Day 2: $90  (10% off)
+     Day 3: $80  (20% off)
+     Day 4: $70  (30% off)
+     Day 5: $60  (40% off)
+     Day 6-10: $50 each (50% off)
+     Total: $600 vs. original $1000
+     ```
+
+3. Package Flexibility Options
+   - Package conversion allowed (longer to shorter periods)
+   - Conversion timing: At purchase or payment time
+   - Maintains total value but increases payment frequency
+
+## II. Special Cases
+
+1. Early Exit Scenarios
+   - Deposit handling rules
+   - Payment inability protocols
+   - Withdrawal procedures
+
+2. Deposit Management
+   - Reduction criteria
+   - Withdrawal conditions
+   - Forfeiture rules
+
+## III. Technical Implementation
+
+1. Database Updates
+   - Payment tracking schema
+   - Discount history logging
+   - Package conversion records
+   - Sequential payment validation
+
+2. Business Logic
+   - Prepayment discount calculator
+   - Package conversion handler
+   - Payment sequence validator
+   - Deposit management system
+
+3. User Interface
+   - Payment schedule display
+   - Available discounts calculator
+   - Package conversion interface
+   - Payment history tracking
+
+## IV. Validation Rules
+
+1. Payment Sequence
+   - Verify all prior periods are paid
+   - Block future payments if gaps exist
+   - Validate conversion eligibility
+
+2. Package Conversion
+   - Maintain value equivalence
+   - Calculate new payment schedule
+   - Update deposit requirements
+
+## V. Example Scenarios
+
+1. Standard Payment Flow
+   ```
+   Package: Daily rate $100
+   Payment: On activation day
+   Total: $100 + $100 deposit
+   ```
+
+2. Advanced Payment With Maximum Discount
+   ```
+   Package: 5-month prepayment
+   Original monthly rate: $3000
+   Month 1: $3000 (0% off)
+   Month 2: $2700 (10% off)
+   Month 3: $2400 (20% off)
+   Month 4: $2100 (30% off)
+   Month 5: $1500 (50% off)
+   Total: $11,700 vs. original $15,000
+   ```
+
+3. Package Conversion Example
+   ```
+   Original: 1-month package $3000
+   Converted: 4-week packages ($800/week)
+   New schedule: Weekly payments of $800
+   Total value maintained: $3200
+   ```
