@@ -6,6 +6,7 @@ import Properties from "./pages/Properties";
 import Financials from "./pages/Financials";
 import { PublicPropertyList } from "./pages/PublicPropertyList";
 import GuestPayment from "./pages/GuestPayment";
+import Auth from "./pages/Auth"; // Added import for Auth component
 import Sidebar from "./components/Sidebar";
 import React from "react";
 
@@ -51,6 +52,12 @@ function App() {
       <Route path="/properties/public">
         <PublicLayout>
           <PublicPropertyList />
+        </PublicLayout>
+      </Route>
+
+      <Route path="/auth"> {/* Added route for Auth */}
+        <PublicLayout>
+          <Auth />
         </PublicLayout>
       </Route>
 

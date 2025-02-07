@@ -3,11 +3,13 @@ import { createServer, type Server } from "http";
 import multer from "multer";
 import path from "path";
 import { db } from "@db";
-import { properties, guests, payments, todos, assets, bookings, insertBookingSchema } from "@db/schema";
+import { properties, guests, payments, todos, assets, bookings, insertBookingSchema, admins, loginAdminSchema, loginGuestSchema } from "@db/schema";
 import { eq, and, gte, lte, or } from "drizzle-orm";
 import express from "express";
 import { addDays, parseISO } from "date-fns";
 import { sql } from "drizzle-orm";
+import { scrypt, randomBytes, timingSafeEqual } from "crypto";
+import { promisify } from "util";
 
 // Configure multer for file upload
 const storage = multer.diskStorage({
@@ -535,6 +537,88 @@ export function registerRoutes(app: Express): Server {
       console.error('Error fetching guest booking:', error);
       res.status(500).json({ message: "Failed to fetch booking details" });
     }
+  });
+
+  // Authentication endpoints
+  app.post("/api/auth/admin", async (req, res) => {
+    try {
+      const result = loginAdminSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ message: "Invalid credentials" });
+      }
+
+      const [admin] = await db
+        .select()
+        .from(admins)
+        .where(eq(admins.email, result.data.email))
+        .limit(1);
+
+      if (!admin) {
+        return res.status(401).json({ message: "Invalid credentials" });
+      }
+
+      // In a real app, we would hash the password and compare
+      if (admin.password !== result.data.password) {
+        return res.status(401).json({ message: "Invalid credentials" });
+      }
+
+      // Set session
+      req.session.adminId = admin.id;
+      res.json({ admin: { id: admin.id, email: admin.email, name: admin.name } });
+    } catch (error) {
+      console.error('Admin login error:', error);
+      res.status(500).json({ message: "Login failed" });
+    }
+  });
+
+  app.post("/api/auth/guest", async (req, res) => {
+    try {
+      const result = loginGuestSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ message: "Invalid credentials" });
+      }
+
+      const booking = await db.query.bookings.findFirst({
+        where: and(
+          eq(bookings.bookingReference, result.data.bookingReference),
+        ),
+        with: {
+          guest: true,
+        },
+      });
+
+      if (!booking || !booking.guest || booking.guest.email !== result.data.email) {
+        return res.status(401).json({ message: "Invalid credentials" });
+      }
+
+      // Set session
+      req.session.guestId = booking.guest.id;
+      res.json({ guest: booking.guest });
+    } catch (error) {
+      console.error('Guest login error:', error);
+      res.status(500).json({ message: "Login failed" });
+    }
+  });
+
+  app.post("/api/auth/logout", (req, res) => {
+    req.session.destroy((err) => {
+      if (err) {
+        console.error('Logout error:', err);
+        return res.status(500).json({ message: "Logout failed" });
+      }
+      res.clearCookie("connect.sid");
+      res.json({ message: "Logged out successfully" });
+    });
+  });
+
+  app.get("/api/auth/session", (req, res) => {
+    if (req.session.adminId) {
+      return res.json({ type: "admin", id: req.session.adminId });
+    }
+    if (req.session.guestId) {
+      return res.json({ type: "guest", id: req.session.guestId });
+    }
+    res.status(401).json({ message: "Not authenticated" });
   });
 
   const httpServer = createServer(app);

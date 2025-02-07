@@ -84,6 +84,14 @@ export const todos = pgTable("todos", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const admins = pgTable("admins", {
+  id: serial("id").primaryKey(),
+  email: text("email").notNull().unique(),
+  password: text("password").notNull(),
+  name: text("name").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Relations
 export const propertiesRelations = relations(properties, ({ many }) => ({
   guests: many(guests),
@@ -170,6 +178,22 @@ export const insertTodoSchema = createInsertSchema(todos);
 export const selectTodoSchema = createSelectSchema(todos);
 export const selectBookingSchema = createSelectSchema(bookings);
 
+export const insertAdminSchema = z.object({
+  email: z.string().email("Invalid email address"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  name: z.string().min(1, "Name is required"),
+});
+
+export const loginGuestSchema = z.object({
+  email: z.string().email("Invalid email address"),
+  bookingReference: z.string().length(10, "Invalid booking reference"),
+});
+
+export const loginAdminSchema = z.object({
+  email: z.string().email("Invalid email address"),
+  password: z.string().min(1, "Password is required"),
+});
+
 // Types
 export type Property = typeof properties.$inferSelect;
 export type Guest = typeof guests.$inferSelect;
@@ -178,3 +202,7 @@ export type Todo = typeof todos.$inferSelect;
 export type Asset = typeof assets.$inferSelect;
 export type Booking = typeof bookings.$inferSelect;
 export type NewBooking = z.infer<typeof insertBookingSchema>;
+export type Admin = typeof admins.$inferSelect;
+export type NewAdmin = z.infer<typeof insertAdminSchema>;
+export type LoginGuest = z.infer<typeof loginGuestSchema>;
+export type LoginAdmin = z.infer<typeof loginAdminSchema>;
