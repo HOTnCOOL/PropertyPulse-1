@@ -6,6 +6,7 @@ import { format } from "date-fns";
 import { CalendarIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useLocation } from "wouter";
 import {
   Form,
   FormControl,
@@ -35,14 +36,20 @@ import PaymentEstimator from "../components/PaymentEstimator";
 import PaymentHistory from "../components/PaymentHistory";
 import PaymentRegistration from "../components/PaymentRegistration";
 
+
 export default function GuestRegistration() {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const [selectedDates, setSelectedDates] = useState<{
     checkIn?: Date;
     checkOut?: Date;
   }>({});
   const [activeGuest, setActiveGuest] = useState<Guest | null>(null);
+
+  // Get propertyId from URL if it exists
+  const params = new URLSearchParams(window.location.search);
+  const preSelectedPropertyId = params.get('propertyId');
 
   const form = useForm({
     resolver: zodResolver(insertGuestSchema),
@@ -51,7 +58,7 @@ export default function GuestRegistration() {
       lastName: "",
       email: "",
       phone: "",
-      propertyId: undefined as unknown as number,
+      propertyId: preSelectedPropertyId ? Number(preSelectedPropertyId) : undefined as unknown as number,
       checkIn: undefined,
       checkOut: undefined,
     },
@@ -93,15 +100,18 @@ export default function GuestRegistration() {
 
   const registerGuest = useMutation({
     mutationFn: async (values: typeof insertGuestSchema._type) => {
+      console.log('Registering guest with values:', values);
       const response = await fetch("/api/guests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(values),
       });
       if (!response.ok) throw new Error("Failed to register guest");
-      return response.json();
+      const data = await response.json();
+      console.log('Registration response:', data);
+      return data;
     },
-    onSuccess: () => {
+    onSuccess: (guest) => {
       queryClient.invalidateQueries({ queryKey: ["/api/guests"] });
       form.reset();
       setSelectedDates({});
@@ -109,8 +119,16 @@ export default function GuestRegistration() {
         title: "Success",
         description: "Guest has been registered successfully",
       });
+      // Redirect to payment page with the booking reference and email
+      if (guest.bookingReference) {
+        console.log('Redirecting to payment page with:', guest);
+        setLocation(`/payment?ref=${guest.bookingReference}&email=${guest.email}`);
+      } else {
+        console.error('No booking reference in response:', guest);
+      }
     },
-    onError: () => {
+    onError: (error) => {
+      console.error('Registration error:', error);
       toast({
         title: "Error",
         description: "Failed to register guest",
@@ -348,8 +366,8 @@ export default function GuestRegistration() {
             <div className="space-y-6">
               <div>
                 <h3 className="text-lg font-medium mb-4">Recent Guests</h3>
-                <GuestList 
-                  guests={guests.slice(0, 5)} 
+                <GuestList
+                  guests={guests.slice(0, 5)}
                   onSelectGuest={(guest) => setActiveGuest(guest)}
                   selectedGuestId={activeGuest?.id}
                 />
@@ -379,8 +397,8 @@ export default function GuestRegistration() {
                         property={selectedProperty}
                         booking={null}
                         onSuccess={() => {
-                          queryClient.invalidateQueries({ 
-                            queryKey: ['/api/payments', activeGuest.id] 
+                          queryClient.invalidateQueries({
+                            queryKey: ['/api/payments', activeGuest.id]
                           });
                         }}
                       />
