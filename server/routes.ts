@@ -14,6 +14,118 @@ import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import { pool } from "@db"; // Import pool from db/index.ts
 
+// Add these helper functions after the existing imports
+function calculateDiscountedRate(baseRate: number, periodIndex: number): number {
+  // Apply 10% discount per period, max 50%
+  const discountPercent = Math.min(periodIndex * 10, 50);
+  return baseRate * (1 - discountPercent / 100);
+}
+
+function calculatePricePeriods(property: any, checkIn: Date, checkOut: Date): PricePeriod[] {
+  console.log('Calculating price periods for stay:', { checkIn, checkOut });
+  const periods: PricePeriod[] = [];
+  let currentDate = startOfDay(new Date(checkIn));
+  const endDate = startOfDay(new Date(checkOut));
+  const normalDailyRate = Number(property.rate);
+
+  // Helper function to calculate period end date for monthly package
+  const calculateMonthlyEnd = (date: Date): Date => {
+    const nextMonth = addMonths(date, 1);
+    return nextMonth <= endDate ? nextMonth : endDate;
+  };
+
+  // Helper function to calculate period end date for weekly package
+  const calculateWeeklyEnd = (date: Date): Date => {
+    const nextWeek = addWeeks(date, 1);
+    return nextWeek <= endDate ? nextWeek : endDate;
+  };
+
+  let periodIndex = 0; // Track period index for discount calculation
+
+  while (currentDate < endDate) {
+    const remainingDays = differenceInDays(endDate, currentDate);
+    console.log('Processing remaining days:', remainingDays);
+
+    // Try to fit complete months first
+    if (property.monthlyRate && differenceInCalendarMonths(endDate, currentDate) >= 1) {
+      const monthlyEnd = calculateMonthlyEnd(currentDate);
+      // Only use monthly rate if we have a complete month
+      if (differenceInCalendarMonths(monthlyEnd, currentDate) === 1) {
+        const baseRate = Number(property.monthlyRate);
+        const discountedRate = calculateDiscountedRate(baseRate, periodIndex);
+        const period = {
+          type: 'monthly' as const,
+          startDate: currentDate,
+          endDate: monthlyEnd,
+          amount: discountedRate,
+          baseRate: baseRate,
+          duration: 1,
+          discountPercent: Math.min(periodIndex * 10, 50)
+        };
+        console.log('Adding monthly period:', period);
+        periods.push(period);
+        currentDate = monthlyEnd;
+        periodIndex++;
+        continue;
+      }
+    }
+
+    // For the remaining period, try to fit complete weeks
+    if (property.weeklyRate && differenceInDays(endDate, currentDate) >= 7) {
+      const weeklyEnd = calculateWeeklyEnd(currentDate);
+      const baseRate = Number(property.weeklyRate);
+      const discountedRate = calculateDiscountedRate(baseRate, periodIndex);
+      const period = {
+        type: 'weekly' as const,
+        startDate: currentDate,
+        endDate: weeklyEnd,
+        amount: discountedRate,
+        baseRate: baseRate,
+        duration: 1,
+        discountPercent: Math.min(periodIndex * 10, 50)
+      };
+      console.log('Adding weekly period:', period);
+      periods.push(period);
+      currentDate = weeklyEnd;
+      periodIndex++;
+      continue;
+    }
+
+    // Use daily rate for any remaining days
+    const remainingDaysCount = differenceInDays(endDate, currentDate);
+    if (remainingDaysCount > 0) {
+      const baseRate = normalDailyRate * remainingDaysCount;
+      const discountedRate = calculateDiscountedRate(baseRate, periodIndex);
+      const period = {
+        type: 'daily' as const,
+        startDate: currentDate,
+        endDate: endDate,
+        amount: discountedRate,
+        baseRate: baseRate,
+        duration: remainingDaysCount,
+        discountPercent: Math.min(periodIndex * 10, 50)
+      };
+      console.log('Adding daily period:', period);
+      periods.push(period);
+      currentDate = endDate;
+    }
+  }
+
+  console.log('Final price periods:', periods);
+  return periods;
+}
+
+// Update the PricePeriod interface
+interface PricePeriod {
+  type: 'monthly' | 'weekly' | 'daily';
+  startDate: Date;
+  endDate: Date;
+  amount: number;
+  baseRate: number;
+  duration: number;
+  discountPercent: number;
+}
+
 // Configure multer for file upload
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -39,96 +151,6 @@ const upload = multer({
     cb(null, true);
   }
 });
-
-interface PricePeriod {
-  type: 'monthly' | 'weekly' | 'daily';
-  startDate: Date;
-  endDate: Date;
-  amount: number;
-  baseRate: number;
-  duration: number;
-}
-
-function calculatePricePeriods(property: any, checkIn: Date, checkOut: Date): PricePeriod[] {
-  console.log('Calculating price periods for stay:', { checkIn, checkOut });
-  const periods: PricePeriod[] = [];
-  let currentDate = startOfDay(new Date(checkIn));
-  const endDate = startOfDay(new Date(checkOut));
-  const normalDailyRate = Number(property.rate);
-
-  // Helper function to calculate period end date for monthly package
-  const calculateMonthlyEnd = (date: Date): Date => {
-    const nextMonth = addMonths(date, 1);
-    return nextMonth <= endDate ? nextMonth : endDate;
-  };
-
-  // Helper function to calculate period end date for weekly package
-  const calculateWeeklyEnd = (date: Date): Date => {
-    const nextWeek = addWeeks(date, 1);
-    return nextWeek <= endDate ? nextWeek : endDate;
-  };
-
-  while (currentDate < endDate) {
-    const remainingDays = differenceInDays(endDate, currentDate);
-    console.log('Processing remaining days:', remainingDays);
-
-    // Try to fit complete months first
-    if (property.monthlyRate && differenceInCalendarMonths(endDate, currentDate) >= 1) {
-      const monthlyEnd = calculateMonthlyEnd(currentDate);
-      // Only use monthly rate if we have a complete month
-      if (differenceInCalendarMonths(monthlyEnd, currentDate) === 1) {
-        const period = {
-          type: 'monthly' as const,
-          startDate: currentDate,
-          endDate: monthlyEnd,
-          amount: Number(property.monthlyRate),
-          baseRate: Number(property.monthlyRate),
-          duration: 1
-        };
-        console.log('Adding monthly period:', period);
-        periods.push(period);
-        currentDate = monthlyEnd;
-        continue;
-      }
-    }
-
-    // For the remaining period, try to fit complete weeks
-    if (property.weeklyRate && differenceInDays(endDate, currentDate) >= 7) {
-      const weeklyEnd = calculateWeeklyEnd(currentDate);
-      const period = {
-        type: 'weekly' as const,
-        startDate: currentDate,
-        endDate: weeklyEnd,
-        amount: Number(property.weeklyRate),
-        baseRate: Number(property.weeklyRate),
-        duration: 1
-      };
-      console.log('Adding weekly period:', period);
-      periods.push(period);
-      currentDate = weeklyEnd;
-      continue;
-    }
-
-    // Use daily rate for any remaining days
-    const remainingDaysCount = differenceInDays(endDate, currentDate);
-    if (remainingDaysCount > 0) {
-      const period = {
-        type: 'daily' as const,
-        startDate: currentDate,
-        endDate: endDate,
-        amount: normalDailyRate * remainingDaysCount,
-        baseRate: normalDailyRate,
-        duration: remainingDaysCount
-      };
-      console.log('Adding daily period:', period);
-      periods.push(period);
-      currentDate = endDate;
-    }
-  }
-
-  console.log('Final price periods:', periods);
-  return periods;
-}
 
 export function registerRoutes(app: Express): Server {
   // Set up session middleware
@@ -647,8 +669,8 @@ export function registerRoutes(app: Express): Server {
         return res.status(400).send("Start and end dates are required");
       }
 
-      const startDate = parseISO(String(start));
-      const endDate = parseISO(String(end));
+      const startDate = new Date(String(start));
+      const endDate = new Date(String(end));
 
       // Get all confirmed bookings for this property within the date range
       const existingBookings = await db.query.bookings.findMany({
@@ -677,10 +699,7 @@ export function registerRoutes(app: Express): Server {
       let currentDate = startDate;
       while (currentDate <= endDate) {
         const isBooked = existingBookings.some(booking =>
-          isWithinInterval(currentDate, {
-            start: new Date(booking.checkIn),
-            end: new Date(booking.checkOut),
-          })
+          currentDate >= new Date(booking.checkIn) && currentDate < new Date(booking.checkOut)
         );
 
         dates.push({
