@@ -57,10 +57,13 @@ function calculatePricePeriods(property: Property, checkIn: Date, checkOut: Date
     return { daysInPeriod, effectiveDailyRate, normalDailyTotal, discountPercentage };
   };
 
-  // First try to fit monthly package
-  if (property.monthlyRate) {
-    const monthlyEnd = calculateMonthlyEnd(currentDate);
-    if (differenceInCalendarMonths(endDate, currentDate) >= 1) {
+  while (currentDate < endDate) {
+    const remainingDays = differenceInDays(endDate, currentDate);
+    const remainingMonths = differenceInCalendarMonths(endDate, currentDate);
+
+    // Only use monthly rate if we have exactly one month or more
+    if (property.monthlyRate && remainingMonths >= 1) {
+      const monthlyEnd = calculateMonthlyEnd(currentDate);
       const metrics = calculatePeriodMetrics(currentDate, monthlyEnd, Number(property.monthlyRate));
       periods.push({
         type: 'monthly',
@@ -72,12 +75,11 @@ function calculatePricePeriods(property: Property, checkIn: Date, checkOut: Date
         ...metrics
       });
       currentDate = monthlyEnd;
+      continue;
     }
-  }
 
-  // Then fit as many weekly packages as possible
-  if (property.weeklyRate) {
-    while (differenceInDays(endDate, currentDate) >= 7) {
+    // For periods less than a month but at least a week, use weekly rate
+    if (property.weeklyRate && remainingDays >= 7) {
       const weeklyEnd = calculateWeeklyEnd(currentDate);
       const metrics = calculatePeriodMetrics(currentDate, weeklyEnd, Number(property.weeklyRate));
       periods.push({
@@ -90,22 +92,23 @@ function calculatePricePeriods(property: Property, checkIn: Date, checkOut: Date
         ...metrics
       });
       currentDate = weeklyEnd;
+      continue;
     }
-  }
 
-  // Use daily rate for any remaining days
-  const remainingDays = differenceInDays(endDate, currentDate);
-  if (remainingDays > 0) {
-    const metrics = calculatePeriodMetrics(currentDate, endDate, normalDailyRate * remainingDays);
-    periods.push({
-      type: 'daily',
-      startDate: currentDate,
-      endDate: endDate,
-      amount: normalDailyRate * remainingDays,
-      baseRate: normalDailyRate,
-      duration: remainingDays,
-      ...metrics
-    });
+    // For periods less than a week, use daily rate
+    if (remainingDays > 0) {
+      const metrics = calculatePeriodMetrics(currentDate, endDate, normalDailyRate * remainingDays);
+      periods.push({
+        type: 'daily',
+        startDate: currentDate,
+        endDate: endDate,
+        amount: normalDailyRate * remainingDays,
+        baseRate: normalDailyRate,
+        duration: remainingDays,
+        ...metrics
+      });
+      currentDate = endDate;
+    }
   }
 
   return periods;

@@ -67,10 +67,13 @@ function calculatePricePeriods(property: any, checkIn: Date, checkOut: Date): Pr
     return nextWeek <= endDate ? nextWeek : endDate;
   };
 
-  // First try to fit monthly package
-  if (property.monthlyRate) {
-    const monthlyEnd = calculateMonthlyEnd(currentDate);
-    if (differenceInCalendarMonths(endDate, currentDate) >= 1) {
+  while (currentDate < endDate) {
+    const remainingDays = differenceInDays(endDate, currentDate);
+    const remainingMonths = differenceInCalendarMonths(endDate, currentDate);
+
+    // Only use monthly rate if we have exactly one month or more
+    if (property.monthlyRate && remainingMonths >= 1) {
+      const monthlyEnd = calculateMonthlyEnd(currentDate);
       periods.push({
         type: 'monthly',
         startDate: currentDate,
@@ -80,12 +83,11 @@ function calculatePricePeriods(property: any, checkIn: Date, checkOut: Date): Pr
         duration: 1 // 1 month
       });
       currentDate = monthlyEnd;
+      continue;
     }
-  }
 
-  // Then fit as many weekly packages as possible
-  if (property.weeklyRate) {
-    while (differenceInDays(endDate, currentDate) >= 7) {
+    // For periods less than a month but at least a week, use weekly rate
+    if (property.weeklyRate && remainingDays >= 7) {
       const weeklyEnd = calculateWeeklyEnd(currentDate);
       periods.push({
         type: 'weekly',
@@ -96,20 +98,21 @@ function calculatePricePeriods(property: any, checkIn: Date, checkOut: Date): Pr
         duration: 1 // 1 week
       });
       currentDate = weeklyEnd;
+      continue;
     }
-  }
 
-  // Use daily rate for any remaining days
-  const remainingDays = differenceInDays(endDate, currentDate);
-  if (remainingDays > 0) {
-    periods.push({
-      type: 'daily',
-      startDate: currentDate,
-      endDate: endDate,
-      amount: Number(property.rate) * remainingDays,
-      baseRate: Number(property.rate),
-      duration: remainingDays
-    });
+    // For periods less than a week, use daily rate
+    if (remainingDays > 0) {
+      periods.push({
+        type: 'daily',
+        startDate: currentDate,
+        endDate: endDate,
+        amount: Number(property.rate) * remainingDays,
+        baseRate: Number(property.rate),
+        duration: remainingDays
+      });
+      currentDate = endDate;
+    }
   }
 
   return periods;
