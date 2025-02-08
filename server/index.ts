@@ -54,17 +54,16 @@ async function startServer(retries = 3) {
       serveStatic(app);
     }
 
-    const PORT = process.env.PORT || 3000; // Changed default port to 3000
+    const PORT = process.env.PORT || 5000;
 
     await new Promise<void>((resolve, reject) => {
-      server.listen(PORT, () => {
+      server.listen(PORT, "0.0.0.0", () => {
         log(`serving on port ${PORT}`);
         resolve();
       }).on('error', (err: NodeJS.ErrnoException) => {
         if (err.code === 'EADDRINUSE' && retries > 0) {
-          log(`Port ${PORT} is in use, retrying with port ${PORT + 1}...`);
+          log(`Port ${PORT} is in use, retrying in 1s...`);
           server.close();
-          process.env.PORT = String(Number(PORT) + 1);
           setTimeout(() => {
             startServer(retries - 1).then(resolve).catch(reject);
           }, 1000);
