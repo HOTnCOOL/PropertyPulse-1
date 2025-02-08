@@ -42,10 +42,12 @@ export default function GuestRegistration() {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const [selectedDates, setSelectedDates] = useState<{
-    checkIn?: Date;
-    checkOut?: Date;
-  }>({});
-  const [activeGuest, setActiveGuest] = useState<Guest | null>(null);
+    from: Date | undefined;
+    to: Date | undefined;
+  }>({
+    from: undefined,
+    to: undefined
+  });
 
   // Get propertyId from URL if it exists
   const params = new URLSearchParams(window.location.search);
@@ -114,7 +116,7 @@ export default function GuestRegistration() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/guests"] });
       form.reset();
-      setSelectedDates({});
+      setSelectedDates({from: undefined, to: undefined});
       toast({
         title: "Success",
         description: "Guest has been registered successfully",
@@ -138,8 +140,36 @@ export default function GuestRegistration() {
     },
   });
 
+  const [activeGuest, setActiveGuest] = useState<Guest | null>(null);
+
   async function onSubmit(values: typeof insertGuestSchema._type) {
-    registerGuest.mutate(values);
+    try {
+      if (!selectedDates.from || !selectedDates.to) {
+        toast({
+          title: "Error",
+          description: "Please select your stay dates",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Update form values with selected dates
+      form.setValue("checkIn", selectedDates.from);
+      form.setValue("checkOut", selectedDates.to);
+
+      await registerGuest.mutateAsync({
+        ...values,
+        checkIn: selectedDates.from,
+        checkOut: selectedDates.to,
+      });
+    } catch (error) {
+      console.error('Registration error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to register guest",
+        variant: "destructive",
+      });
+    }
   }
 
   return (
@@ -154,6 +184,60 @@ export default function GuestRegistration() {
           <CardContent>
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="checkIn"
+                  render={() => (
+                    <FormItem className="flex flex-col">
+                      <FormLabel>Stay Dates</FormLabel>
+                      <FormControl>
+                        <Calendar
+                          mode="range"
+                          selected={selectedDates}
+                          onSelect={(range) => {
+                            setSelectedDates(range ?? { from: undefined, to: undefined });
+                            if (range?.from) {
+                              form.setValue("checkIn", range.from);
+                              if (range.to) {
+                                form.setValue("checkOut", range.to);
+                              }
+                            }
+                          }}
+                          disabled={(date) => date < new Date()}
+                          numberOfMonths={2}
+                          className="rounded-md border"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {selectedDates.from && selectedDates.to && (
+                  <div className="space-y-2 p-4 bg-muted rounded-lg">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Check-in:</span>
+                      <span className="font-medium">
+                        {format(selectedDates.from, "MMMM d, yyyy")}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Check-out:</span>
+                      <span className="font-medium">
+                        {format(selectedDates.to, "MMMM d, yyyy")}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm pt-2 border-t">
+                      <span className="font-medium">
+                        Total nights:
+                      </span>
+                      <span className="font-medium">
+                        {Math.ceil((selectedDates.to.getTime() - selectedDates.from.getTime()) / (1000 * 60 * 60 * 24))}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
@@ -241,107 +325,6 @@ export default function GuestRegistration() {
                     </FormItem>
                   )}
                 />
-
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="checkIn"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Check In</FormLabel>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <FormControl>
-                              <Button
-                                variant="outline"
-                                className={`w-full pl-3 text-left font-normal ${
-                                  !field.value && "text-muted-foreground"
-                                }`}
-                              >
-                                {field.value ? (
-                                  format(field.value, "PP")
-                                ) : (
-                                  <span>Pick a date</span>
-                                )}
-                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                              </Button>
-                            </FormControl>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                              mode="single"
-                              selected={field.value}
-                              onSelect={(date) => {
-                                field.onChange(date);
-                                setSelectedDates((prev) => ({
-                                  ...prev,
-                                  checkIn: date,
-                                }));
-                              }}
-                              disabled={(date) =>
-                                date < new Date() ||
-                                (selectedDates.checkOut
-                                  ? date > selectedDates.checkOut
-                                  : false)
-                              }
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="checkOut"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Check Out</FormLabel>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <FormControl>
-                              <Button
-                                variant="outline"
-                                className={`w-full pl-3 text-left font-normal ${
-                                  !field.value && "text-muted-foreground"
-                                }`}
-                              >
-                                {field.value ? (
-                                  format(field.value, "PP")
-                                ) : (
-                                  <span>Pick a date</span>
-                                )}
-                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                              </Button>
-                            </FormControl>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                              mode="single"
-                              selected={field.value}
-                              onSelect={(date) => {
-                                field.onChange(date);
-                                setSelectedDates((prev) => ({
-                                  ...prev,
-                                  checkOut: date,
-                                }));
-                              }}
-                              disabled={(date) =>
-                                (selectedDates.checkIn
-                                  ? date < selectedDates.checkIn
-                                  : date < new Date())
-                              }
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
 
                 <Button type="submit" className="w-full">
                   Register Guest
