@@ -17,6 +17,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { type Property, insertBookingSchema, insertGuestSchema } from "@db/schema";
 import * as z from "zod";
+import { Card } from "@/components/ui/card";
 
 interface BookingFormProps {
   property: Property;
@@ -29,10 +30,13 @@ type BookingFormValues = z.infer<typeof bookingFormSchema>;
 export default function BookingForm({ property, onSuccess }: BookingFormProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [selectedDates, setSelectedDates] = useState<{
+  const [dateRange, setDateRange] = useState<{
     from: Date | undefined;
     to: Date | undefined;
-  }>({ from: undefined, to: undefined });
+  }>({
+    from: undefined,
+    to: undefined
+  });
 
   const form = useForm<BookingFormValues>({
     resolver: zodResolver(bookingFormSchema),
@@ -53,7 +57,7 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
   const createBookingAndGuest = useMutation({
     mutationFn: async (values: BookingFormValues) => {
       try {
-        if (!selectedDates.from || !selectedDates.to) {
+        if (!dateRange.from || !dateRange.to) {
           throw new Error("Please select check-in and check-out dates");
         }
 
@@ -67,8 +71,8 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
             email: values.email,
             phone: values.phone,
             propertyId: property.id,
-            checkIn: selectedDates.from,
-            checkOut: selectedDates.to,
+            checkIn: dateRange.from,
+            checkOut: dateRange.to,
           }),
         });
 
@@ -82,10 +86,10 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
         const bookingData = {
           propertyId: property.id,
           guestId: guest.id,
-          checkIn: selectedDates.from,
-          checkOut: selectedDates.to,
+          checkIn: dateRange.from,
+          checkOut: dateRange.to,
           status: values.status,
-          totalAmount: calculateTotalAmount(selectedDates.from, selectedDates.to),
+          totalAmount: calculateTotalAmount(dateRange.from, dateRange.to),
           notes: values.notes || "",
         };
 
@@ -108,7 +112,7 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/bookings"] });
       form.reset();
-      setSelectedDates({ from: undefined, to: undefined });
+      setDateRange({ from: undefined, to: undefined });
       toast({
         title: "Success",
         description: "Booking and guest registration completed successfully",
@@ -131,23 +135,23 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
 
   async function onSubmit(values: BookingFormValues) {
     try {
-      if (!selectedDates.from || !selectedDates.to) {
+      if (!dateRange.from || !dateRange.to) {
         toast({
           title: "Error",
-          description: "Please select check-in and check-out dates",
+          description: "Please select your stay dates",
           variant: "destructive",
         });
         return;
       }
 
-      // Set the dates in the form values
-      form.setValue("checkIn", selectedDates.from);
-      form.setValue("checkOut", selectedDates.to);
+      // Update form values with selected dates
+      form.setValue("checkIn", dateRange.from);
+      form.setValue("checkOut", dateRange.to);
 
       await createBookingAndGuest.mutateAsync({
         ...values,
-        checkIn: selectedDates.from,
-        checkOut: selectedDates.to,
+        checkIn: dateRange.from,
+        checkOut: dateRange.to,
       });
     } catch (error) {
       console.error('Form submission error:', error);
@@ -156,53 +160,57 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-        <FormField
-          control={form.control}
-          name="checkIn"
-          render={() => (
-            <FormItem>
-              <FormLabel>Select Dates</FormLabel>
-              <FormControl>
-                <Calendar
-                  mode="range"
-                  selected={{
-                    from: selectedDates.from,
-                    to: selectedDates.to,
-                  }}
-                  onSelect={(range) => {
-                    setSelectedDates({
-                      from: range?.from,
-                      to: range?.to,
-                    });
-                    // Update form values when dates are selected
-                    if (range?.from) {
-                      form.setValue("checkIn", range.from);
-                      if (range.to) {
-                        form.setValue("checkOut", range.to);
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        <Card className="p-4">
+          <FormField
+            control={form.control}
+            name="checkIn"
+            render={() => (
+              <FormItem className="flex flex-col">
+                <FormLabel>Select Your Stay Dates</FormLabel>
+                <FormControl>
+                  <Calendar
+                    mode="range"
+                    selected={dateRange}
+                    onSelect={(range) => {
+                      setDateRange(range ?? { from: undefined, to: undefined });
+                      if (range?.from) {
+                        form.setValue("checkIn", range.from);
+                        if (range.to) {
+                          form.setValue("checkOut", range.to);
+                        }
                       }
-                    }
-                  }}
-                  disabled={(date) => date < new Date()}
-                  className="rounded-md border"
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+                    }}
+                    disabled={(date) => date < new Date()}
+                    numberOfMonths={2}
+                    className="rounded-md border"
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-        {selectedDates?.from && selectedDates?.to && (
-          <>
-            <div className="text-sm">
-              <p>Check-in: {format(selectedDates.from, "MMM dd, yyyy")}</p>
-              <p>Check-out: {format(selectedDates.to, "MMM dd, yyyy")}</p>
-              <p className="font-semibold mt-2">
-                Total: ${calculateTotalAmount(selectedDates.from, selectedDates.to)}
-              </p>
+          {dateRange.from && dateRange.to && (
+            <div className="mt-4 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Check-in:</span>
+                <span className="font-medium">{format(dateRange.from, "MMMM d, yyyy")}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Check-out:</span>
+                <span className="font-medium">{format(dateRange.to, "MMMM d, yyyy")}</span>
+              </div>
+              <div className="flex justify-between text-sm pt-2 border-t">
+                <span className="font-medium">Total for {Math.ceil((dateRange.to.getTime() - dateRange.from.getTime()) / (1000 * 60 * 60 * 24))} nights:</span>
+                <span className="font-medium">${calculateTotalAmount(dateRange.from, dateRange.to).toLocaleString()}</span>
+              </div>
             </div>
+          )}
+        </Card>
 
-            {/* Guest Information */}
+        {dateRange.from && dateRange.to && (
+          <div className="space-y-6">
             <div className="space-y-4">
               <h3 className="text-lg font-medium">Guest Information</h3>
               <div className="grid grid-cols-2 gap-4">
@@ -285,9 +293,9 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
               className="w-full"
               disabled={createBookingAndGuest.isPending}
             >
-              {createBookingAndGuest.isPending ? "Submitting..." : "Complete Booking"}
+              {createBookingAndGuest.isPending ? "Processing..." : "Complete Booking"}
             </Button>
-          </>
+          </div>
         )}
       </form>
     </Form>
