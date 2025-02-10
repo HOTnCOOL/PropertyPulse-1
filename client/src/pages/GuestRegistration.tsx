@@ -41,6 +41,7 @@ export default function GuestRegistration() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
+  const [activeGuest, setActiveGuest] = useState<Guest | null>(null);
   const [selectedDates, setSelectedDates] = useState<{
     from: Date | undefined;
     to: Date | undefined;
@@ -140,7 +141,6 @@ export default function GuestRegistration() {
     },
   });
 
-  const [activeGuest, setActiveGuest] = useState<Guest | null>(null);
 
   async function onSubmit(values: typeof insertGuestSchema._type) {
     try {
