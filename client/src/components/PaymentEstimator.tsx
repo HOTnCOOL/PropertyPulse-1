@@ -9,6 +9,7 @@ import {
   startOfDay,
   isBefore,
 } from "date-fns";
+import { AlertTriangle } from "lucide-react";
 import type { Property } from "@db/schema";
 
 interface PaymentEstimatorProps {
@@ -29,6 +30,18 @@ interface PricePeriod {
   normalDailyTotal: number;
   discountPercentage: number;
   discountAmount?: number;
+}
+
+interface PaymentEstimate {
+  periods: PricePeriod[];
+  totalBaseAmount: number;
+  totalDiscountAmount: number;
+  finalAmount: number;
+  depositRequired: boolean;
+  depositAmount: number;
+  minimumPayment: number;
+  depositRefundable: boolean;
+  depositPartiallyRefundable: boolean;
 }
 
 const calculateDiscountedRate = (baseRate: number, periodIndex: number): { amount: number; discountPercent: number } => {
@@ -134,21 +147,45 @@ const calculatePricePeriods = (property: Property, checkIn: Date, checkOut: Date
   return periods;
 };
 
+const calculatePaymentEstimate = (periods: PricePeriod[]): PaymentEstimate => {
+  const totalBaseAmount = periods.reduce((sum, period) => sum + period.baseRate, 0);
+  const totalDiscountAmount = periods.reduce((sum, period) => sum + (period.discountAmount || 0), 0);
+  const finalAmount = periods.reduce((sum, period) => sum + period.amount, 0);
+
+  // Check if deposit is required (2 or more packages of same type)
+  const hasMultiplePackages = periods.length >= 2 && 
+    periods.filter(p => p.type === periods[0].type).length >= 2;
+
+  // Calculate deposit amount (equal to one regular package)
+  const depositAmount = hasMultiplePackages ? periods[0].baseRate : 0;
+
+  // Calculate minimum payment (first package + deposit if required)
+  const minimumPayment = periods[0].amount + depositAmount;
+
+  // Determine deposit refund conditions
+  const totalPrepaidPackages = periods.length;
+  const depositPartiallyRefundable = totalPrepaidPackages >= 2;
+  const depositRefundable = totalPrepaidPackages === periods.length;
+
+  return {
+    periods,
+    totalBaseAmount,
+    totalDiscountAmount,
+    finalAmount,
+    depositRequired: hasMultiplePackages,
+    depositAmount,
+    minimumPayment,
+    depositRefundable,
+    depositPartiallyRefundable
+  };
+};
+
 export default function PaymentEstimator({ property, checkIn, checkOut }: PaymentEstimatorProps) {
   const estimates = useMemo(() => {
     if (!property || !checkIn || !checkOut) return null;
 
     const pricePeriods = calculatePricePeriods(property, checkIn, checkOut);
-    const totalBaseAmount = pricePeriods.reduce((sum, period) => sum + period.baseRate, 0);
-    const totalDiscountAmount = pricePeriods.reduce((sum, period) => sum + (period.discountAmount || 0), 0);
-    const finalAmount = pricePeriods.reduce((sum, period) => sum + period.amount, 0);
-
-    return {
-      periods: pricePeriods,
-      totalBaseAmount,
-      totalDiscountAmount,
-      finalAmount
-    };
+    return calculatePaymentEstimate(pricePeriods);
   }, [property, checkIn, checkOut]);
 
   if (!estimates) return null;
@@ -160,9 +197,57 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
       </CardHeader>
       <CardContent>
         <div className="space-y-6">
+          {/* Payment Window Warning */}
+          <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-start gap-2">
+            <AlertTriangle className="h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-yellow-700">
+              Payment must be received within 24 hours to guarantee availability. 
+              The initial payment includes the first package{estimates.depositRequired ? ' plus security deposit' : ''}.
+            </p>
+          </div>
+
+          {/* Minimum Payment Section */}
+          <div className="p-4 bg-primary/5 rounded-lg space-y-2">
+            <h3 className="font-semibold">Required Initial Payment</h3>
+            <div className="flex justify-between text-sm">
+              <span>First Package Payment</span>
+              <span>${estimates.periods[0].amount.toLocaleString()}</span>
+            </div>
+            {estimates.depositRequired && (
+              <div className="flex justify-between text-sm">
+                <span>Security Deposit</span>
+                <span>${estimates.depositAmount.toLocaleString()}</span>
+              </div>
+            )}
+            <div className="flex justify-between font-medium pt-2 border-t">
+              <span>Minimum Payment Required</span>
+              <span>${estimates.minimumPayment.toLocaleString()}</span>
+            </div>
+          </div>
+
+          {/* Deposit Information */}
+          {estimates.depositRequired && (
+            <div className="space-y-2 text-sm">
+              <h3 className="font-semibold">Security Deposit Terms</h3>
+              <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                <li>Deposit amount: ${estimates.depositAmount.toLocaleString()}</li>
+                <li>
+                  {estimates.depositRefundable 
+                    ? 'Fully refundable if entire stay is paid in advance'
+                    : estimates.depositPartiallyRefundable
+                      ? '50% refundable with 2 or more prepaid packages'
+                      : 'Fully refundable after stay (subject to property condition)'}
+                </li>
+              </ul>
+            </div>
+          )}
+
           {/* Period Details */}
           <div className="space-y-2">
             <h3 className="text-sm font-semibold">Payment Schedule</h3>
+            <p className="text-xs text-muted-foreground mb-2">
+              All packages must be paid before their start date. Shorter period packages cannot be utilized before longer period packages.
+            </p>
             <div className="divide-y">
               {estimates.periods.map((period, index) => (
                 <div key={index} className="py-2 space-y-1">
