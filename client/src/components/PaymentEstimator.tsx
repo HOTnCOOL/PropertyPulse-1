@@ -57,7 +57,7 @@ const calculateOptimalPaymentBreakdown = (
         amount: Number(property.rate) * totalDays,
         label: `${totalDays} Day${totalDays > 1 ? 's' : ''}`
       });
-      periodCount.daily = totalDays;
+      periodCount.daily = totalDays; // Set the actual number of days
     }
   } else {
     // Calculate full months first if monthly rate is available
