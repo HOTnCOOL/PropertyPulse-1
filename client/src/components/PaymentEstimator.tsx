@@ -123,6 +123,16 @@ const calculateOptimalPaymentBreakdown = (
   };
 };
 
+const calculateTotalCost = (
+  property: Property,
+  checkIn: Date,
+  checkOut: Date,
+  type: 'monthly' | 'weekly' | 'daily'
+): number => {
+  const breakdown = calculateOptimalPaymentBreakdown(property, checkIn, checkOut, type);
+  return breakdown.totalAmount;
+};
+
 export default function PaymentEstimator({ property, checkIn, checkOut }: PaymentEstimatorProps) {
   const [, setLocation] = useLocation();
   const [preferredPackageType, setPreferredPackageType] = useState<'monthly' | 'weekly' | 'daily'>('monthly');
@@ -142,7 +152,17 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
     }, { monthly: 0, weekly: 0, daily: 0 });
   }, [paymentBreakdown]);
 
-  if (!paymentBreakdown || !property) return null;
+  // Calculate costs for all package types
+  const allCosts = useMemo(() => {
+    if (!property || !checkIn || !checkOut) return null;
+    return {
+      monthly: property.monthlyRate ? calculateTotalCost(property, checkIn, checkOut, 'monthly') : null,
+      weekly: property.weeklyRate ? calculateTotalCost(property, checkIn, checkOut, 'weekly') : null,
+      daily: calculateTotalCost(property, checkIn, checkOut, 'daily')
+    };
+  }, [property, checkIn, checkOut]);
+
+  if (!paymentBreakdown || !property || !allCosts) return null;
 
   const handleConfirm = () => {
     setLocation(`/payment?propertyId=${property.id}&packageType=${paymentBreakdown.primaryType}`);
@@ -160,62 +180,93 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
             <h3 className="font-semibold">Available Payment Plans</h3>
             <div className="grid gap-4 sm:grid-cols-3">
               {property.monthlyRate && (
-                <div 
-                  className={`p-3 bg-white rounded border cursor-pointer transition-colors relative ${
-                    preferredPackageType === 'monthly' ? 'border-primary' : ''
-                  }`}
-                  onClick={() => setPreferredPackageType('monthly')}
-                >
-                  <div className="text-sm font-medium">Monthly Plan</div>
-                  <div className="text-2xl font-bold">${Number(property.monthlyRate).toLocaleString()}</div>
-                  <div className="text-xs text-muted-foreground">per month</div>
-                  {packageCounts.monthly > 0 && (
-                    <div className={`absolute top-3 right-3 px-4 py-1.5 rounded-full text-base font-semibold
-                      ${preferredPackageType === 'monthly' 
-                        ? 'bg-primary/15 text-primary'
-                        : 'bg-muted/20 text-muted-foreground'}`}>
-                      ×{packageCounts.monthly}
+                <div className="space-y-2">
+                  <div 
+                    className={`p-3 bg-white rounded border cursor-pointer transition-colors relative ${
+                      preferredPackageType === 'monthly' ? 'border-primary' : ''
+                    }`}
+                    onClick={() => setPreferredPackageType('monthly')}
+                  >
+                    <div className="text-sm font-medium">Monthly Plan</div>
+                    <div className="text-2xl font-bold">${Number(property.monthlyRate).toLocaleString()}</div>
+                    <div className="text-xs text-muted-foreground">per month</div>
+                    {packageCounts.monthly > 0 && (
+                      <div className={`absolute top-3 right-3 px-4 py-1.5 rounded-full text-base font-semibold
+                        ${preferredPackageType === 'monthly' 
+                          ? 'bg-primary/15 text-primary'
+                          : 'bg-muted/20 text-muted-foreground'}`}>
+                        ×{packageCounts.monthly}
+                      </div>
+                    )}
+                  </div>
+                  {allCosts.monthly && (
+                    <div className={`text-center ${
+                      preferredPackageType === 'monthly' 
+                        ? 'text-primary font-medium'
+                        : 'text-muted-foreground'
+                    }`}>
+                      Total: ${allCosts.monthly.toLocaleString()}
                     </div>
                   )}
                 </div>
               )}
               {property.weeklyRate && (
-                <div 
-                  className={`p-3 bg-white rounded border cursor-pointer transition-colors relative ${
-                    preferredPackageType === 'weekly' ? 'border-primary' : ''
-                  }`}
-                  onClick={() => setPreferredPackageType('weekly')}
-                >
-                  <div className="text-sm font-medium">Weekly Plan</div>
-                  <div className="text-2xl font-bold">${Number(property.weeklyRate).toLocaleString()}</div>
-                  <div className="text-xs text-muted-foreground">per week</div>
-                  {packageCounts.weekly > 0 && (
-                    <div className={`absolute top-3 right-3 px-4 py-1.5 rounded-full text-base font-semibold
-                      ${preferredPackageType === 'weekly'
-                        ? 'bg-primary/15 text-primary'
-                        : 'bg-muted/20 text-muted-foreground'}`}>
-                      ×{packageCounts.weekly}
+                <div className="space-y-2">
+                  <div 
+                    className={`p-3 bg-white rounded border cursor-pointer transition-colors relative ${
+                      preferredPackageType === 'weekly' ? 'border-primary' : ''
+                    }`}
+                    onClick={() => setPreferredPackageType('weekly')}
+                  >
+                    <div className="text-sm font-medium">Weekly Plan</div>
+                    <div className="text-2xl font-bold">${Number(property.weeklyRate).toLocaleString()}</div>
+                    <div className="text-xs text-muted-foreground">per week</div>
+                    {packageCounts.weekly > 0 && (
+                      <div className={`absolute top-3 right-3 px-4 py-1.5 rounded-full text-base font-semibold
+                        ${preferredPackageType === 'weekly'
+                          ? 'bg-primary/15 text-primary'
+                          : 'bg-muted/20 text-muted-foreground'}`}>
+                        ×{packageCounts.weekly}
+                      </div>
+                    )}
+                  </div>
+                  {allCosts.weekly && (
+                    <div className={`text-center ${
+                      preferredPackageType === 'weekly' 
+                        ? 'text-primary font-medium'
+                        : 'text-muted-foreground'
+                    }`}>
+                      Total: ${allCosts.weekly.toLocaleString()}
                     </div>
                   )}
                 </div>
               )}
-              <div 
-                className={`p-3 bg-white rounded border cursor-pointer transition-colors relative ${
-                  preferredPackageType === 'daily' ? 'border-primary' : ''
-                }`}
-                onClick={() => setPreferredPackageType('daily')}
-              >
-                <div className="text-sm font-medium">Daily Rate</div>
-                <div className="text-2xl font-bold">${Number(property.rate).toLocaleString()}</div>
-                <div className="text-xs text-muted-foreground">per day</div>
-                {packageCounts.daily > 0 && (
-                  <div className={`absolute top-3 right-3 px-4 py-1.5 rounded-full text-base font-semibold
-                    ${preferredPackageType === 'daily'
-                      ? 'bg-primary/15 text-primary'
-                      : 'bg-muted/20 text-muted-foreground'}`}>
-                    ×{packageCounts.daily}
-                  </div>
-                )}
+              <div className="space-y-2">
+                <div 
+                  className={`p-3 bg-white rounded border cursor-pointer transition-colors relative ${
+                    preferredPackageType === 'daily' ? 'border-primary' : ''
+                  }`}
+                  onClick={() => setPreferredPackageType('daily')}
+                >
+                  <div className="text-sm font-medium">Daily Rate</div>
+                  <div className="text-2xl font-bold">${Number(property.rate).toLocaleString()}</div>
+                  <div className="text-xs text-muted-foreground">per day</div>
+                  {packageCounts.daily > 0 && (
+                    <div className={`absolute top-3 right-3 px-4 py-1.5 rounded-full text-base font-semibold
+                      ${preferredPackageType === 'daily'
+                        ? 'bg-primary/15 text-primary'
+                        : 'bg-muted/20 text-muted-foreground'}`}>
+                      ×{packageCounts.daily}
+                    </div>
+                  )}
+                </div>
+                <div className={`text-center ${
+                  preferredPackageType === 'daily' 
+                    ? 'text-primary font-medium'
+                    : 'text-muted-foreground'
+                }`}>
+                  Total: ${allCosts.daily.toLocaleString()}
+                </div>
               </div>
             </div>
           </div>
