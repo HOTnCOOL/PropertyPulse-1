@@ -7,9 +7,8 @@ import {
   addMonths,
   addWeeks,
   startOfDay,
-  isBefore,
 } from "date-fns";
-import { AlertTriangle, Check } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -20,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { Property } from "@db/schema";
+import { useLocation } from "wouter";
 
 interface PaymentEstimatorProps {
   property?: Property;
@@ -41,7 +41,6 @@ interface PricePeriod {
   discountPercentage: number;
   discountAmount?: number;
   isSelected?: boolean;
-  canModifyPeriod: boolean;
 }
 
 interface PaymentEstimate {
@@ -62,78 +61,15 @@ const calculateDiscountedRate = (baseRate: number, periodIndex: number): { amoun
   return { amount, discountPercent };
 };
 
-const splitPeriodToShorter = (period: PricePeriod, property: Property, targetType: 'weekly' | 'daily'): PricePeriod[] => {
-  const periods: PricePeriod[] = [];
-  let currentDate = startOfDay(new Date(period.startDate));
-  const endDate = startOfDay(new Date(period.endDate));
-  let periodIndex = 0;
-
-  while (currentDate < endDate) {
-    if (targetType === 'weekly' && differenceInDays(endDate, currentDate) >= 7) {
-      const weeklyEnd = addWeeks(currentDate, 1);
-      const weeklyRate = Number(property.weeklyRate);
-      const { amount, discountPercent } = calculateDiscountedRate(weeklyRate, periodIndex);
-
-      periods.push({
-        id: `${currentDate.getTime()}-weekly`,
-        type: 'weekly',
-        startDate: currentDate,
-        endDate: weeklyEnd,
-        amount,
-        baseRate: weeklyRate,
-        duration: 1,
-        daysInPeriod: 7,
-        effectiveDailyRate: amount / 7,
-        normalDailyTotal: weeklyRate,
-        discountPercentage: discountPercent,
-        discountAmount: weeklyRate - amount,
-        isSelected: true,
-        canModifyPeriod: true
-      });
-
-      currentDate = weeklyEnd;
-    } else {
-      // Use daily rate for remaining days
-      const remainingDays = differenceInDays(endDate, currentDate);
-      const dailyRate = Number(property.rate);
-      const baseRate = dailyRate * remainingDays;
-      const { amount, discountPercent } = calculateDiscountedRate(baseRate, periodIndex);
-
-      periods.push({
-        id: `${currentDate.getTime()}-daily`,
-        type: 'daily',
-        startDate: currentDate,
-        endDate: endDate,
-        amount,
-        baseRate,
-        duration: remainingDays,
-        daysInPeriod: remainingDays,
-        effectiveDailyRate: amount / remainingDays,
-        normalDailyTotal: baseRate,
-        discountPercentage: discountPercent,
-        discountAmount: baseRate - amount,
-        isSelected: true,
-        canModifyPeriod: false
-      });
-
-      currentDate = endDate;
-    }
-    periodIndex++;
-  }
-
-  return periods;
-};
-
-const calculatePricePeriods = (property: Property, checkIn: Date, checkOut: Date): PricePeriod[] => {
+const calculatePricePeriods = (property: Property, checkIn: Date, checkOut: Date, selectedRateType: 'monthly' | 'weekly' | 'daily'): PricePeriod[] => {
   const periods: PricePeriod[] = [];
   let currentDate = startOfDay(new Date(checkIn));
   const endDate = startOfDay(new Date(checkOut));
   const totalDays = differenceInDays(endDate, currentDate);
-  const normalDailyRate = Number(property.rate);
   let periodIndex = 0;
 
   while (currentDate < endDate) {
-    if (property.monthlyRate && differenceInCalendarMonths(endDate, currentDate) >= 1) {
+    if (selectedRateType === 'monthly' && property.monthlyRate && differenceInCalendarMonths(endDate, currentDate) >= 1) {
       const monthlyEnd = addMonths(currentDate, 1);
       const isCompleteMonth = differenceInCalendarMonths(monthlyEnd, currentDate) === 1;
 
@@ -155,8 +91,7 @@ const calculatePricePeriods = (property: Property, checkIn: Date, checkOut: Date
           normalDailyTotal: baseRate,
           discountPercentage: discountPercent,
           discountAmount: baseRate - amount,
-          isSelected: true,
-          canModifyPeriod: true
+          isSelected: true
         });
 
         currentDate = monthlyEnd;
@@ -165,7 +100,7 @@ const calculatePricePeriods = (property: Property, checkIn: Date, checkOut: Date
       }
     }
 
-    if (property.weeklyRate && differenceInDays(endDate, currentDate) >= 7) {
+    if (selectedRateType === 'weekly' && property.weeklyRate && differenceInDays(endDate, currentDate) >= 7) {
       const weeklyEnd = addWeeks(currentDate, 1);
       const baseRate = Number(property.weeklyRate);
       const { amount, discountPercent } = calculateDiscountedRate(baseRate, periodIndex);
@@ -183,8 +118,7 @@ const calculatePricePeriods = (property: Property, checkIn: Date, checkOut: Date
         normalDailyTotal: baseRate,
         discountPercentage: discountPercent,
         discountAmount: baseRate - amount,
-        isSelected: true,
-        canModifyPeriod: true
+        isSelected: true
       });
 
       currentDate = weeklyEnd;
@@ -192,9 +126,10 @@ const calculatePricePeriods = (property: Property, checkIn: Date, checkOut: Date
       continue;
     }
 
+    // Use daily rate for remaining days or if daily rate is selected
     const remainingDays = differenceInDays(endDate, currentDate);
     if (remainingDays > 0) {
-      const baseRate = normalDailyRate * remainingDays;
+      const baseRate = Number(property.rate) * remainingDays;
       const { amount, discountPercent } = calculateDiscountedRate(baseRate, periodIndex);
 
       periods.push({
@@ -210,18 +145,16 @@ const calculatePricePeriods = (property: Property, checkIn: Date, checkOut: Date
         normalDailyTotal: baseRate,
         discountPercentage: discountPercent,
         discountAmount: baseRate - amount,
-        isSelected: true,
-        canModifyPeriod: false
+        isSelected: true
       });
 
       currentDate = endDate;
     }
   }
 
-  // Mark first period as always selected and not modifiable
+  // Ensure first period is always selected
   if (periods.length > 0) {
     periods[0].isSelected = true;
-    periods[0].canModifyPeriod = false;
   }
 
   return periods;
@@ -234,8 +167,7 @@ const calculatePaymentEstimate = (periods: PricePeriod[]): PaymentEstimate => {
   const finalAmount = selectedPeriods.reduce((sum, period) => sum + period.amount, 0);
 
   // Check if deposit is required (2 or more packages of same type)
-  const hasMultiplePackages = periods.length >= 2 && 
-    periods.filter(p => p.type === periods[0].type).length >= 2;
+  const hasMultiplePackages = periods.length >= 2;
 
   // Calculate deposit amount (equal to one regular package)
   const depositAmount = hasMultiplePackages ? periods[0].baseRate : 0;
@@ -263,40 +195,38 @@ const calculatePaymentEstimate = (periods: PricePeriod[]): PaymentEstimate => {
 };
 
 export default function PaymentEstimator({ property, checkIn, checkOut }: PaymentEstimatorProps) {
+  const [, setLocation] = useLocation();
+  const [selectedRateType, setSelectedRateType] = useState<'monthly' | 'weekly' | 'daily'>('monthly');
   const [modifiedPeriods, setModifiedPeriods] = useState<PricePeriod[]>([]);
+
+  // Calculate the best fitting rate type based on stay duration
+  const bestFittingRateType = useMemo(() => {
+    if (!property || !checkIn || !checkOut) return 'daily';
+
+    const totalDays = differenceInDays(checkOut, checkIn);
+    const monthsAvailable = property.monthlyRate && differenceInCalendarMonths(checkOut, checkIn) >= 1;
+    const weeksAvailable = property.weeklyRate && totalDays >= 7;
+
+    return monthsAvailable ? 'monthly' : weeksAvailable ? 'weekly' : 'daily';
+  }, [property, checkIn, checkOut]);
+
+  // Set initial rate type when component mounts or dates change
+  useMemo(() => {
+    setSelectedRateType(bestFittingRateType);
+  }, [bestFittingRateType]);
 
   const estimates = useMemo(() => {
     if (!property || !checkIn || !checkOut) return null;
 
-    const initialPeriods = calculatePricePeriods(property, checkIn, checkOut);
+    const initialPeriods = calculatePricePeriods(property, checkIn, checkOut, selectedRateType);
     setModifiedPeriods(initialPeriods);
     return calculatePaymentEstimate(initialPeriods);
-  }, [property, checkIn, checkOut]);
-
-  const handlePeriodTypeChange = (periodId: string, newType: 'monthly' | 'weekly' | 'daily') => {
-    if (!property) return;
-
-    setModifiedPeriods(currentPeriods => {
-      const periodIndex = currentPeriods.findIndex(p => p.id === periodId);
-      if (periodIndex === -1) return currentPeriods;
-
-      const period = currentPeriods[periodIndex];
-      if (!period.canModifyPeriod) return currentPeriods;
-
-      const newPeriods = [...currentPeriods];
-      const splitPeriods = splitPeriodToShorter(period, property, newType);
-
-      // Replace the original period with split periods
-      newPeriods.splice(periodIndex, 1, ...splitPeriods);
-
-      return newPeriods;
-    });
-  };
+  }, [property, checkIn, checkOut, selectedRateType]);
 
   const handlePeriodSelection = (periodId: string, isSelected: boolean) => {
     setModifiedPeriods(currentPeriods => {
       return currentPeriods.map(period => {
-        if (period.id === periodId && period.canModifyPeriod) {
+        if (period.id === periodId) {
           return { ...period, isSelected };
         }
         return period;
@@ -309,7 +239,14 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
     return calculatePaymentEstimate(modifiedPeriods);
   }, [modifiedPeriods, estimates]);
 
-  if (!currentEstimates) return null;
+  if (!currentEstimates || !property) return null;
+
+  const handleConfirm = () => {
+    // Navigate to payment page with selected options
+    if (currentEstimates.periods[0]) {
+      setLocation(`/payment?propertyId=${property.id}&rateType=${selectedRateType}`);
+    }
+  };
 
   return (
     <Card>
@@ -318,6 +255,60 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
       </CardHeader>
       <CardContent>
         <div className="space-y-6">
+          {/* Standard Rates */}
+          <div className="p-4 bg-primary/5 rounded-lg space-y-4">
+            <h3 className="font-semibold">Standard Rates</h3>
+            <div className="grid gap-4 sm:grid-cols-3">
+              {property.monthlyRate && (
+                <div className="p-3 bg-white rounded border">
+                  <div className="text-sm font-medium">Monthly Rate</div>
+                  <div className="text-2xl font-bold">${Number(property.monthlyRate).toLocaleString()}</div>
+                  <div className="text-xs text-muted-foreground">
+                    ${Math.round(Number(property.monthlyRate) / 30)}/day
+                  </div>
+                </div>
+              )}
+              {property.weeklyRate && (
+                <div className="p-3 bg-white rounded border">
+                  <div className="text-sm font-medium">Weekly Rate</div>
+                  <div className="text-2xl font-bold">${Number(property.weeklyRate).toLocaleString()}</div>
+                  <div className="text-xs text-muted-foreground">
+                    ${Math.round(Number(property.weeklyRate) / 7)}/day
+                  </div>
+                </div>
+              )}
+              <div className="p-3 bg-white rounded border">
+                <div className="text-sm font-medium">Daily Rate</div>
+                <div className="text-2xl font-bold">${Number(property.rate).toLocaleString()}</div>
+                <div className="text-xs text-muted-foreground">Standard rate</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Rate Selection */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold">Select Payment Rate</h3>
+              <Select
+                value={selectedRateType}
+                onValueChange={(value) => setSelectedRateType(value as 'monthly' | 'weekly' | 'daily')}
+              >
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {property.monthlyRate && differenceInCalendarMonths(checkOut!, checkIn!) >= 1 && (
+                    <SelectItem value="monthly">Monthly</SelectItem>
+                  )}
+                  {property.weeklyRate && differenceInDays(checkOut!, checkIn!) >= 7 && (
+                    <SelectItem value="weekly">Weekly</SelectItem>
+                  )}
+                  <SelectItem value="daily">Daily</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
           {/* Payment Window Warning */}
           <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-start gap-2">
             <AlertTriangle className="h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
@@ -327,7 +318,60 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
             </p>
           </div>
 
-          {/* Security Deposit Section */}
+          {/* Package Selection */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold">Select Packages to Prepay</h3>
+            <p className="text-xs text-muted-foreground">
+              Prepay multiple packages to earn higher discounts (10% off per package, up to 50%).
+            </p>
+
+            <div className="divide-y">
+              {currentEstimates.periods.map((period, index) => (
+                <div key={period.id} className="py-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-3">
+                      <Checkbox
+                        checked={period.isSelected}
+                        disabled={index === 0} // First package always selected
+                        onCheckedChange={(checked) => handlePeriodSelection(period.id, checked as boolean)}
+                      />
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">
+                            {period.type === 'monthly' && `Month ${index + 1}`}
+                            {period.type === 'weekly' && `Week ${index + 1}`}
+                            {period.type === 'daily' && `${period.duration} Day${period.duration > 1 ? 's' : ''}`}
+                          </span>
+                          {index === 0 && (
+                            <span className="text-xs text-muted-foreground">(Required)</span>
+                          )}
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          {format(period.startDate, "MMM d")} - {format(period.endDate, "MMM d")}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <div className="font-medium">
+                        ${period.amount.toLocaleString()}
+                      </div>
+                      {period.discountPercentage > 0 && (
+                        <div className="text-xs text-green-600">
+                          Save ${period.discountAmount?.toLocaleString()} ({Math.round(period.discountPercentage)}% off)
+                        </div>
+                      )}
+                      <div className="text-xs text-muted-foreground mt-1">
+                        ${Math.round(period.effectiveDailyRate)}/day
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Security Deposit */}
           {currentEstimates.depositRequired && (
             <div className="p-4 bg-primary/5 rounded-lg space-y-2">
               <h3 className="font-semibold">Security Deposit</h3>
@@ -346,97 +390,6 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
               </div>
             </div>
           )}
-
-          {/* Package Selection */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold">Select Packages to Prepay</h3>
-            <p className="text-xs text-muted-foreground">
-              Prepay multiple packages to earn higher discounts. You can modify payment periods for better flexibility.
-            </p>
-
-            <div className="divide-y">
-              {modifiedPeriods.map((period, index) => (
-                <div key={period.id} className="py-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-3">
-                      <Checkbox
-                        checked={period.isSelected}
-                        disabled={!period.canModifyPeriod}
-                        onCheckedChange={(checked) => handlePeriodSelection(period.id, checked as boolean)}
-                      />
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">
-                            {period.type === 'monthly' && `Month ${index + 1}`}
-                            {period.type === 'weekly' && `Week ${index + 1}`}
-                            {period.type === 'daily' && `${period.duration} Day${period.duration > 1 ? 's' : ''}`}
-                          </span>
-                          {!period.canModifyPeriod && (
-                            <span className="text-xs text-muted-foreground">(Required)</span>
-                          )}
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          {format(period.startDate, "MMM d")} - {format(period.endDate, "MMM d")}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2 text-right">
-                      {period.canModifyPeriod && (
-                        <Select
-                          value={period.type}
-                          onValueChange={(value) => handlePeriodTypeChange(period.id, value as 'monthly' | 'weekly' | 'daily')}
-                        >
-                          <SelectTrigger className="w-[140px]">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {period.type === 'monthly' && (
-                              <>
-                                <SelectItem value="monthly">Monthly</SelectItem>
-                                <SelectItem value="weekly">Weekly</SelectItem>
-                                <SelectItem value="daily">Daily</SelectItem>
-                              </>
-                            )}
-                            {period.type === 'weekly' && (
-                              <>
-                                <SelectItem value="weekly">Weekly</SelectItem>
-                                <SelectItem value="daily">Daily</SelectItem>
-                              </>
-                            )}
-                            {period.type === 'daily' && (
-                              <SelectItem value="daily">Daily</SelectItem>
-                            )}
-                          </SelectContent>
-                        </Select>
-                      )}
-                      <div className="flex flex-col items-end">
-                        <span className="font-medium">
-                          ${period.amount.toLocaleString()}
-                        </span>
-                        {period.discountPercentage > 0 && (
-                          <span className="text-xs text-green-600">
-                            Save ${period.discountAmount?.toLocaleString()} ({Math.round(period.discountPercentage)}% off)
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-2 text-xs text-muted-foreground">
-                    <span>
-                      ${Math.round(period.effectiveDailyRate)}/day
-                      {period.discountPercentage > 0 && (
-                        <span className="text-green-600">
-                          {' '}(down from ${Math.round(period.normalDailyTotal/period.daysInPeriod)}/day)
-                        </span>
-                      )}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
 
           {/* Total Summary */}
           <div className="space-y-4 pt-4 border-t">
@@ -466,12 +419,11 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
               <span>Total Required Payment</span>
               <span>${(currentEstimates.finalAmount + currentEstimates.depositAmount).toLocaleString()}</span>
             </div>
-
-            <p className="text-xs text-muted-foreground">
-              * Early payment discounts: 10% off for each prepaid period (up to 50% maximum).
-              The displayed amounts reflect the discounted rates if paid according to schedule.
-            </p>
           </div>
+
+          <Button className="w-full" onClick={handleConfirm}>
+            Proceed to Payment
+          </Button>
         </div>
       </CardContent>
     </Card>

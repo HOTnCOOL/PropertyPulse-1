@@ -6,6 +6,7 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+// Add request logging middleware
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
@@ -36,46 +37,80 @@ app.use((req, res, next) => {
   next();
 });
 
-async function startServer(retries = 3) {
-  try {
-    const server = registerRoutes(app);
+async function startServer() {
+  const startPort = parseInt(process.env.PORT || "5000", 10);
+  const maxRetries = 10;
+  let currentPort = startPort;
+  let retries = 0;
 
-    app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-      const status = err.status || err.statusCode || 500;
-      const message = err.message || "Internal Server Error";
+  while (retries < maxRetries) {
+    try {
+      log(`Attempting to start server on port ${currentPort}...`);
+      const server = registerRoutes(app);
 
-      res.status(status).json({ message });
-      throw err;
-    });
-
-    if (app.get("env") === "development") {
-      await setupVite(app, server);
-    } else {
-      serveStatic(app);
-    }
-
-    const PORT = process.env.PORT || 5000;
-
-    await new Promise<void>((resolve, reject) => {
-      server.listen(PORT, "0.0.0.0", () => {
-        log(`serving on port ${PORT}`);
-        resolve();
-      }).on('error', (err: NodeJS.ErrnoException) => {
-        if (err.code === 'EADDRINUSE' && retries > 0) {
-          log(`Port ${PORT} is in use, retrying in 1s...`);
-          server.close();
-          setTimeout(() => {
-            startServer(retries - 1).then(resolve).catch(reject);
-          }, 1000);
-        } else {
-          reject(err);
-        }
+      // Error handling middleware
+      app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+        const status = err.status || err.statusCode || 500;
+        const message = err.message || "Internal Server Error";
+        log(`Error occurred: ${message}`);
+        res.status(status).json({ message });
       });
-    });
-  } catch (error) {
-    log(`Failed to start server: ${error}`);
-    process.exit(1);
+
+      // Setup middleware based on environment
+      const isDev = app.get("env") === "development";
+      log(`Running in ${isDev ? "development" : "production"} mode`);
+
+      if (isDev && !process.env.SKIP_VITE) {
+        log("Setting up Vite middleware...");
+        await setupVite(app, server);
+        log("Vite middleware setup complete");
+      } else {
+        log("Using static file serving...");
+        serveStatic(app);
+      }
+
+      // Start server
+      await new Promise<void>((resolve, reject) => {
+        server.listen(currentPort, "0.0.0.0")
+          .once("listening", () => {
+            log(`Server successfully started on port ${currentPort}`);
+            resolve();
+          })
+          .once("error", (err: NodeJS.ErrnoException) => {
+            if (err.code === "EADDRINUSE") {
+              log(`Port ${currentPort} is in use`);
+              currentPort++;
+              retries++;
+              if (retries < maxRetries) {
+                log(`Trying next port: ${currentPort}`);
+                server.close();
+                resolve();
+              } else {
+                reject(new Error(`Failed to find an available port after ${maxRetries} attempts`));
+              }
+            } else {
+              log(`Server error: ${err.message}`);
+              reject(err);
+            }
+          });
+      });
+
+      if (true) { //server.listening is undefined in the context of the promise
+        break;
+      }
+    } catch (error) {
+      log(`Attempt ${retries + 1} failed: ${error}`);
+      retries++;
+      if (retries >= maxRetries) {
+        log(`Failed to start server after ${maxRetries} attempts`);
+        process.exit(1);
+      }
+    }
   }
 }
 
-startServer();
+// Start the server with improved error handling
+startServer().catch((error) => {
+  log(`Fatal error starting server: ${error}`);
+  process.exit(1);
+});
