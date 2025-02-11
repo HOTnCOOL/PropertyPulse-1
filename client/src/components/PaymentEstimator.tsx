@@ -46,51 +46,67 @@ const calculateOptimalPaymentBreakdown = (
   const endDate = startOfDay(new Date(checkOut));
   let periodCount = { monthly: 0, weekly: 0, daily: 0 };
 
-  // Calculate full months first if monthly rate is available
-  if (property.monthlyRate && preferredType !== 'daily' && preferredType !== 'weekly') {
-    while (differenceInCalendarMonths(endDate, currentDate) >= 1) {
-      const monthlyEnd = addMonths(currentDate, 1);
+  // If daily rate is preferred, calculate entire stay as daily
+  if (preferredType === 'daily') {
+    const totalDays = differenceInDays(endDate, currentDate);
+    if (totalDays > 0) {
       periods.push({
-        type: 'monthly',
+        type: 'daily',
         startDate: currentDate,
-        endDate: monthlyEnd,
-        amount: Number(property.monthlyRate),
-        label: `Month ${++periodCount.monthly}`
+        endDate: endDate,
+        amount: Number(property.rate) * totalDays,
+        label: `${totalDays} Day${totalDays > 1 ? 's' : ''}`
       });
-      currentDate = monthlyEnd;
+      periodCount.daily = totalDays;
     }
-  }
+  } else {
+    // Calculate full months first if monthly rate is available
+    if (property.monthlyRate && preferredType !== 'weekly') {
+      while (differenceInCalendarMonths(endDate, currentDate) >= 1) {
+        const monthlyEnd = addMonths(currentDate, 1);
+        periods.push({
+          type: 'monthly',
+          startDate: currentDate,
+          endDate: monthlyEnd,
+          amount: Number(property.monthlyRate),
+          label: `Month ${++periodCount.monthly}`
+        });
+        currentDate = monthlyEnd;
+      }
+    }
 
-  // Calculate full weeks for remaining days if weekly rate is available
-  if (property.weeklyRate && preferredType !== 'daily' && differenceInDays(endDate, currentDate) >= 7) {
-    while (differenceInDays(endDate, currentDate) >= 7) {
-      const weeklyEnd = addWeeks(currentDate, 1);
+    // Calculate full weeks for remaining days if weekly rate is available
+    if (property.weeklyRate && preferredType !== 'daily') {
+      while (differenceInDays(endDate, currentDate) >= 7) {
+        const weeklyEnd = addWeeks(currentDate, 1);
+        periods.push({
+          type: 'weekly',
+          startDate: currentDate,
+          endDate: weeklyEnd,
+          amount: Number(property.weeklyRate),
+          label: `Week ${++periodCount.weekly}`
+        });
+        currentDate = weeklyEnd;
+      }
+    }
+
+    // Calculate remaining days at daily rate
+    const remainingDays = differenceInDays(endDate, currentDate);
+    if (remainingDays > 0) {
       periods.push({
-        type: 'weekly',
+        type: 'daily',
         startDate: currentDate,
-        endDate: weeklyEnd,
-        amount: Number(property.weeklyRate),
-        label: `Week ${++periodCount.weekly}`
+        endDate: endDate,
+        amount: Number(property.rate) * remainingDays,
+        label: `${remainingDays} Day${remainingDays > 1 ? 's' : ''}`
       });
-      currentDate = weeklyEnd;
+      periodCount.daily = remainingDays;
     }
-  }
-
-  // Calculate remaining days at daily rate
-  const remainingDays = differenceInDays(endDate, currentDate);
-  if (remainingDays > 0) {
-    periods.push({
-      type: 'daily',
-      startDate: currentDate,
-      endDate: endDate,
-      amount: Number(property.rate) * remainingDays,
-      label: `${remainingDays} Day${remainingDays > 1 ? 's' : ''}`
-    });
-    periodCount.daily += remainingDays;
   }
 
   // Determine primary package type based on which type covers most days
-  const primaryType = periodCount.monthly > 0 ? 'monthly' :
+  const primaryType = preferredType === 'daily' ? 'daily' :
+                     periodCount.monthly > 0 ? 'monthly' :
                      periodCount.weekly > 0 ? 'weekly' : 'daily';
 
   const totalAmount = periods.reduce((sum, period) => sum + period.amount, 0);
@@ -154,7 +170,7 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                   <div className="text-2xl font-bold">${Number(property.monthlyRate).toLocaleString()}</div>
                   <div className="text-xs text-muted-foreground">per month</div>
                   {packageCounts.monthly > 0 && (
-                    <div className={`absolute top-3 right-3 px-3 py-1 rounded-full text-sm font-semibold
+                    <div className={`absolute top-3 right-3 px-4 py-1.5 rounded-full text-base font-semibold
                       ${preferredPackageType === 'monthly' 
                         ? 'bg-primary/15 text-primary'
                         : 'bg-muted/20 text-muted-foreground'}`}>
@@ -174,7 +190,7 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                   <div className="text-2xl font-bold">${Number(property.weeklyRate).toLocaleString()}</div>
                   <div className="text-xs text-muted-foreground">per week</div>
                   {packageCounts.weekly > 0 && (
-                    <div className={`absolute top-3 right-3 px-3 py-1 rounded-full text-sm font-semibold
+                    <div className={`absolute top-3 right-3 px-4 py-1.5 rounded-full text-base font-semibold
                       ${preferredPackageType === 'weekly'
                         ? 'bg-primary/15 text-primary'
                         : 'bg-muted/20 text-muted-foreground'}`}>
@@ -193,7 +209,7 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                 <div className="text-2xl font-bold">${Number(property.rate).toLocaleString()}</div>
                 <div className="text-xs text-muted-foreground">per day</div>
                 {packageCounts.daily > 0 && (
-                  <div className={`absolute top-3 right-3 px-3 py-1 rounded-full text-sm font-semibold
+                  <div className={`absolute top-3 right-3 px-4 py-1.5 rounded-full text-base font-semibold
                     ${preferredPackageType === 'daily'
                       ? 'bg-primary/15 text-primary'
                       : 'bg-muted/20 text-muted-foreground'}`}>
