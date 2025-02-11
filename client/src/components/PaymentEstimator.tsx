@@ -117,6 +117,15 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
     return calculateOptimalPaymentBreakdown(property, checkIn, checkOut, preferredPackageType);
   }, [property, checkIn, checkOut, preferredPackageType]);
 
+  // Calculate package counts
+  const packageCounts = useMemo(() => {
+    if (!paymentBreakdown) return { monthly: 0, weekly: 0, daily: 0 };
+    return paymentBreakdown.periods.reduce((counts, period) => {
+      counts[period.type]++;
+      return counts;
+    }, { monthly: 0, weekly: 0, daily: 0 });
+  }, [paymentBreakdown]);
+
   if (!paymentBreakdown || !property) return null;
 
   const handleConfirm = () => {
@@ -136,7 +145,7 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
             <div className="grid gap-4 sm:grid-cols-3">
               {property.monthlyRate && (
                 <div 
-                  className={`p-3 bg-white rounded border cursor-pointer transition-colors ${
+                  className={`p-3 bg-white rounded border cursor-pointer transition-colors relative ${
                     preferredPackageType === 'monthly' ? 'border-primary' : ''
                   }`}
                   onClick={() => setPreferredPackageType('monthly')}
@@ -144,11 +153,19 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                   <div className="text-sm font-medium">Monthly Plan</div>
                   <div className="text-2xl font-bold">${Number(property.monthlyRate).toLocaleString()}</div>
                   <div className="text-xs text-muted-foreground">per month</div>
+                  {packageCounts.monthly > 0 && (
+                    <div className={`absolute top-2 right-2 px-2 py-0.5 rounded-full text-xs font-medium
+                      ${preferredPackageType === 'monthly' 
+                        ? 'bg-primary/10 text-primary'
+                        : 'bg-muted text-muted-foreground'}`}>
+                      x{packageCounts.monthly}
+                    </div>
+                  )}
                 </div>
               )}
               {property.weeklyRate && (
                 <div 
-                  className={`p-3 bg-white rounded border cursor-pointer transition-colors ${
+                  className={`p-3 bg-white rounded border cursor-pointer transition-colors relative ${
                     preferredPackageType === 'weekly' ? 'border-primary' : ''
                   }`}
                   onClick={() => setPreferredPackageType('weekly')}
@@ -156,10 +173,18 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                   <div className="text-sm font-medium">Weekly Plan</div>
                   <div className="text-2xl font-bold">${Number(property.weeklyRate).toLocaleString()}</div>
                   <div className="text-xs text-muted-foreground">per week</div>
+                  {packageCounts.weekly > 0 && (
+                    <div className={`absolute top-2 right-2 px-2 py-0.5 rounded-full text-xs font-medium
+                      ${preferredPackageType === 'weekly'
+                        ? 'bg-primary/10 text-primary'
+                        : 'bg-muted text-muted-foreground'}`}>
+                      x{packageCounts.weekly}
+                    </div>
+                  )}
                 </div>
               )}
               <div 
-                className={`p-3 bg-white rounded border cursor-pointer transition-colors ${
+                className={`p-3 bg-white rounded border cursor-pointer transition-colors relative ${
                   preferredPackageType === 'daily' ? 'border-primary' : ''
                 }`}
                 onClick={() => setPreferredPackageType('daily')}
@@ -167,6 +192,14 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                 <div className="text-sm font-medium">Daily Rate</div>
                 <div className="text-2xl font-bold">${Number(property.rate).toLocaleString()}</div>
                 <div className="text-xs text-muted-foreground">per day</div>
+                {packageCounts.daily > 0 && (
+                  <div className={`absolute top-2 right-2 px-2 py-0.5 rounded-full text-xs font-medium
+                    ${preferredPackageType === 'daily'
+                      ? 'bg-primary/10 text-primary'
+                      : 'bg-muted text-muted-foreground'}`}>
+                    x{packageCounts.daily}
+                  </div>
+                )}
               </div>
             </div>
           </div>
