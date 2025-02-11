@@ -18,6 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import { type Property, insertBookingSchema, insertGuestSchema } from "@db/schema";
 import * as z from "zod";
 import { Card } from "@/components/ui/card";
+import { type DateRange } from "react-day-picker";
 
 interface BookingFormProps {
   property: Property;
@@ -30,13 +31,7 @@ type BookingFormValues = z.infer<typeof bookingFormSchema>;
 export default function BookingForm({ property, onSuccess }: BookingFormProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [dateRange, setDateRange] = useState<{
-    from: Date | undefined;
-    to: Date | undefined;
-  }>({
-    from: undefined,
-    to: undefined
-  });
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
   const form = useForm<BookingFormValues>({
     resolver: zodResolver(bookingFormSchema),
@@ -57,7 +52,7 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
   const createBookingAndGuest = useMutation({
     mutationFn: async (values: BookingFormValues) => {
       try {
-        if (!dateRange.from || !dateRange.to) {
+        if (!dateRange?.from || !dateRange?.to) {
           throw new Error("Please select check-in and check-out dates");
         }
 
@@ -112,7 +107,7 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/bookings"] });
       form.reset();
-      setDateRange({ from: undefined, to: undefined });
+      setDateRange(undefined);
       toast({
         title: "Success",
         description: "Booking and guest registration completed successfully",
@@ -135,7 +130,7 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
 
   async function onSubmit(values: BookingFormValues) {
     try {
-      if (!dateRange.from || !dateRange.to) {
+      if (!dateRange?.from || !dateRange?.to) {
         toast({
           title: "Error",
           description: "Please select your stay dates",
@@ -172,17 +167,10 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
                   <Calendar
                     mode="range"
                     selected={dateRange}
-                    onSelect={(range) => {
-                      setDateRange(range ?? { from: undefined, to: undefined });
-                      if (range?.from) {
-                        form.setValue("checkIn", range.from);
-                        if (range.to) {
-                          form.setValue("checkOut", range.to);
-                        }
-                      }
-                    }}
-                    disabled={(date) => date < new Date()}
+                    onSelect={setDateRange}
                     numberOfMonths={2}
+                    disabled={(date) => date < new Date()}
+                    initialFocus
                     className="rounded-md border"
                   />
                 </FormControl>
@@ -191,7 +179,7 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
             )}
           />
 
-          {dateRange.from && dateRange.to && (
+          {dateRange?.from && dateRange?.to && (
             <div className="mt-4 space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Check-in:</span>
@@ -209,7 +197,7 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
           )}
         </Card>
 
-        {dateRange.from && dateRange.to && (
+        {dateRange?.from && dateRange?.to && (
           <div className="space-y-6">
             <div className="space-y-4">
               <h3 className="text-lg font-medium">Guest Information</h3>
