@@ -11,6 +11,10 @@ function Calendar({
   className,
   classNames,
   showOutsideDays = true,
+  mode = "single",
+  selected,
+  onSelect,
+  disabled,
   ...props
 }: CalendarProps) {
   return (
@@ -55,6 +59,10 @@ function Calendar({
         IconLeft: ({ ...props }) => <ChevronLeft className="h-4 w-4" />,
         IconRight: ({ ...props }) => <ChevronRight className="h-4 w-4" />,
       }}
+      mode={mode}
+      selected={selected}
+      onSelect={onSelect}
+      disabled={disabled}
       {...props}
     />
   )
