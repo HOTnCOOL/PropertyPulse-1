@@ -147,7 +147,13 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
   const packageCounts = useMemo(() => {
     if (!paymentBreakdown) return { monthly: 0, weekly: 0, daily: 0 };
     return paymentBreakdown.periods.reduce((counts, period) => {
-      counts[period.type]++;
+      if (period.type === 'daily') {
+        // Extract the number from the label (e.g., "3 Days" -> 3)
+        const dayCount = parseInt(period.label.split(' ')[0]);
+        counts.daily += dayCount;
+      } else {
+        counts[period.type]++;
+      }
       return counts;
     }, { monthly: 0, weekly: 0, daily: 0 });
   }, [paymentBreakdown]);
