@@ -242,7 +242,6 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
   if (!currentEstimates || !property) return null;
 
   const handleConfirm = () => {
-    // Navigate to payment page with selected options
     if (currentEstimates.periods[0]) {
       setLocation(`/payment?propertyId=${property.id}&rateType=${selectedRateType}`);
     }
