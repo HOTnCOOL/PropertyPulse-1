@@ -1,0 +1,73 @@
+
+Payment Estimation
+Select your Preferred Standard Rate:
+( )per hour	( )Daily	( )Weekly Rate	(X)Monthly Rate		 	
+   $15		  $90		   $420		   $1200
+   max $150/day	  Standard rate    $60/day	   $40 day
+	   
+Purchase Details & regular payment schedule:
+
+1 Monthly x 1200		$1200 (cost per night $40)
+Feb 12 - Mar 12			to be paid at booking.
+
+2 weekly x $420 		$840  (cost per night $60)
+Mar 12 - Mar 19 - Mar 26	to be paid at the start of each period 
+
+3 Daily x $90			$270    period during your stay.
+Mar 26 - Mar 29			to be paid at the start of each period
+	   
+	   Accommodation TOTAL: $2110			    
+
+Booking Payment Basket:
+1 Monthly x 1200		$1200
+1 Weekly Deposit*		$420
+
+Get up to 50% discount per purchased package and your deposit as you add unpaid packages to your Booking Payment Basket. Check how match you Save per Prepay
+ +-2 weekly
+ +-3 daily
+
+
+* Deposit policy: Security Deposit is not charged for all pre-paid bookings. Security Deposit is paid in advance or guaranteed by card for all stays longer that 3 days, that are partly paid. The deposit is fully refundable at check-out. Deposit can be reduced by half if at least 2 packs of the same type are prepaid. The amount of the deposit is formed as follows:
+ 1. $90 - one daily rate deposit for stays longer than 3 days and shorter than 2 weeks
+ 2. $420 - one weekly rate deposit for stays longer than 2 weeks and shorter than 2 months
+ 3. $1200 - one monthly rate deposit for stays longer than 2 months 
+
+
+#As users add or remove pachackes they can appear in the estimation playground and dynamically change the prices and the total amount as already demonstrated in the code. Add to the above estimation some of the elements bellow and amend estimations accordingly. combine similar periods for simplicity but keep the savings on visible positions: 
+Week 2
+
+$378
+Save $42 (10% off)
+$54/day
+
+Week 3
+Mar 19 - Mar 26
+$336
+Save $84 (20% off)
+$48/day
+
+3 Days
+Mar 26 - Mar 29
+$189
+Save $81 (30% off)
+$63/day
+Security Deposit
+Required Deposit Amount
+$0
+100% refundable - entire stay prepaid
+
+Base Price (Selected Packages)
+$2,310
+Total Savings
+-$207
+Final Price
+$2,103
+Security Deposit (Refundable)
++$0
+Total Required Payment
+$2,103
+
+
+
+
+

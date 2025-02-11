@@ -68,88 +68,86 @@ const calculatePricePeriods = (property: Property, checkIn: Date, checkOut: Date
   const totalDays = differenceInDays(endDate, currentDate);
   let periodIndex = 0;
 
-  while (currentDate < endDate) {
-    if (selectedRateType === 'monthly' && property.monthlyRate && differenceInCalendarMonths(endDate, currentDate) >= 1) {
-      const monthlyEnd = addMonths(currentDate, 1);
-      const isCompleteMonth = differenceInCalendarMonths(monthlyEnd, currentDate) === 1;
+  // Try to fit monthly packages first if available
+  while (currentDate < endDate && selectedRateType === 'monthly' && property.monthlyRate) {
+    const monthlyEnd = addMonths(currentDate, 1);
+    const isCompleteMonth = differenceInCalendarMonths(monthlyEnd, currentDate) === 1;
 
-      if (isCompleteMonth && monthlyEnd <= endDate) {
-        const baseRate = Number(property.monthlyRate);
-        const { amount, discountPercent } = calculateDiscountedRate(baseRate, periodIndex);
-        const daysInPeriod = differenceInDays(monthlyEnd, currentDate);
-
-        periods.push({
-          id: `${currentDate.getTime()}-monthly`,
-          type: 'monthly',
-          startDate: currentDate,
-          endDate: monthlyEnd,
-          amount,
-          baseRate,
-          duration: 1,
-          daysInPeriod,
-          effectiveDailyRate: amount / daysInPeriod,
-          normalDailyTotal: baseRate,
-          discountPercentage: discountPercent,
-          discountAmount: baseRate - amount,
-          isSelected: true
-        });
-
-        currentDate = monthlyEnd;
-        periodIndex++;
-        continue;
-      }
-    }
-
-    if (selectedRateType === 'weekly' && property.weeklyRate && differenceInDays(endDate, currentDate) >= 7) {
-      const weeklyEnd = addWeeks(currentDate, 1);
-      const baseRate = Number(property.weeklyRate);
+    if (isCompleteMonth && monthlyEnd <= endDate) {
+      const baseRate = Number(property.monthlyRate);
       const { amount, discountPercent } = calculateDiscountedRate(baseRate, periodIndex);
+      const daysInPeriod = differenceInDays(monthlyEnd, currentDate);
 
       periods.push({
-        id: `${currentDate.getTime()}-weekly`,
-        type: 'weekly',
+        id: `${currentDate.getTime()}-monthly`,
+        type: 'monthly',
         startDate: currentDate,
-        endDate: weeklyEnd,
+        endDate: monthlyEnd,
         amount,
         baseRate,
         duration: 1,
-        daysInPeriod: 7,
-        effectiveDailyRate: amount / 7,
+        daysInPeriod,
+        effectiveDailyRate: amount / daysInPeriod,
         normalDailyTotal: baseRate,
         discountPercentage: discountPercent,
         discountAmount: baseRate - amount,
         isSelected: true
       });
 
-      currentDate = weeklyEnd;
+      currentDate = monthlyEnd;
       periodIndex++;
-      continue;
+    } else {
+      break; // Can't fit more monthly packages
     }
+  }
 
-    // Use daily rate for remaining days or if daily rate is selected
-    const remainingDays = differenceInDays(endDate, currentDate);
-    if (remainingDays > 0) {
-      const baseRate = Number(property.rate) * remainingDays;
-      const { amount, discountPercent } = calculateDiscountedRate(baseRate, periodIndex);
+  // Try to fit weekly packages for remaining period if available
+  while (currentDate < endDate && (selectedRateType === 'weekly' || selectedRateType === 'monthly') && property.weeklyRate && differenceInDays(endDate, currentDate) >= 7) {
+    const weeklyEnd = addWeeks(currentDate, 1);
+    const baseRate = Number(property.weeklyRate);
+    const { amount, discountPercent } = calculateDiscountedRate(baseRate, periodIndex);
 
-      periods.push({
-        id: `${currentDate.getTime()}-daily`,
-        type: 'daily',
-        startDate: currentDate,
-        endDate: endDate,
-        amount,
-        baseRate,
-        duration: remainingDays,
-        daysInPeriod: remainingDays,
-        effectiveDailyRate: amount / remainingDays,
-        normalDailyTotal: baseRate,
-        discountPercentage: discountPercent,
-        discountAmount: baseRate - amount,
-        isSelected: true
-      });
+    periods.push({
+      id: `${currentDate.getTime()}-weekly`,
+      type: 'weekly',
+      startDate: currentDate,
+      endDate: weeklyEnd,
+      amount,
+      baseRate,
+      duration: 1,
+      daysInPeriod: 7,
+      effectiveDailyRate: amount / 7,
+      normalDailyTotal: baseRate,
+      discountPercentage: discountPercent,
+      discountAmount: baseRate - amount,
+      isSelected: true
+    });
 
-      currentDate = endDate;
-    }
+    currentDate = weeklyEnd;
+    periodIndex++;
+  }
+
+  // Use daily rate for any remaining days
+  const remainingDays = differenceInDays(endDate, currentDate);
+  if (remainingDays > 0) {
+    const baseRate = Number(property.rate) * remainingDays;
+    const { amount, discountPercent } = calculateDiscountedRate(baseRate, periodIndex);
+
+    periods.push({
+      id: `${currentDate.getTime()}-daily`,
+      type: 'daily',
+      startDate: currentDate,
+      endDate: endDate,
+      amount,
+      baseRate,
+      duration: remainingDays,
+      daysInPeriod: remainingDays,
+      effectiveDailyRate: amount / remainingDays,
+      normalDailyTotal: baseRate,
+      discountPercentage: discountPercent,
+      discountAmount: baseRate - amount,
+      isSelected: true
+    });
   }
 
   // Ensure first period is always selected
@@ -175,11 +173,23 @@ const calculatePaymentEstimate = (periods: PricePeriod[]): PaymentEstimate => {
   // Calculate minimum payment (first package + deposit if required)
   const minimumPayment = periods[0].amount + depositAmount;
 
-  // Determine deposit refund conditions based on selected periods
+  // Update deposit refund conditions based on selected periods
   const selectedPackagesCount = selectedPeriods.length;
   const totalPackagesCount = periods.length;
-  const depositPartiallyRefundable = selectedPackagesCount >= 2;
+
+  // Deposit is fully refundable if all packages are selected (entire stay prepaid)
   const depositRefundable = selectedPackagesCount === totalPackagesCount;
+
+  // Deposit is partially refundable (50%) if at least 2 packages are prepaid
+  const depositPartiallyRefundable = selectedPackagesCount >= 2;
+
+  // Calculate actual deposit amount based on refund conditions
+  let effectiveDepositAmount = depositAmount;
+  if (depositRefundable) {
+    effectiveDepositAmount = 0; // No deposit needed if entire stay is prepaid
+  } else if (depositPartiallyRefundable) {
+    effectiveDepositAmount = depositAmount * 0.5; // 50% deposit if 2+ packages prepaid
+  }
 
   return {
     periods,
@@ -187,8 +197,8 @@ const calculatePaymentEstimate = (periods: PricePeriod[]): PaymentEstimate => {
     totalDiscountAmount,
     finalAmount,
     depositRequired: hasMultiplePackages,
-    depositAmount,
-    minimumPayment,
+    depositAmount: effectiveDepositAmount,
+    minimumPayment: depositRefundable ? finalAmount : periods[0].amount + effectiveDepositAmount,
     depositRefundable,
     depositPartiallyRefundable
   };
@@ -241,6 +251,11 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
 
   if (!currentEstimates || !property) return null;
 
+  // Calculate effective daily rates
+  const monthlyDailyRate = property.monthlyRate ? Math.round(Number(property.monthlyRate) / 30) : null;
+  const weeklyDailyRate = property.weeklyRate ? Math.round(Number(property.weeklyRate) / 7) : null;
+  const dailyRate = Number(property.rate);
+
   const handleConfirm = () => {
     // Navigate to payment page with selected options
     if (currentEstimates.periods[0]) {
@@ -260,26 +275,26 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
             <h3 className="font-semibold">Standard Rates</h3>
             <div className="grid gap-4 sm:grid-cols-3">
               {property.monthlyRate && (
-                <div className="p-3 bg-white rounded border">
+                <div className={`p-3 bg-white rounded border ${selectedRateType === 'monthly' ? 'ring-2 ring-primary' : ''}`}>
                   <div className="text-sm font-medium">Monthly Rate</div>
                   <div className="text-2xl font-bold">${Number(property.monthlyRate).toLocaleString()}</div>
                   <div className="text-xs text-muted-foreground">
-                    ${Math.round(Number(property.monthlyRate) / 30)}/day
+                    ${monthlyDailyRate}/day
                   </div>
                 </div>
               )}
               {property.weeklyRate && (
-                <div className="p-3 bg-white rounded border">
+                <div className={`p-3 bg-white rounded border ${selectedRateType === 'weekly' ? 'ring-2 ring-primary' : ''}`}>
                   <div className="text-sm font-medium">Weekly Rate</div>
                   <div className="text-2xl font-bold">${Number(property.weeklyRate).toLocaleString()}</div>
                   <div className="text-xs text-muted-foreground">
-                    ${Math.round(Number(property.weeklyRate) / 7)}/day
+                    ${weeklyDailyRate}/day
                   </div>
                 </div>
               )}
-              <div className="p-3 bg-white rounded border">
+              <div className={`p-3 bg-white rounded border ${selectedRateType === 'daily' ? 'ring-2 ring-primary' : ''}`}>
                 <div className="text-sm font-medium">Daily Rate</div>
-                <div className="text-2xl font-bold">${Number(property.rate).toLocaleString()}</div>
+                <div className="text-2xl font-bold">${dailyRate.toLocaleString()}</div>
                 <div className="text-xs text-muted-foreground">Standard rate</div>
               </div>
             </div>
@@ -320,10 +335,12 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
 
           {/* Package Selection */}
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold">Select Packages to Prepay</h3>
-            <p className="text-xs text-muted-foreground">
-              Prepay multiple packages to earn higher discounts (10% off per package, up to 50%).
-            </p>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold">Select Packages to Prepay</h3>
+              <p className="text-xs text-muted-foreground">
+                Save up to 50% with prepayment discounts
+              </p>
+            </div>
 
             <div className="divide-y">
               {currentEstimates.periods.map((period, index) => (
@@ -382,10 +399,10 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                 </div>
                 <p className="text-sm text-muted-foreground">
                   {currentEstimates.depositRefundable 
-                    ? '100% refundable - entire stay prepaid'
+                    ? 'No deposit required - entire stay prepaid'
                     : currentEstimates.depositPartiallyRefundable
-                      ? '50% refundable - 2+ packages prepaid'
-                      : 'Fully refundable after stay completion'}
+                      ? '50% deposit required - 2+ packages prepaid'
+                      : 'Full deposit required'}
                 </p>
               </div>
             </div>

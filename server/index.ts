@@ -38,7 +38,7 @@ app.use((req, res, next) => {
 });
 
 async function startServer() {
-  const startPort = parseInt(process.env.PORT || "5000", 10);
+  const startPort = parseInt(process.env.PORT || "3000", 10); // Changed default port to 3000
   const maxRetries = 10;
   let currentPort = startPort;
   let retries = 0;
@@ -70,7 +70,7 @@ async function startServer() {
       }
 
       // Start server
-      await new Promise<void>((resolve, reject) => {
+      return new Promise<void>((resolve, reject) => {
         server.listen(currentPort, "0.0.0.0")
           .once("listening", () => {
             log(`Server successfully started on port ${currentPort}`);
@@ -94,10 +94,6 @@ async function startServer() {
             }
           });
       });
-
-      if (true) { //server.listening is undefined in the context of the promise
-        break;
-      }
     } catch (error) {
       log(`Attempt ${retries + 1} failed: ${error}`);
       retries++;
