@@ -154,11 +154,11 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                   <div className="text-2xl font-bold">${Number(property.monthlyRate).toLocaleString()}</div>
                   <div className="text-xs text-muted-foreground">per month</div>
                   {packageCounts.monthly > 0 && (
-                    <div className={`absolute top-2 right-2 px-2 py-0.5 rounded-full text-xs font-medium
+                    <div className={`absolute top-3 right-3 px-3 py-1 rounded-full text-sm font-semibold
                       ${preferredPackageType === 'monthly' 
-                        ? 'bg-primary/10 text-primary'
-                        : 'bg-muted text-muted-foreground'}`}>
-                      x{packageCounts.monthly}
+                        ? 'bg-primary/15 text-primary'
+                        : 'bg-muted/20 text-muted-foreground'}`}>
+                      ×{packageCounts.monthly}
                     </div>
                   )}
                 </div>
@@ -174,11 +174,11 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                   <div className="text-2xl font-bold">${Number(property.weeklyRate).toLocaleString()}</div>
                   <div className="text-xs text-muted-foreground">per week</div>
                   {packageCounts.weekly > 0 && (
-                    <div className={`absolute top-2 right-2 px-2 py-0.5 rounded-full text-xs font-medium
+                    <div className={`absolute top-3 right-3 px-3 py-1 rounded-full text-sm font-semibold
                       ${preferredPackageType === 'weekly'
-                        ? 'bg-primary/10 text-primary'
-                        : 'bg-muted text-muted-foreground'}`}>
-                      x{packageCounts.weekly}
+                        ? 'bg-primary/15 text-primary'
+                        : 'bg-muted/20 text-muted-foreground'}`}>
+                      ×{packageCounts.weekly}
                     </div>
                   )}
                 </div>
@@ -193,11 +193,11 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                 <div className="text-2xl font-bold">${Number(property.rate).toLocaleString()}</div>
                 <div className="text-xs text-muted-foreground">per day</div>
                 {packageCounts.daily > 0 && (
-                  <div className={`absolute top-2 right-2 px-2 py-0.5 rounded-full text-xs font-medium
+                  <div className={`absolute top-3 right-3 px-3 py-1 rounded-full text-sm font-semibold
                     ${preferredPackageType === 'daily'
-                      ? 'bg-primary/10 text-primary'
-                      : 'bg-muted text-muted-foreground'}`}>
-                    x{packageCounts.daily}
+                      ? 'bg-primary/15 text-primary'
+                      : 'bg-muted/20 text-muted-foreground'}`}>
+                    ×{packageCounts.daily}
                   </div>
                 )}
               </div>
