@@ -69,10 +69,7 @@ const calculatePricePeriods = (property: Property, checkIn: Date, checkOut: Date
   let periodIndex = 0;
 
   while (currentDate < endDate) {
-    // Try to fit monthly packages first if selected or available
-    if ((selectedRateType === 'monthly' || selectedRateType === 'weekly') && 
-        property.monthlyRate && 
-        differenceInCalendarMonths(endDate, currentDate) >= 1) {
+    if (selectedRateType === 'monthly' && property.monthlyRate && differenceInCalendarMonths(endDate, currentDate) >= 1) {
       const monthlyEnd = addMonths(currentDate, 1);
       const isCompleteMonth = differenceInCalendarMonths(monthlyEnd, currentDate) === 1;
 
@@ -103,10 +100,7 @@ const calculatePricePeriods = (property: Property, checkIn: Date, checkOut: Date
       }
     }
 
-    // Try to fit weekly packages for remaining periods >= 7 days
-    if ((selectedRateType === 'weekly' || selectedRateType === 'daily') && 
-        property.weeklyRate && 
-        differenceInDays(endDate, currentDate) >= 7) {
+    if (selectedRateType === 'weekly' && property.weeklyRate && differenceInDays(endDate, currentDate) >= 7) {
       const weeklyEnd = addWeeks(currentDate, 1);
       const baseRate = Number(property.weeklyRate);
       const { amount, discountPercent } = calculateDiscountedRate(baseRate, periodIndex);
@@ -132,9 +126,9 @@ const calculatePricePeriods = (property: Property, checkIn: Date, checkOut: Date
       continue;
     }
 
-    // Use daily rate only for periods < 7 days
+    // Use daily rate for remaining days or if daily rate is selected
     const remainingDays = differenceInDays(endDate, currentDate);
-    if (remainingDays > 0 && (selectedRateType === 'daily' || remainingDays < 7)) {
+    if (remainingDays > 0) {
       const baseRate = Number(property.rate) * remainingDays;
       const { amount, discountPercent } = calculateDiscountedRate(baseRate, periodIndex);
 
