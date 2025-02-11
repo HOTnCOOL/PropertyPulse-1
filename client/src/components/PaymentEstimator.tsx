@@ -277,6 +277,35 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
             </div>
           </div>
 
+          {/* Initial Payment Information */}
+          <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg space-y-4">
+            <div>
+              <h3 className="text-sm font-semibold mb-2">Initial Payment Required</h3>
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span>First {paymentBreakdown.periods[0]?.label}</span>
+                  <span>${paymentBreakdown.periods[0]?.amount.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span>Security Deposit (Fully Refundable)</span>
+                  <span>+${paymentBreakdown.depositAmount.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between font-semibold text-base pt-2 border-t">
+                  <span>Total Initial Payment</span>
+                  <span>${paymentBreakdown.initialPayment.toLocaleString()}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-yellow-700">
+                Initial payment must be received within 24 hours to guarantee availability.
+                The security deposit is fully refundable after stay completion and property inspection.
+              </p>
+            </div>
+          </div>
+
           {/* Payment Schedule */}
           <div className="space-y-4">
             <h3 className="text-sm font-semibold">Payment Schedule</h3>
@@ -324,35 +353,6 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                     <span>${paymentBreakdown.totalAmount.toLocaleString()}</span>
                   </div>
                 </div>
-              </div>
-            </div>
-
-            {/* Initial Payment Information */}
-            <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg space-y-4">
-              <div>
-                <h3 className="text-sm font-semibold mb-2">Initial Payment Required</h3>
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span>First {paymentBreakdown.periods[0]?.label}</span>
-                    <span>${paymentBreakdown.periods[0]?.amount.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span>Security Deposit (Fully Refundable)</span>
-                    <span>+${paymentBreakdown.depositAmount.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between font-semibold text-base pt-2 border-t">
-                    <span>Total Initial Payment</span>
-                    <span>${paymentBreakdown.initialPayment.toLocaleString()}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-2">
-                <AlertTriangle className="h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
-                <p className="text-sm text-yellow-700">
-                  Initial payment must be received within 24 hours to guarantee availability.
-                  The security deposit is fully refundable after stay completion and property inspection.
-                </p>
               </div>
             </div>
           </div>
