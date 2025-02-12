@@ -92,7 +92,7 @@ const calculateOptimalPaymentBreakdown = (
   } else {
     let periodIndex = 0;
     // Calculate full months first if monthly rate is available
-    if (property.monthlyRate && preferredType !== 'weekly') {
+    if (property.monthlyRate && preferredType !== 'daily') {
       while (differenceInCalendarMonths(endDate, currentDate) >= 1) {
         const monthlyEnd = addMonths(currentDate, 1);
         const baseAmount = Number(property.monthlyRate);
@@ -146,6 +146,7 @@ const calculateOptimalPaymentBreakdown = (
 
   // Apply discounts to selected periods
   const selectedPeriodsCount = periods.filter((p, i) => selectedPeriods.includes(i) || prepayAll).length;
+  const isFullyPrepaid = prepayAll || selectedPeriodsCount === periods.length;
 
   periods.forEach((period, index) => {
     if (selectedPeriods.includes(index) || prepayAll) {
@@ -174,8 +175,8 @@ const calculateOptimalPaymentBreakdown = (
   // Calculate total savings
   const totalSavings = periods.reduce((sum, period) => sum + (period.discountAmount || 0), 0);
 
-  // Calculate deposit amount based on selected periods
-  const depositAmount = calculateDepositAmount(property, totalDays, selectedPeriodsCount);
+  // Calculate deposit amount based on selected periods and prepayment status
+  const depositAmount = calculateDepositAmount(property, totalDays, selectedPeriodsCount, isFullyPrepaid);
 
   return {
     primaryType: preferredType === 'daily' ? 'daily' :
@@ -191,7 +192,10 @@ const calculateOptimalPaymentBreakdown = (
 };
 
 // Update helper functions to match new discount rules
-const calculateDepositAmount = (property: Property, totalDays: number, prepaidPeriodsCount: number): number => {
+const calculateDepositAmount = (property: Property, totalDays: number, prepaidPeriodsCount: number, isFullyPrepaid: boolean): number => {
+  // If all periods are prepaid, no deposit is required
+  if (isFullyPrepaid) return 0;
+
   let baseDepositAmount = 0;
   if (totalDays > 3) {
     if (totalDays > 60) {
