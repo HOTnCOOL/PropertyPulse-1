@@ -84,7 +84,7 @@ const calculateOptimalPaymentBreakdown = (
     }
 
     // Calculate full weeks for remaining days if weekly rate is available
-    if (property.weeklyRate && preferredType === 'weekly') {
+    if (property.weeklyRate && preferredType !== 'daily') {
       while (differenceInDays(endDate, currentDate) >= 7) {
         const weeklyEnd = addWeeks(currentDate, 1);
         periods.push({
@@ -120,19 +120,17 @@ const calculateOptimalPaymentBreakdown = (
   const totalAmount = periods.reduce((sum, period) => sum + period.amount, 0);
 
   // Calculate deposit amount based on stay duration and payment type
-  const totalDays = differenceInDays(endDate, checkIn); // Changed from currentDate to checkIn for accurate total days
+  const totalDays = differenceInDays(endDate, currentDate);
   const isFullyPrepaid = periods.every(p => p.isPrepaid);
   const prepaidPacksCount = periods.filter(p => p.type === primaryType && p.isPrepaid).length;
 
   let baseDepositAmount = 0;
-  if (!isFullyPrepaid && totalDays > 3) { // Only calculate deposit if not fully prepaid and stay > 3 days
-    if (totalDays > 60) { // > 2 months
-      baseDepositAmount = Number(property.monthlyRate) || 1200;
-    } else if (totalDays >= 15) { // >= 15 days (changed from 14)
-      baseDepositAmount = Number(property.weeklyRate) || 420;
-    } else { // > 3 days and < 15 days
-      baseDepositAmount = Number(property.rate) || 90;
-    }
+  if (totalDays > 60) { // > 2 months
+    baseDepositAmount = Number(property.monthlyRate) || 1200;
+  } else if (totalDays > 14) { // > 2 weeks
+    baseDepositAmount = Number(property.weeklyRate) || 420;
+  } else if (totalDays > 3) { // > 3 days
+    baseDepositAmount = Number(property.rate) || 90;
   }
 
   // Apply deposit reductions
@@ -143,7 +141,7 @@ const calculateOptimalPaymentBreakdown = (
   return {
     primaryType,
     periods,
-    totalAmount, // This amount excludes deposit since it's refundable
+    totalAmount,
     depositAmount,
     initialPayment: periods[0]?.amount + depositAmount || 0
   };
