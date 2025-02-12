@@ -32,10 +32,12 @@ interface PaymentPeriod {
   startDate: Date;
   endDate: Date;
   amount: number;
-  baseAmount: number; // Store original amount before discounts
+  baseAmount: number;
   label: string;
   isPrepaid?: boolean;
-  index?: number; // Add index for discount calculation
+  index?: number;
+  discountAmount?: number; // Track the actual discount amount
+  discountPercent?: number; // Track the applied discount percentage
 }
 
 interface PaymentBreakdown {
@@ -44,6 +46,8 @@ interface PaymentBreakdown {
   totalAmount: number;
   depositAmount: number;
   initialPayment: number;
+  totalSavings: number;
+  effectiveRate: number;
 }
 
 const calculateOptimalPaymentBreakdown = (
@@ -60,12 +64,20 @@ const calculateOptimalPaymentBreakdown = (
   let periodCount = { monthly: 0, weekly: 0, daily: 0 };
   const totalDays = differenceInDays(endDate, currentDate);
 
-  // Function to calculate discount based on period index and type
+  // Calculate progressive discount based on period index and type
   const calculateDiscount = (periodType: 'monthly' | 'weekly' | 'daily', index: number): number => {
     const selectedPeriodsOfType = periods
       .filter((p, i) => p.type === periodType && (selectedPeriods.includes(i) || prepayAll))
       .length;
-    return Math.min((selectedPeriodsOfType - 1) * 10, 50) / 100;
+
+    // Progressive discount: 10% per prepaid period, max 50%
+    const baseDiscount = Math.min((selectedPeriodsOfType - 1) * 10, 50);
+
+    // Additional early booking discount if booking is more than 30 days in advance
+    const daysUntilCheckIn = differenceInDays(checkIn, new Date());
+    const earlyBookingBonus = daysUntilCheckIn > 30 ? 5 : 0;
+
+    return Math.min(baseDiscount + earlyBookingBonus, 50) / 100;
   };
 
   // Calculate periods based on preferred payment type
@@ -104,7 +116,7 @@ const calculateOptimalPaymentBreakdown = (
     }
 
     // Update the comparison on line 107 to fix type error
-    if (property.weeklyRate && preferredType === 'monthly') {
+    if (property.weeklyRate && preferredType !== 'daily') {
       while (differenceInDays(endDate, currentDate) >= 7) {
         const weeklyEnd = addWeeks(currentDate, 1);
         const baseAmount = Number(property.weeklyRate);
@@ -142,56 +154,71 @@ const calculateOptimalPaymentBreakdown = (
   // Apply discounts to selected periods
   periods.forEach((period, index) => {
     if (selectedPeriods.includes(index) || prepayAll) {
-      const discount = calculateDiscount(period.type, index);
-      period.amount = period.baseAmount * (1 - discount);
+      const discountPercent = calculateDiscount(period.type, index);
+      const discountAmount = period.baseAmount * discountPercent;
+      period.amount = period.baseAmount - discountAmount;
       period.isPrepaid = true;
+      period.discountAmount = discountAmount;
+      period.discountPercent = discountPercent * 100;
     } else {
       period.amount = period.baseAmount;
       period.isPrepaid = false;
+      period.discountAmount = 0;
+      period.discountPercent = 0;
     }
   });
 
-  // Determine primary package type
-  const primaryType = preferredType === 'daily' ? 'daily' :
-                     periodCount.monthly > 0 ? 'monthly' :
-                     periodCount.weekly > 0 ? 'weekly' : 'daily';
+  // Calculate total savings
+  const totalSavings = periods.reduce((sum, period) => sum + (period.discountAmount || 0), 0);
 
-  const totalAmount = periods.reduce((sum, period) => sum + period.amount, 0);
+  // Return updated breakdown with savings information
+  return {
+    primaryType: preferredType === 'daily' ? 'daily' :
+                periodCount.monthly > 0 ? 'monthly' :
+                periodCount.weekly > 0 ? 'weekly' : 'daily',
+    periods,
+    totalAmount: periods.reduce((sum, period) => sum + period.amount, 0),
+    depositAmount: calculateDepositAmount(property, totalDays, periods),
+    initialPayment: calculateInitialPayment(periods, selectedPeriods, prepayAll),
+    totalSavings,
+    effectiveRate: calculateEffectiveRate(periods, totalDays)
+  };
+};
 
-  // Count prepaid packages of the primary type
-  const prepaidPacksCount = periods.filter(p => p.type === primaryType && (p.isPrepaid || prepayAll)).length;
-  const isFullyPrepaid = prepayAll || periods.every((_p, i) => selectedPeriods.includes(i));
-
-  // Calculate deposit amount based on stay duration
+// Add helper functions for cleaner code
+const calculateDepositAmount = (property: Property, totalDays: number, periods: PaymentPeriod[]): number => {
   let baseDepositAmount = 0;
-  if (totalDays > 3) { // Only charge deposit for stays longer than 3 days
-    if (totalDays > 60) { // > 2 months
+  if (totalDays > 3) {
+    if (totalDays > 60) {
       baseDepositAmount = property.monthlyRate ? Number(property.monthlyRate) : 1200;
-    } else if (totalDays > 14) { // > 2 weeks
+    } else if (totalDays > 14) {
       baseDepositAmount = property.weeklyRate ? Number(property.weeklyRate) : 420;
-    } else { // > 3 days
+    } else {
       baseDepositAmount = property.rate ? Number(property.rate) : 90;
     }
   }
 
-  // Apply deposit rules
-  const depositAmount = isFullyPrepaid ? 0 :
-                       prepaidPacksCount >= 2 ? baseDepositAmount / 2 :
-                       baseDepositAmount;
+  const prepaidPeriodsCount = periods.filter(p => p.isPrepaid).length;
+  const isFullyPrepaid = periods.every(p => p.isPrepaid);
 
-  // Calculate initial payment (selected periods + deposit)
-  const initialPayment = periods.reduce((sum, period, index) =>
-    sum + (selectedPeriods.includes(index) || prepayAll ? period.amount : 0), 0) + depositAmount;
-
-  return {
-    primaryType,
-    periods,
-    totalAmount,
-    depositAmount,
-    initialPayment
-  };
+  return isFullyPrepaid ? 0 : prepaidPeriodsCount >= 2 ? baseDepositAmount / 2 : baseDepositAmount;
 };
 
+const calculateInitialPayment = (
+  periods: PaymentPeriod[],
+  selectedPeriods: number[],
+  prepayAll: boolean
+): number => {
+  return periods.reduce((sum, period, index) =>
+    sum + (selectedPeriods.includes(index) || prepayAll ? period.amount : 0), 0);
+};
+
+const calculateEffectiveRate = (periods: PaymentPeriod[], totalDays: number): number => {
+  const totalAmount = periods.reduce((sum, period) => sum + period.amount, 0);
+  return totalAmount / totalDays; // Daily effective rate after all discounts
+};
+
+// Update the component's JSX to show more detailed discount information
 export default function PaymentEstimator({ property, checkIn, checkOut }: PaymentEstimatorProps) {
   const [, setLocation] = useLocation();
   const [preferredPackageType, setPreferredPackageType] = useState<'monthly' | 'weekly' | 'daily'>('monthly');
@@ -228,6 +255,9 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
       setSelectedPeriods(paymentBreakdown?.periods.map((_, i) => i) || []);
     }
   };
+
+  const formatPercent = (value: number) => `${value.toFixed(0)}%`;
+  const formatCurrency = (value: number) => `$${value.toLocaleString()}`;
 
   if (!paymentBreakdown || !property) return null;
 
@@ -318,10 +348,9 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
               {selectedPeriods.map(index => {
                 const period = paymentBreakdown.periods[index];
                 if (!period) return null;
-                const discount = ((period.baseAmount - period.amount) / period.baseAmount * 100).toFixed(0);
                 return (
                   <div key={index} className="flex justify-between text-sm">
-                    <span>{period.label} {Number(discount) > 0 && `(${discount}% off)`}</span>
+                    <span>{period.label} {period.discountPercent > 0 && `(${formatPercent(period.discountPercent)} off)`}</span>
                     <span>${period.amount.toLocaleString()}</span>
                   </div>
                 );
@@ -360,13 +389,31 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
             </div>
           </div>
 
+          {/* Add a new section for savings summary */}
+          {paymentBreakdown.totalSavings > 0 && (
+            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+              <h3 className="font-semibold text-green-700 mb-2">Your Savings</h3>
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span>Total Savings</span>
+                  <span className="font-semibold text-green-600">
+                    {formatCurrency(paymentBreakdown.totalSavings)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Effective Daily Rate</span>
+                  <span>{formatCurrency(paymentBreakdown.effectiveRate)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Payment Schedule */}
           <div className="space-y-4">
             <h3 className="text-sm font-semibold">Payment Schedule</h3>
             <div className="divide-y">
               {paymentBreakdown.periods.map((period, index) => {
                 const isSelected = selectedPeriods.includes(index) || prepayAll;
-                const discount = ((period.baseAmount - period.amount) / period.baseAmount * 100).toFixed(0);
                 return (
                   <div key={index} className="py-4">
                     <div className="flex justify-between items-start">
@@ -381,9 +428,9 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                         <div className="space-y-1">
                           <div className="font-medium">
                             {period.label}
-                            {isSelected && Number(discount) > 0 && (
+                            {isSelected && period.discountPercent && period.discountPercent > 0 && (
                               <span className="ml-2 text-sm text-green-600">
-                                ({discount}% off)
+                                ({formatPercent(period.discountPercent)} off)
                               </span>
                             )}
                           </div>
@@ -394,10 +441,10 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                       </div>
                       <div className="text-right">
                         <div className="font-medium">
-                          ${period.amount.toLocaleString()}
-                          {isSelected && period.amount !== period.baseAmount && (
+                          {formatCurrency(period.amount)}
+                          {isSelected && period.discountAmount && period.discountAmount > 0 && (
                             <div className="text-sm text-muted-foreground line-through">
-                              ${period.baseAmount.toLocaleString()}
+                              {formatCurrency(period.baseAmount)}
                             </div>
                           )}
                         </div>
@@ -422,9 +469,9 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                     <div key={index} className="flex justify-between text-sm">
                       <span>
                         {period.label}
-                        {(selectedPeriods.includes(index) || prepayAll) && period.amount !== period.baseAmount && (
+                        {(selectedPeriods.includes(index) || prepayAll) && period.discountAmount && period.discountAmount > 0 && (
                           <span className="ml-2 text-green-600">
-                            ({((period.baseAmount - period.amount) / period.baseAmount * 100).toFixed(0)}% off)
+                            ({formatPercent(period.discountPercent)} off)
                           </span>
                         )}
                       </span>
