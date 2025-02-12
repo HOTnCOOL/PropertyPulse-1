@@ -6,7 +6,7 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-// Add request logging middleware
+// Add request logging middleware with more detailed error information
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
@@ -37,67 +37,74 @@ app.use((req, res, next) => {
   next();
 });
 
+// Add health check endpoint
+app.get("/health", (_req, res) => {
+  res.json({ status: "ok" });
+});
+
 async function startServer() {
-  const startPort = parseInt(process.env.PORT || "5000", 10);
-  let currentPort = startPort;
-  const maxRetries = 3;
-  let retries = 0;
+  const port = 5001;
 
-  while (retries < maxRetries) {
-    try {
-      log(`Starting server on port ${currentPort}...`);
-      const server = registerRoutes(app);
+  try {
+    log(`Starting server on port ${port}...`);
+    const server = registerRoutes(app);
 
-      // Error handling middleware
-      app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-        const status = err.status || err.statusCode || 500;
-        const message = err.message || "Internal Server Error";
-        log(`Error occurred: ${message}`);
-        res.status(status).json({ message });
-      });
+    // Error handling middleware with detailed logging
+    app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+      const status = err.status || err.statusCode || 500;
+      const message = err.message || "Internal Server Error";
+      const stack = err.stack || "";
+      log(`Error occurred: ${message}\nStack: ${stack}`);
+      res.status(status).json({ message });
+    });
 
-      // Setup middleware based on environment
-      const isDev = app.get("env") === "development";
-      log(`Running in ${isDev ? "development" : "production"} mode`);
+    // Setup middleware based on environment
+    const isDev = app.get("env") === "development";
+    log(`Running in ${isDev ? "development" : "production"} mode`);
 
-      if (isDev && !process.env.SKIP_VITE) {
+    if (isDev && !process.env.SKIP_VITE) {
+      try {
         log("Setting up Vite middleware...");
         await setupVite(app, server);
         log("Vite middleware setup complete");
-      } else {
-        log("Using static file serving...");
+      } catch (viteError) {
+        log(`Vite middleware setup failed: ${viteError}`);
+        // Fall back to static serving if Vite fails
+        log("Falling back to static file serving...");
         serveStatic(app);
       }
-
-      // Start server with a promise that resolves immediately after listening
-      await new Promise<void>((resolve, reject) => {
-        server
-          .listen(currentPort, "0.0.0.0")
-          .once("listening", () => {
-            log(`Server started successfully on port ${currentPort}`);
-            resolve();
-          })
-          .once("error", (err: NodeJS.ErrnoException) => {
-            reject(err);
-          });
-      });
-
-      // If we get here without an error, break the loop
-      break;
-    } catch (error) {
-      log(`Attempt ${retries + 1} failed: ${error}`);
-      if (retries >= maxRetries - 1) {
-        log(`Failed to start server after ${maxRetries} attempts`);
-        throw error;
-      }
-      retries++;
-      currentPort++; // Try the next port
+    } else {
+      log("Using static file serving...");
+      serveStatic(app);
     }
+
+    // Start server
+    await new Promise<void>((resolve, reject) => {
+      server
+        .listen(port, "0.0.0.0")
+        .once("listening", () => {
+          log(`Server started successfully on port ${port}`);
+          resolve();
+        })
+        .once("error", (err: NodeJS.ErrnoException) => {
+          log(`Server startup error: ${err.message}`);
+          reject(err);
+        });
+    });
+
+  } catch (error) {
+    log(`Fatal error starting server: ${error}`);
+    // Don't exit process on error, let it attempt to recover
+    throw error;
   }
 }
 
-// Start the server
+// Start the server with error handling
 startServer().catch((error) => {
   log(`Fatal error starting server: ${error}`);
-  process.exit(1);
+  // Wait before retrying to avoid rapid restarts
+  setTimeout(() => {
+    log("Attempting server restart...");
+    startServer();
+  }, 5000);
 });
