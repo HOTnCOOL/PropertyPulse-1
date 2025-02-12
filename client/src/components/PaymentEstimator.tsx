@@ -53,10 +53,10 @@ const calculateOptimalPaymentBreakdown = (
   let currentDate = startOfDay(new Date(checkIn));
   const endDate = startOfDay(new Date(checkOut));
   let periodCount = { monthly: 0, weekly: 0, daily: 0 };
+  const totalDays = differenceInDays(endDate, currentDate);
 
-  // If daily rate is preferred, calculate entire stay as daily
+  // Calculate periods based on preferred payment type
   if (preferredType === 'daily') {
-    const totalDays = differenceInDays(endDate, currentDate);
     if (totalDays > 0) {
       periods.push({
         type: 'daily',
@@ -65,7 +65,7 @@ const calculateOptimalPaymentBreakdown = (
         amount: Number(property.rate) * totalDays,
         label: `${totalDays} Day${totalDays > 1 ? 's' : ''}`
       });
-      periodCount.daily = totalDays; // Set the actual number of days
+      periodCount.daily = totalDays;
     }
   } else {
     // Calculate full months first if monthly rate is available
@@ -112,31 +112,36 @@ const calculateOptimalPaymentBreakdown = (
     }
   }
 
-  // Determine primary package type based on which type covers most days
+  // Determine primary package type
   const primaryType = preferredType === 'daily' ? 'daily' :
                      periodCount.monthly > 0 ? 'monthly' :
                      periodCount.weekly > 0 ? 'weekly' : 'daily';
 
   const totalAmount = periods.reduce((sum, period) => sum + period.amount, 0);
 
-  // Calculate deposit amount based on stay duration and payment type
-  const totalDays = differenceInDays(endDate, currentDate);
-  const isFullyPrepaid = periods.every(p => p.isPrepaid);
+  // Count prepaid packages of the primary type
   const prepaidPacksCount = periods.filter(p => p.type === primaryType && p.isPrepaid).length;
+  const isFullyPrepaid = periods.every(p => p.isPrepaid);
 
+  // Calculate deposit amount based on stay duration
   let baseDepositAmount = 0;
-  if (totalDays > 60) { // > 2 months
-    baseDepositAmount = Number(property.monthlyRate) || 1200;
-  } else if (totalDays > 14) { // > 2 weeks
-    baseDepositAmount = Number(property.weeklyRate) || 420;
-  } else if (totalDays > 3) { // > 3 days
-    baseDepositAmount = Number(property.rate) || 90;
+  if (totalDays > 3) { // Only charge deposit for stays longer than 3 days
+    if (totalDays > 60) { // > 2 months
+      baseDepositAmount = property.monthlyRate ? Number(property.monthlyRate) : 1200;
+    } else if (totalDays > 14) { // > 2 weeks
+      baseDepositAmount = property.weeklyRate ? Number(property.weeklyRate) : 420;
+    } else { // > 3 days
+      baseDepositAmount = property.rate ? Number(property.rate) : 90;
+    }
   }
 
-  // Apply deposit reductions
-  const depositAmount = isFullyPrepaid ? 0 : // No deposit for fully prepaid bookings
-                       prepaidPacksCount >= 2 ? baseDepositAmount / 2 : // Half deposit if 2+ packs prepaid
-                       baseDepositAmount; // Full deposit otherwise
+  // Apply deposit rules:
+  // 1. No deposit for fully prepaid bookings
+  // 2. Half deposit if 2+ packs of same type are prepaid
+  // 3. Full deposit otherwise
+  const depositAmount = isFullyPrepaid ? 0 : 
+                       prepaidPacksCount >= 2 ? baseDepositAmount / 2 : 
+                       baseDepositAmount;
 
   return {
     primaryType,
