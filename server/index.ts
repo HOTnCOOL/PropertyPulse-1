@@ -39,7 +39,8 @@ app.use((req, res, next) => {
 });
 
 async function startServer(): Promise<HttpServer> {
-  const startPort = parseInt(process.env.PORT || "3000", 10); // Changed default port to 3000
+  // Try a range of ports starting from 3001
+  const startPort = parseInt(process.env.PORT || "3001", 10);
   const maxRetries = 10;
   let currentPort = startPort;
   let retries = 0;
@@ -62,22 +63,6 @@ async function startServer(): Promise<HttpServer> {
       const isDev = app.get("env") === "development";
       log(`Running in ${isDev ? "development" : "production"} mode`);
 
-      if (isDev && !process.env.SKIP_VITE) {
-        log("Setting up Vite middleware...");
-        await setupVite(app, server);
-        log("Vite middleware setup complete");
-      } else {
-        log("Using static file serving...");
-        serveStatic(app);
-      }
-
-      // Track active connections to ensure clean shutdown
-      const connections = new Set<any>();
-      server.on('connection', (conn) => {
-        connections.add(conn);
-        conn.on('close', () => connections.delete(conn));
-      });
-
       // Start server with a promise that resolves immediately after listening
       await new Promise<void>((resolve, reject) => {
         if (!server) {
@@ -94,8 +79,6 @@ async function startServer(): Promise<HttpServer> {
           cleanup();
           if (err.code === 'EADDRINUSE') {
             log(`Port ${currentPort} is in use, trying next port`);
-            // Close all existing connections
-            connections.forEach((conn) => conn.destroy());
             server?.close();
             currentPort++;
             retries++;
@@ -108,6 +91,20 @@ async function startServer(): Promise<HttpServer> {
         const onListening = () => {
           cleanup();
           log(`Server started successfully on port ${currentPort}`);
+
+          // After successful server start, set up Vite or static serving
+          if (isDev && !process.env.SKIP_VITE) {
+            log("Setting up Vite middleware...");
+            setupVite(app, server as HttpServer).then(() => {
+              log("Vite middleware setup complete");
+            }).catch((error) => {
+              log(`Error setting up Vite: ${error}`);
+            });
+          } else {
+            log("Using static file serving...");
+            serveStatic(app);
+          }
+
           resolve();
         };
 
@@ -125,14 +122,9 @@ async function startServer(): Promise<HttpServer> {
         throw new Error(`Failed to start server after ${maxRetries} attempts`);
       }
       retries++;
-      // Close the server if it exists before trying again
       if (server) {
         await new Promise<void>((resolve) => {
-          if (!server) {
-            resolve();
-            return;
-          }
-          server.close(() => resolve());
+          server?.close(() => resolve());
         });
       }
     }
