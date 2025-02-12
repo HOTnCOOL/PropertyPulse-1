@@ -11,7 +11,7 @@ export default function DepositPolicyPage() {
       <Button
         variant="ghost"
         className="mb-4"
-        onClick={() => setLocation(-1)}
+        onClick={() => window.history.back()}
       >
         <ChevronLeft className="h-4 w-4 mr-2" />
         Back
