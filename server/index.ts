@@ -1,7 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
-import { Server as HttpServer } from "http";
 
 const app = express();
 app.use(express.json());
@@ -38,18 +37,16 @@ app.use((req, res, next) => {
   next();
 });
 
-async function startServer(): Promise<HttpServer> {
-  // Try a range of ports starting from 3001
-  const startPort = parseInt(process.env.PORT || "3001", 10);
+async function startServer() {
+  const startPort = parseInt(process.env.PORT || "5000", 10);
   const maxRetries = 10;
   let currentPort = startPort;
   let retries = 0;
-  let server: HttpServer | null = null;
 
   while (retries < maxRetries) {
     try {
       log(`Starting server on port ${currentPort}...`);
-      server = registerRoutes(app);
+      const server = registerRoutes(app);
 
       // Error handling middleware
       app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
@@ -63,78 +60,47 @@ async function startServer(): Promise<HttpServer> {
       const isDev = app.get("env") === "development";
       log(`Running in ${isDev ? "development" : "production"} mode`);
 
+      if (isDev && !process.env.SKIP_VITE) {
+        log("Setting up Vite middleware...");
+        await setupVite(app, server);
+        log("Vite middleware setup complete");
+      } else {
+        log("Using static file serving...");
+        serveStatic(app);
+      }
+
       // Start server with a promise that resolves immediately after listening
       await new Promise<void>((resolve, reject) => {
-        if (!server) {
-          reject(new Error("Failed to create server instance"));
-          return;
-        }
-
-        const cleanup = () => {
-          server?.removeListener('error', onError);
-          server?.removeListener('listening', onListening);
-        };
-
-        const onError = (err: NodeJS.ErrnoException) => {
-          cleanup();
-          if (err.code === 'EADDRINUSE') {
-            log(`Port ${currentPort} is in use, trying next port`);
-            server?.close();
-            currentPort++;
-            retries++;
-            resolve(); // Continue to next iteration
-          } else {
-            reject(err);
-          }
-        };
-
-        const onListening = () => {
-          cleanup();
-          log(`Server started successfully on port ${currentPort}`);
-
-          // After successful server start, set up Vite or static serving
-          if (isDev && !process.env.SKIP_VITE) {
-            log("Setting up Vite middleware...");
-            setupVite(app, server as HttpServer).then(() => {
-              log("Vite middleware setup complete");
-            }).catch((error) => {
-              log(`Error setting up Vite: ${error}`);
-            });
-          } else {
-            log("Using static file serving...");
-            serveStatic(app);
-          }
-
-          resolve();
-        };
-
         server
-          .on('error', onError)
-          .on('listening', onListening)
-          .listen(currentPort, "0.0.0.0");
+          .listen(currentPort, "0.0.0.0")
+          .once("listening", () => {
+            log(`Server started successfully on port ${currentPort}`);
+            resolve();
+          })
+          .once("error", (err: NodeJS.ErrnoException) => {
+            if (err.code === "EADDRINUSE") {
+              log(`Port ${currentPort} is in use, trying next port`);
+              server.close();
+              currentPort++;
+              retries++;
+              resolve(); // Continue to next iteration
+            } else {
+              reject(err);
+            }
+          });
       });
 
-      // If we get here without throwing, we've successfully started
+      // If we get here without an error, break the loop
       break;
     } catch (error) {
       log(`Attempt ${retries + 1} failed: ${error}`);
       if (retries >= maxRetries - 1) {
-        throw new Error(`Failed to start server after ${maxRetries} attempts`);
+        log(`Failed to start server after ${maxRetries} attempts`);
+        throw error;
       }
       retries++;
-      if (server) {
-        await new Promise<void>((resolve) => {
-          server?.close(() => resolve());
-        });
-      }
     }
   }
-
-  if (!server) {
-    throw new Error("Failed to start server");
-  }
-
-  return server;
 }
 
 // Start the server
