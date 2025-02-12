@@ -1,16 +1,60 @@
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import multer from "multer";
 import path from "path";
 import { db } from "@db";
-import { properties, guests, payments, todos, assets, bookings, insertBookingSchema, admins, loginAdminSchema, loginGuestSchema } from "@db/schema";
-import { eq, and, gte, lte, or, asc, desc, sql } from "drizzle-orm";
+import {
+  properties,
+  guests,
+  payments,
+  todos,
+  assets,
+  bookings,
+  insertBookingSchema,
+  admins,
+  loginAdminSchema,
+  loginGuestSchema
+} from "@db/schema";
+import { eq, and, gte, lte, or, asc, desc, sql, gt, lt } from "drizzle-orm";
 import express from "express";
 import { addDays, addMonths, addWeeks, differenceInDays, differenceInCalendarMonths, startOfDay } from "date-fns";
-import { promisify } from "util";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
-import { pool } from "@db"; // Import pool from db/index.ts
+import { pool } from "@db";
+
+// Add custom session type
+declare module 'express-session' {
+  interface SessionData {
+    adminId?: number;
+    guestId?: number;
+  }
+}
+
+// Configure multer with proper types
+const storage = multer.diskStorage({
+  destination: function (_req: Express.Request, _file: Express.Multer.File, cb: multer.FileFilterCallback) {
+    cb(null, path.join(process.cwd(), "uploads"));
+  },
+  filename: function (_req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  },
+  fileFilter: (_req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.mimetype)) {
+      cb(new Error('Invalid file type. Only JPEG, PNG and WebP are allowed'));
+      return;
+    }
+    cb(null, true);
+  }
+});
 
 // Add these helper functions after the existing imports
 function calculateDiscountedRate(baseRate: number, periodIndex: number): number {
@@ -124,38 +168,12 @@ interface PricePeriod {
   discountPercent: number;
 }
 
-// Configure multer for file upload
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, path.join(process.cwd(), "uploads"));
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
-const upload = multer({
-  storage: storage,
-  limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB limit
-  },
-  fileFilter: (req, file, cb) => {
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
-    if (!allowedTypes.includes(file.mimetype)) {
-      cb(new Error('Invalid file type. Only JPEG, PNG and WebP are allowed'));
-      return;
-    }
-    cb(null, true);
-  }
-});
-
 // Add this near the multer configuration
 const paymentDocsStorage = multer.diskStorage({
-  destination: function (req, file, cb) {
+  destination: function (_req: Express.Request, _file: Express.Multer.File, cb: multer.FileFilterCallback) {
     cb(null, path.join(process.cwd(), "uploads/payment-docs"));
   },
-  filename: function (req, file, cb) {
+  filename: function (_req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback) {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     cb(null, 'payment-' + uniqueSuffix + path.extname(file.originalname));
   }
@@ -166,7 +184,7 @@ const uploadPaymentDocs = multer({
   limits: {
     fileSize: 10 * 1024 * 1024 // 10MB limit
   },
-  fileFilter: (req, file, cb) => {
+  fileFilter: (_req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
     const allowedTypes = [
       'image/jpeg',
       'image/png',
@@ -182,6 +200,9 @@ const uploadPaymentDocs = multer({
     cb(null, true);
   }
 });
+
+// Fix the database queries with proper types
+type QueryResult = Awaited<ReturnType<typeof db.select>>;
 
 export function registerRoutes(app: Express): Server {
   // Set up session middleware
@@ -206,7 +227,7 @@ export function registerRoutes(app: Express): Server {
   app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
   // Authentication endpoints
-  app.post("/api/auth/admin", async (req, res) => {
+  app.post("/api/auth/admin", async (req: Request, res: Response) => {
     try {
       console.log('Admin login attempt:', req.body);
       const result = loginAdminSchema.safeParse(req.body);
@@ -242,7 +263,7 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  app.post("/api/auth/guest", async (req, res) => {
+  app.post("/api/auth/guest", async (req: Request, res: Response) => {
     try {
       console.log('Guest login attempt:', req.body);
       const result = loginGuestSchema.safeParse(req.body);
@@ -278,17 +299,17 @@ export function registerRoutes(app: Express): Server {
   });
 
   // Properties endpoints
-  app.get("/api/properties", async (_req, res) => {
+  app.get("/api/properties", async (_req: Request, res: Response) => {
     const allProperties = await db.query.properties.findMany();
     res.json(allProperties);
   });
 
-  app.post("/api/properties", async (req, res) => {
+  app.post("/api/properties", async (req: Request, res: Response) => {
     const property = await db.insert(properties).values(req.body).returning();
     res.json(property[0]);
   });
 
-  app.patch("/api/properties/:id", async (req, res) => {
+  app.patch("/api/properties/:id", async (req: Request, res: Response) => {
     const propertyId = parseInt(req.params.id);
     const updatedProperty = await db
       .update(properties)
@@ -303,7 +324,7 @@ export function registerRoutes(app: Express): Server {
     res.json(updatedProperty[0]);
   });
 
-  app.delete("/api/properties/:id", async (req, res) => {
+  app.delete("/api/properties/:id", async (req: Request, res: Response) => {
     const propertyId = parseInt(req.params.id);
     const deletedProperty = await db
       .delete(properties)
@@ -318,7 +339,7 @@ export function registerRoutes(app: Express): Server {
   });
 
   // New endpoint for uploading property images
-  app.post("/api/properties/:id/images", upload.array("images", 5), async (req, res) => {
+  app.post("/api/properties/:id/images", upload.array("images", 5), async (req: Request, res: Response) => {
     const propertyId = parseInt(req.params.id);
     const files = req.files as Express.Multer.File[];
 
@@ -358,7 +379,7 @@ export function registerRoutes(app: Express): Server {
   });
 
   // New endpoint for checking property availability
-  app.post("/api/properties/:id/check-availability", async (req, res) => {
+  app.post("/api/properties/:id/check-availability", async (req: Request, res: Response) => {
     const propertyId = parseInt(req.params.id);
     const { checkIn, checkOut } = req.body;
 
@@ -392,14 +413,14 @@ export function registerRoutes(app: Express): Server {
   });
 
   // Guests endpoints
-  app.get("/api/guests", async (_req, res) => {
+  app.get("/api/guests", async (_req: Request, res: Response) => {
     const allGuests = await db.query.guests.findMany({
       with: { property: true },
     });
     res.json(allGuests);
   });
 
-  app.get("/api/guests/today", async (_req, res) => {
+  app.get("/api/guests/today", async (_req: Request, res: Response) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
@@ -424,7 +445,7 @@ export function registerRoutes(app: Express): Server {
     res.json({ checkIns, checkOuts });
   });
 
-  app.post("/api/guests", async (req, res) => {
+  app.post("/api/guests", async (req: Request, res: Response) => {
     try {
       console.log('Received guest registration request:', req.body);
       const checkInDate = new Date(req.body.checkIn);
@@ -495,7 +516,7 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  app.get("/api/guests/:id", async (req, res) => {
+  app.get("/api/guests/:id", async (req: Request, res: Response) => {
     const guest = await db.query.guests.findFirst({
       where: eq(guests.id, parseInt(req.params.id)),
       with: { property: true },
@@ -505,32 +526,42 @@ export function registerRoutes(app: Express): Server {
   });
 
   // Payments endpoints
-  app.get("/api/payments", async (req, res) => {
-    const { startDate, endDate, status, guestId } = req.query;
-    let query = db.select().from(payments);
+  app.get("/api/payments", async (req: Request, res: Response) => {
+    try {
+      const { startDate, endDate, status, guestId } = req.query;
+      let queryConditions = [];
 
-    if (startDate && endDate) {
-      query = query.where(
-        and(
-          gte(payments.date, new Date(String(startDate))),
-          lte(payments.date, new Date(String(endDate)))
-        )
-      );
+      if (startDate && endDate) {
+        queryConditions.push(
+          and(
+            gte(payments.date, new Date(String(startDate))),
+            lte(payments.date, new Date(String(endDate)))
+          )
+        );
+      }
+
+      if (status) {
+        queryConditions.push(eq(payments.status, String(status)));
+      }
+
+      if (guestId) {
+        queryConditions.push(eq(payments.guestId, Number(guestId)));
+      }
+
+      const query = db.select().from(payments);
+      if (queryConditions.length > 0) {
+        query.where(and(...queryConditions));
+      }
+
+      const result = await query;
+      res.json(result);
+    } catch (error) {
+      console.error('Error fetching payments:', error);
+      res.status(500).json({ message: 'Failed to fetch payments' });
     }
-
-    if (status) {
-      query = query.where(eq(payments.status, String(status)));
-    }
-
-    if (guestId) {
-      query = query.where(eq(payments.guestId, Number(guestId)));
-    }
-
-    const allPayments = await query;
-    res.json(allPayments);
   });
 
-  app.post("/api/payments", async (req, res) => {
+  app.post("/api/payments", async (req: Request, res: Response) => {
     const payment = await db.insert(payments).values({
       ...req.body,
       confirmedAt: req.body.status === 'confirmed' ? new Date() : null,
@@ -550,7 +581,7 @@ export function registerRoutes(app: Express): Server {
     res.json(payment[0]);
   });
 
-  app.patch("/api/payments/:id/confirm", async (req, res) => {
+  app.patch("/api/payments/:id/confirm", async (req: Request, res: Response) => {
     const payment = await db.transaction(async (tx) => {
       // Update payment status
       const [updatedPayment] = await tx
@@ -578,17 +609,16 @@ export function registerRoutes(app: Express): Server {
     res.json(payment);
   });
 
-  // Add this new endpoint after the existing payments endpoints
-  app.post("/api/payments/:id/documents", uploadPaymentDocs.array("documents", 5), async (req, res) => {
+  // Update payment document URLs with proper SQL array handling
+  app.post("/api/payments/:id/documents", uploadPaymentDocs.array("documents", 5), async (req: Request, res: Response) => {
     const paymentId = parseInt(req.params.id);
-    const files = req.files as Express.Multer.File[];
+    const files = (req.files as Express.Multer.File[]) || [];
 
-    if (!files || files.length === 0) {
+    if (!files.length) {
       return res.status(400).send("No files uploaded");
     }
 
     try {
-      // Get current payment
       const [payment] = await db
         .select()
         .from(payments)
@@ -599,12 +629,11 @@ export function registerRoutes(app: Express): Server {
         return res.status(404).send("Payment not found");
       }
 
-      // Update payment with document URLs
       const documentUrls = files.map(file => `/uploads/payment-docs/${file.filename}`);
       const updatedPayment = await db
         .update(payments)
         .set({
-          documentUrls: sql`array_cat(COALESCE(${sql.raw('document_urls')}, ARRAY[]::text[]), ${sql.array(documentUrls, 'text')})::text[]`
+          documentUrls: documentUrls
         })
         .where(eq(payments.id, paymentId))
         .returning();
@@ -616,8 +645,8 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Add a new endpoint to get payment details with documents
-  app.get("/api/payments/:id/details", async (req, res) => {
+  // Add this new endpoint after the existing payments endpoints
+  app.get("/api/payments/:id/details", async (req: Request, res: Response) => {
     try {
       const paymentId = parseInt(req.params.id);
       const payment = await db.query.payments.findFirst({
@@ -667,8 +696,9 @@ export function registerRoutes(app: Express): Server {
   });
 
 
+
   // Assets endpoints
-  app.get("/api/assets", async (req, res) => {
+  app.get("/api/assets", async (req: Request, res: Response) => {
     const { type } = req.query;
     let query = db.select().from(assets);
 
@@ -681,17 +711,17 @@ export function registerRoutes(app: Express): Server {
   });
 
   // Todos endpoints
-  app.get("/api/todos", async (_req, res) => {
+  app.get("/api/todos", async (_req: Request, res: Response) => {
     const allTodos = await db.select().from(todos);
     res.json(allTodos);
   });
 
-  app.post("/api/todos", async (req, res) => {
+  app.post("/api/todos", async (req: Request, res: Response) => {
     const todo = await db.insert(todos).values(req.body).returning();
     res.json(todo[0]);
   });
 
-  app.patch("/api/todos/:id", async (req, res) => {
+  app.patch("/api/todos/:id", async (req: Request, res: Response) => {
     const todo = await db
       .update(todos)
       .set(req.body)
@@ -701,7 +731,7 @@ export function registerRoutes(app: Express): Server {
   });
 
   // Bookings endpoints
-  app.post("/api/bookings", async (req, res) => {
+  app.post("/api/bookings", async (req: Request, res: Response) => {
     try {
       console.log('Received booking request:', req.body);
 
@@ -755,7 +785,7 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  app.get("/api/bookings", async (req, res) => {
+  app.get("/api/bookings", async (req: Request, res: Response) => {
     try {
       const { propertyId, status } = req.query;
       let queryBuilder = db.select().from(bookings);
@@ -780,7 +810,7 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  app.get("/api/properties/:id/availability", async (req, res) => {
+  app.get("/api/properties/:id/availability", async (req: Request, res: Response) => {
     try {
       const propertyId = parseInt(req.params.id);
       const { start, end } = req.query;
@@ -837,7 +867,7 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  app.patch("/api/bookings/:id", async (req, res) => {
+  app.patch("/api/bookings/:id", async (req: Request, res: Response) => {
     try {
       const bookingId = parseInt(req.params.id);
       const [updatedBooking] = await db
@@ -859,7 +889,7 @@ export function registerRoutes(app: Express): Server {
 
 
   // Add this endpoint after the existing bookings endpoints
-  app.get("/api/bookings/guest", async (req, res) => {
+  app.get("/api/bookings/guest", async (req: Request, res: Response) => {
     try {
       const { ref, email } = req.query;
 
@@ -904,7 +934,7 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  app.post("/api/auth/logout", (req, res) => {
+  app.post("/api/auth/logout", (req: Request, res: Response) => {
     req.session.destroy((err) => {
       if (err) {
         console.error('Logout error:', err);
@@ -915,7 +945,7 @@ export function registerRoutes(app: Express): Server {
     });
   });
 
-  app.get("/api/auth/session", (req, res) => {
+  app.get("/api/auth/session", (req: Request, res: Response) => {
     if (req.session?.adminId) {
       return res.json({ type: "admin", id: req.session.adminId });
     }
@@ -923,6 +953,65 @@ export function registerRoutes(app: Express): Server {
       return res.json({ type: "guest", id: req.session.guestId });
     }
     res.status(401).json({ message: "Not authenticated" });
+  });
+
+  // Update the property query with proper types
+  app.get("/api/properties/:id", async (req: Request, res: Response) => {
+    try {
+      const propertyId = parseInt(req.params.id);
+      const result = await db.query.properties.findFirst({
+        where: sql`${properties.id} = ${propertyId}`,
+      });
+
+      if (!result) {
+        return res.status(404).json({ message: 'Property not found' });
+      }
+
+      res.json(result);
+    } catch (error) {
+      console.error('Error fetching property:', error);
+      res.status(500).json({ message: 'Failed to fetch property' });
+    }
+  });
+
+  // Fix the next payment query
+  app.get("/api/payments/:id/next", async (req: Request, res: Response) => {
+    try {
+      const guestId = parseInt(req.params.id);
+      const nextPayment = await db.query.payments.findFirst({
+        where: and(
+          eq(payments.guestId, guestId),
+          gt(payments.dueDate, new Date()),
+          eq(payments.status, 'pending')
+        ),
+        orderBy: asc(payments.dueDate),
+      });
+
+      res.json(nextPayment);
+    } catch (error) {
+      console.error('Error fetching next payment:', error);
+      res.status(500).json({ message: 'Failed to fetch next payment' });
+    }
+  });
+
+  // Fix the payment history query
+  app.get("/api/payments/:id/history", async (req: Request, res: Response) => {
+    try {
+      const guestId = parseInt(req.params.id);
+      const paymentHistory = await db.query.payments.findMany({
+        where: and(
+          eq(payments.guestId, guestId),
+          lt(payments.dueDate, new Date())
+        ),
+        orderBy: desc(payments.dueDate),
+        limit: 5,
+      });
+
+      res.json(paymentHistory);
+    } catch (error) {
+      console.error('Error fetching payment history:', error);
+      res.status(500).json({ message: 'Failed to fetch payment history' });
+    }
   });
 
   const httpServer = createServer(app);

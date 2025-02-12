@@ -103,8 +103,8 @@ const calculateOptimalPaymentBreakdown = (
       }
     }
 
-    // Calculate full weeks for remaining days if weekly rate is available
-    if (property.weeklyRate && preferredType !== 'daily') {
+    // Update the comparison on line 107 to fix type error
+    if (property.weeklyRate && preferredType === 'monthly') {
       while (differenceInDays(endDate, currentDate) >= 7) {
         const weeklyEnd = addWeeks(currentDate, 1);
         const baseAmount = Number(property.weeklyRate);
@@ -120,6 +120,7 @@ const calculateOptimalPaymentBreakdown = (
         currentDate = weeklyEnd;
       }
     }
+
 
     // Calculate remaining days at daily rate
     const remainingDays = differenceInDays(endDate, currentDate);
@@ -174,12 +175,12 @@ const calculateOptimalPaymentBreakdown = (
   }
 
   // Apply deposit rules
-  const depositAmount = isFullyPrepaid ? 0 : 
-                       prepaidPacksCount >= 2 ? baseDepositAmount / 2 : 
+  const depositAmount = isFullyPrepaid ? 0 :
+                       prepaidPacksCount >= 2 ? baseDepositAmount / 2 :
                        baseDepositAmount;
 
   // Calculate initial payment (selected periods + deposit)
-  const initialPayment = periods.reduce((sum, period, index) => 
+  const initialPayment = periods.reduce((sum, period, index) =>
     sum + (selectedPeriods.includes(index) || prepayAll ? period.amount : 0), 0) + depositAmount;
 
   return {
