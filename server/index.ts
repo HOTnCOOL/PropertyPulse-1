@@ -45,7 +45,7 @@ async function startServer() {
 
   while (retries < maxRetries) {
     try {
-      log(`Attempting to start server on port ${currentPort}...`);
+      log(`Starting server on port ${currentPort}...`);
       const server = registerRoutes(app);
 
       // Error handling middleware
@@ -69,47 +69,41 @@ async function startServer() {
         serveStatic(app);
       }
 
-      // Start server
+      // Start server with a promise that resolves immediately after listening
       await new Promise<void>((resolve, reject) => {
-        server.listen(currentPort, "0.0.0.0")
+        server
+          .listen(currentPort, "0.0.0.0")
           .once("listening", () => {
-            log(`Server successfully started on port ${currentPort}`);
+            log(`Server started successfully on port ${currentPort}`);
             resolve();
           })
           .once("error", (err: NodeJS.ErrnoException) => {
             if (err.code === "EADDRINUSE") {
-              log(`Port ${currentPort} is in use`);
+              log(`Port ${currentPort} is in use, trying next port`);
+              server.close();
               currentPort++;
               retries++;
-              if (retries < maxRetries) {
-                log(`Trying next port: ${currentPort}`);
-                server.close();
-                resolve();
-              } else {
-                reject(new Error(`Failed to find an available port after ${maxRetries} attempts`));
-              }
+              resolve(); // Continue to next iteration
             } else {
-              log(`Server error: ${err.message}`);
               reject(err);
             }
           });
       });
 
-      if (true) { //server.listening is undefined in the context of the promise
-        break;
-      }
+      // If we get here without an error, break the loop
+      break;
     } catch (error) {
       log(`Attempt ${retries + 1} failed: ${error}`);
-      retries++;
-      if (retries >= maxRetries) {
+      if (retries >= maxRetries - 1) {
         log(`Failed to start server after ${maxRetries} attempts`);
-        process.exit(1);
+        throw error;
       }
+      retries++;
     }
   }
 }
 
-// Start the server with improved error handling
+// Start the server
 startServer().catch((error) => {
   log(`Fatal error starting server: ${error}`);
   process.exit(1);

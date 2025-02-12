@@ -1,30 +1,29 @@
 import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { 
-  format, 
+import {
+  format,
   differenceInDays,
   differenceInCalendarMonths,
   addMonths,
   addWeeks,
   startOfDay,
 } from "date-fns";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Property } from "@db/schema";
 import { useLocation } from "wouter";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Link } from "wouter";
 
 interface PaymentEstimatorProps {
   property?: Property;
   checkIn?: Date;
   checkOut?: Date;
-}
-
-interface PaymentPeriod {
-  type: 'monthly' | 'weekly' | 'daily';
-  startDate: Date;
-  endDate: Date;
-  amount: number;
-  label: string;
 }
 
 interface PaymentPeriod {
@@ -119,18 +118,19 @@ const calculateOptimalPaymentBreakdown = (
                      periodCount.weekly > 0 ? 'weekly' : 'daily';
 
   const totalAmount = periods.reduce((sum, period) => sum + period.amount, 0);
+
   // Calculate deposit amount based on stay duration and payment type
-  const totalDays = differenceInDays(endDate, startDate);
+  const totalDays = differenceInDays(endDate, currentDate);
   const isFullyPrepaid = periods.every(p => p.isPrepaid);
   const prepaidPacksCount = periods.filter(p => p.type === primaryType && p.isPrepaid).length;
-  
+
   let baseDepositAmount = 0;
   if (totalDays > 60) { // > 2 months
-    baseDepositAmount = 1200;
+    baseDepositAmount = Number(property.monthlyRate) || 1200;
   } else if (totalDays > 14) { // > 2 weeks
-    baseDepositAmount = 420;
+    baseDepositAmount = Number(property.weeklyRate) || 420;
   } else if (totalDays > 3) { // > 3 days
-    baseDepositAmount = 90;
+    baseDepositAmount = Number(property.rate) || 90;
   }
 
   // Apply deposit reductions
@@ -211,7 +211,7 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
             <div className="grid gap-4 sm:grid-cols-3">
               {property.monthlyRate && (
                 <div className="space-y-2">
-                  <div 
+                  <div
                     className={`p-3 bg-white rounded border cursor-pointer transition-colors relative ${
                       preferredPackageType === 'monthly' ? 'border-primary' : ''
                     }`}
@@ -222,7 +222,7 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                     <div className="text-xs text-muted-foreground">per month</div>
                     {packageCounts.monthly > 0 && (
                       <div className={`absolute top-3 right-3 px-4 py-1.5 rounded-full text-base font-semibold
-                        ${preferredPackageType === 'monthly' 
+                        ${preferredPackageType === 'monthly'
                           ? 'bg-primary/15 text-primary'
                           : 'bg-muted/20 text-muted-foreground'}`}>
                         ×{packageCounts.monthly}
@@ -231,7 +231,7 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                   </div>
                   {allCosts.monthly && (
                     <div className={`text-center ${
-                      preferredPackageType === 'monthly' 
+                      preferredPackageType === 'monthly'
                         ? 'text-primary font-medium'
                         : 'text-muted-foreground'
                     }`}>
@@ -242,7 +242,7 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
               )}
               {property.weeklyRate && (
                 <div className="space-y-2">
-                  <div 
+                  <div
                     className={`p-3 bg-white rounded border cursor-pointer transition-colors relative ${
                       preferredPackageType === 'weekly' ? 'border-primary' : ''
                     }`}
@@ -262,7 +262,7 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                   </div>
                   {allCosts.weekly && (
                     <div className={`text-center ${
-                      preferredPackageType === 'weekly' 
+                      preferredPackageType === 'weekly'
                         ? 'text-primary font-medium'
                         : 'text-muted-foreground'
                     }`}>
@@ -272,7 +272,7 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                 </div>
               )}
               <div className="space-y-2">
-                <div 
+                <div
                   className={`p-3 bg-white rounded border cursor-pointer transition-colors relative ${
                     preferredPackageType === 'daily' ? 'border-primary' : ''
                   }`}
@@ -291,7 +291,7 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                   )}
                 </div>
                 <div className={`text-center ${
-                  preferredPackageType === 'daily' 
+                  preferredPackageType === 'daily'
                     ? 'text-primary font-medium'
                     : 'text-muted-foreground'
                 }`}>
@@ -303,30 +303,55 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
 
           {/* Initial Payment Information */}
           <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg space-y-4">
-            <div>
-              <h3 className="text-sm font-semibold mb-2">Initial Payment Required</h3>
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>First {paymentBreakdown.periods[0]?.label}</span>
-                  <span>${paymentBreakdown.periods[0]?.amount.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span>Security Deposit (Fully Refundable)</span>
-                  <span>+${paymentBreakdown.depositAmount.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between font-semibold text-base pt-2 border-t">
-                  <span>Total Initial Payment</span>
-                  <span>${paymentBreakdown.initialPayment.toLocaleString()}</span>
-                </div>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-semibold">Initial Payment Required</h3>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Link href="/policies/deposit-policy" className="text-muted-foreground hover:text-primary">
+                      <Info className="h-4 w-4" />
+                    </Link>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>View our detailed deposit policy</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span>First {paymentBreakdown.periods[0]?.label}</span>
+                <span>${paymentBreakdown.periods[0]?.amount.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span>Security Deposit (Fully Refundable)</span>
+                <span>+${paymentBreakdown.depositAmount.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between font-semibold text-base pt-2 border-t">
+                <span>Total Initial Payment</span>
+                <span>${paymentBreakdown.initialPayment.toLocaleString()}</span>
               </div>
             </div>
 
             <div className="flex items-start gap-2">
               <AlertTriangle className="h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-yellow-700">
-                Initial payment must be received within 24 hours to guarantee availability.
-                The security deposit is fully refundable after stay completion and property inspection.
-              </p>
+              <div className="space-y-2 text-sm text-yellow-700">
+                <p>
+                  Initial payment must be received within 24 hours to guarantee availability.
+                  The security deposit is fully refundable after stay completion and property inspection.
+                </p>
+                {paymentBreakdown.depositAmount === 0 ? (
+                  <p className="font-medium">
+                    No security deposit required for fully prepaid bookings.
+                  </p>
+                ) : (
+                  <p>
+                    Security deposit can be paid in advance or guaranteed by credit card.
+                    {paymentBreakdown.periods.filter(p => p.isPrepaid).length >= 2 &&
+                      " Your deposit is reduced by 50% as you've prepaid 2 or more payment periods."}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
 

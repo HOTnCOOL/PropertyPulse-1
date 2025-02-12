@@ -6,7 +6,8 @@ import Properties from "./pages/Properties";
 import Financials from "./pages/Financials";
 import { PublicPropertyList } from "./pages/PublicPropertyList";
 import GuestPayment from "./pages/GuestPayment";
-import Auth from "./pages/Auth"; // Added import for Auth component
+import Auth from "./pages/Auth";
+import DepositPolicyPage from "./pages/DepositPolicyPage"; // Added import
 import Sidebar from "./components/Sidebar";
 import React from "react";
 
@@ -55,7 +56,13 @@ function App() {
         </PublicLayout>
       </Route>
 
-      <Route path="/auth"> {/* Added route for Auth */}
+      <Route path="/policies/deposit-policy">
+        <PublicLayout>
+          <DepositPolicyPage />
+        </PublicLayout>
+      </Route>
+
+      <Route path="/auth">
         <PublicLayout>
           <Auth />
         </PublicLayout>
