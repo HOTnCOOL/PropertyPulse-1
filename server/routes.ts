@@ -1,135 +1,32 @@
-import type { Express } from "express";
+import type { Express, Request } from "express";
+import type { Multer } from "multer";
 import { createServer, type Server } from "http";
 import multer from "multer";
 import path from "path";
 import { db } from "@db";
 import { properties, guests, payments, todos, assets, bookings, insertBookingSchema, admins, loginAdminSchema, loginGuestSchema } from "@db/schema";
-import { eq, and, gte, lte, or, asc, desc, sql } from "drizzle-orm";
+import { eq, and, gte, lte, or, asc, desc, gt, lt, sql } from "drizzle-orm";
 import express from "express";
 import { addDays, addMonths, addWeeks, differenceInDays, differenceInCalendarMonths, startOfDay } from "date-fns";
 import { promisify } from "util";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
-import { pool } from "@db"; // Import pool from db/index.ts
+import { pool } from "@db";
 
-// Add these helper functions after the existing imports
-function calculateDiscountedRate(baseRate: number, periodIndex: number): number {
-  // Apply 10% discount per period, max 50%
-  const discountPercent = Math.min(periodIndex * 10, 50);
-  return baseRate * (1 - discountPercent / 100);
-}
-
-function calculatePricePeriods(property: any, checkIn: Date, checkOut: Date): PricePeriod[] {
-  console.log('Calculating price periods for stay:', { checkIn, checkOut });
-  const periods: PricePeriod[] = [];
-  let currentDate = startOfDay(new Date(checkIn));
-  const endDate = startOfDay(new Date(checkOut));
-  const normalDailyRate = Number(property.rate);
-
-  // Helper function to calculate period end date for monthly package
-  const calculateMonthlyEnd = (date: Date): Date => {
-    const nextMonth = addMonths(date, 1);
-    return nextMonth <= endDate ? nextMonth : endDate;
-  };
-
-  // Helper function to calculate period end date for weekly package
-  const calculateWeeklyEnd = (date: Date): Date => {
-    const nextWeek = addWeeks(date, 1);
-    return nextWeek <= endDate ? nextWeek : endDate;
-  };
-
-  let periodIndex = 0; // Track period index for discount calculation
-
-  while (currentDate < endDate) {
-    const remainingDays = differenceInDays(endDate, currentDate);
-    console.log('Processing remaining days:', remainingDays);
-
-    // Try to fit complete months first
-    if (property.monthlyRate && differenceInCalendarMonths(endDate, currentDate) >= 1) {
-      const monthlyEnd = calculateMonthlyEnd(currentDate);
-      // Only use monthly rate if we have a complete month
-      if (differenceInCalendarMonths(monthlyEnd, currentDate) === 1) {
-        const baseRate = Number(property.monthlyRate);
-        const discountedRate = calculateDiscountedRate(baseRate, periodIndex);
-        const period = {
-          type: 'monthly' as const,
-          startDate: currentDate,
-          endDate: monthlyEnd,
-          amount: discountedRate,
-          baseRate: baseRate,
-          duration: 1,
-          discountPercent: Math.min(periodIndex * 10, 50)
-        };
-        console.log('Adding monthly period:', period);
-        periods.push(period);
-        currentDate = monthlyEnd;
-        periodIndex++;
-        continue;
-      }
-    }
-
-    // For the remaining period, try to fit complete weeks
-    if (property.weeklyRate && differenceInDays(endDate, currentDate) >= 7) {
-      const weeklyEnd = calculateWeeklyEnd(currentDate);
-      const baseRate = Number(property.weeklyRate);
-      const discountedRate = calculateDiscountedRate(baseRate, periodIndex);
-      const period = {
-        type: 'weekly' as const,
-        startDate: currentDate,
-        endDate: weeklyEnd,
-        amount: discountedRate,
-        baseRate: baseRate,
-        duration: 1,
-        discountPercent: Math.min(periodIndex * 10, 50)
-      };
-      console.log('Adding weekly period:', period);
-      periods.push(period);
-      currentDate = weeklyEnd;
-      periodIndex++;
-      continue;
-    }
-
-    // Use daily rate for any remaining days
-    const remainingDaysCount = differenceInDays(endDate, currentDate);
-    if (remainingDaysCount > 0) {
-      const baseRate = normalDailyRate * remainingDaysCount;
-      const discountedRate = calculateDiscountedRate(baseRate, periodIndex);
-      const period = {
-        type: 'daily' as const,
-        startDate: currentDate,
-        endDate: endDate,
-        amount: discountedRate,
-        baseRate: baseRate,
-        duration: remainingDaysCount,
-        discountPercent: Math.min(periodIndex * 10, 50)
-      };
-      console.log('Adding daily period:', period);
-      periods.push(period);
-      currentDate = endDate;
-    }
+// Declare custom session properties
+declare module 'express-session' {
+  interface SessionData {
+    adminId?: number;
+    guestId?: number;
   }
-
-  console.log('Final price periods:', periods);
-  return periods;
 }
 
-// Update the PricePeriod interface
-interface PricePeriod {
-  type: 'monthly' | 'weekly' | 'daily';
-  startDate: Date;
-  endDate: Date;
-  amount: number;
-  baseRate: number;
-  duration: number;
-  discountPercent: number;
-}
-
-// Configure multer for file upload
+// Update multer configuration with proper types
 const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
+  destination: (_req: Express.Request, _file: Express.Multer.File, cb: (error: Error | null, destination: string) => void) => {
     cb(null, path.join(process.cwd(), "uploads"));
   },
-  filename: function (req, file, cb) {
+  filename: (_req: Express.Request, file: Express.Multer.File, cb: (error: Error | null, filename: string) => void) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     cb(null, uniqueSuffix + path.extname(file.originalname));
   }
@@ -140,7 +37,7 @@ const upload = multer({
   limits: {
     fileSize: 5 * 1024 * 1024 // 5MB limit
   },
-  fileFilter: (req, file, cb) => {
+  fileFilter: (_req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
     if (!allowedTypes.includes(file.mimetype)) {
       cb(new Error('Invalid file type. Only JPEG, PNG and WebP are allowed'));
@@ -152,10 +49,10 @@ const upload = multer({
 
 // Add this near the multer configuration
 const paymentDocsStorage = multer.diskStorage({
-  destination: function (req, file, cb) {
+  destination: function (req: Request, file: Express.Multer.File, cb: (error: Error | null, destination: string) => void) {
     cb(null, path.join(process.cwd(), "uploads/payment-docs"));
   },
-  filename: function (req, file, cb) {
+  filename: function (req: Request, file: Express.Multer.File, cb: (error: Error | null, filename: string) => void) {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     cb(null, 'payment-' + uniqueSuffix + path.extname(file.originalname));
   }
@@ -166,7 +63,7 @@ const uploadPaymentDocs = multer({
   limits: {
     fileSize: 10 * 1024 * 1024 // 10MB limit
   },
-  fileFilter: (req, file, cb) => {
+  fileFilter: (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
     const allowedTypes = [
       'image/jpeg',
       'image/png',
@@ -506,28 +403,33 @@ export function registerRoutes(app: Express): Server {
 
   // Payments endpoints
   app.get("/api/payments", async (req, res) => {
-    const { startDate, endDate, status, guestId } = req.query;
-    let query = db.select().from(payments);
+    try {
+      const { startDate, endDate, status, guestId } = req.query;
+      let queryBuilder = db.select().from(payments);
 
-    if (startDate && endDate) {
-      query = query.where(
-        and(
-          gte(payments.date, new Date(String(startDate))),
-          lte(payments.date, new Date(String(endDate)))
-        )
-      );
+      if (startDate && endDate) {
+        queryBuilder = queryBuilder.where(
+          and(
+            gte(payments.date, new Date(String(startDate))),
+            lte(payments.date, new Date(String(endDate)))
+          )
+        );
+      }
+
+      if (status) {
+        queryBuilder = queryBuilder.where(eq(payments.status, String(status)));
+      }
+
+      if (guestId) {
+        queryBuilder = queryBuilder.where(eq(payments.guestId, Number(guestId)));
+      }
+
+      const allPayments = await queryBuilder;
+      res.json(allPayments);
+    } catch (error) {
+      console.error('Error fetching payments:', error);
+      res.status(500).json({ message: 'Failed to fetch payments' });
     }
-
-    if (status) {
-      query = query.where(eq(payments.status, String(status)));
-    }
-
-    if (guestId) {
-      query = query.where(eq(payments.guestId, Number(guestId)));
-    }
-
-    const allPayments = await query;
-    res.json(allPayments);
   });
 
   app.post("/api/payments", async (req, res) => {
@@ -599,13 +501,15 @@ export function registerRoutes(app: Express): Server {
         return res.status(404).send("Payment not found");
       }
 
-      // Update payment with document URLs
+      // Update payment with document URLs using raw SQL for array operations
       const documentUrls = files.map(file => `/uploads/payment-docs/${file.filename}`);
       const updatedPayment = await db
         .update(payments)
         .set({
-          documentUrls: sql`array_cat(COALESCE(${sql.raw('document_urls')}, ARRAY[]::text[]), ${sql.array(documentUrls, 'text')})::text[]`
-        })
+          documentUrls: sql`ARRAY(
+            SELECT UNNEST(COALESCE(${payments.documentUrls}, ARRAY[]::text[]) || ${sql.array(documentUrls, 'text')})
+          )`
+        } as any)
         .where(eq(payments.id, paymentId))
         .returning();
 
@@ -635,23 +539,16 @@ export function registerRoutes(app: Express): Server {
         return res.status(404).send("Payment not found");
       }
 
-      // Get next payment due
+      // Get next payment due using raw SQL for complex conditions
       const nextPayment = await db.query.payments.findFirst({
-        where: and(
-          eq(payments.guestId, payment.guestId),
-          gt(payments.dueDate, new Date()),
-          eq(payments.status, 'pending')
-        ),
-        orderBy: asc(payments.dueDate)
+        where: sql`${payments.guestId} = ${payment.guestId} AND ${payments.dueDate} > NOW() AND ${payments.status} = 'pending'`,
+        orderBy: [asc(payments.dueDate)]
       });
 
-      // Get payment history
+      // Get payment history using raw SQL
       const paymentHistory = await db.query.payments.findMany({
-        where: and(
-          eq(payments.guestId, payment.guestId),
-          lt(payments.dueDate, new Date())
-        ),
-        orderBy: desc(payments.dueDate),
+        where: sql`${payments.guestId} = ${payment.guestId} AND ${payments.dueDate} < NOW()`,
+        orderBy: [desc(payments.dueDate)],
         limit: 5
       });
 
@@ -665,6 +562,7 @@ export function registerRoutes(app: Express): Server {
       res.status(500).send("Failed to fetch payment details");
     }
   });
+
 
 
   // Assets endpoints
@@ -714,34 +612,16 @@ export function registerRoutes(app: Express): Server {
         });
       }
 
-      // Ensure dates are properly converted to Date objects
-      const checkInDate = new Date(result.data.checkIn);
-      const checkOutDate = new Date(result.data.checkOut);
-
-      // Validate dates
-      if (isNaN(checkInDate.getTime()) || isNaN(checkOutDate.getTime())) {
-        return res.status(400).json({
-          message: "Invalid date format",
-        });
-      }
-
-      if (checkInDate >= checkOutDate) {
-        return res.status(400).json({
-          message: "Check-out date must be after check-in date",
-        });
-      }
-
-      // Create the booking
+      // Create the booking with explicit type casting
       const [booking] = await db.insert(bookings)
         .values({
-          propertyId: result.data.propertyId,
-          guestId: result.data.guestId,
+          ...result.data,
+          checkIn: new Date(result.data.checkIn),
+          checkOut: new Date(result.data.checkOut),
           status: result.data.status,
           totalAmount: result.data.totalAmount,
-          notes: result.data.notes,
-          checkIn: checkInDate,
-          checkOut: checkOutDate,
-        })
+          notes: result.data.notes || "",
+        } as typeof bookings.$inferInsert)
         .returning();
 
       console.log('Created booking:', booking);
@@ -927,4 +807,119 @@ export function registerRoutes(app: Express): Server {
 
   const httpServer = createServer(app);
   return httpServer;
+}
+
+// Add proper return type for calculatePricePeriods
+interface PricePeriod {
+  type: 'monthly' | 'weekly' | 'daily';
+  startDate: Date;
+  endDate: Date;
+  amount: number;
+  baseRate: number;
+  duration: number;
+  discountPercent: number;
+}
+
+function calculateDiscountedRate(baseRate: number, periodIndex: number): number {
+  // Apply 10% discount per period, max 50%
+  const discountPercent = Math.min(periodIndex * 10, 50);
+  return baseRate * (1 - discountPercent / 100);
+}
+
+function calculatePricePeriods(
+  property: { rate: string | number; monthlyRate?: string | number; weeklyRate?: string | number },
+  checkIn: Date,
+  checkOut: Date
+): PricePeriod[] {
+  console.log('Calculating price periods for stay:', { checkIn, checkOut });
+  const periods: PricePeriod[] = [];
+  let currentDate = startOfDay(new Date(checkIn));
+  const endDate = startOfDay(new Date(checkOut));
+  const normalDailyRate = Number(property.rate);
+
+  // Helper function to calculate period end date for monthly package
+  const calculateMonthlyEnd = (date: Date): Date => {
+    const nextMonth = addMonths(date, 1);
+    return nextMonth <= endDate ? nextMonth : endDate;
+  };
+
+  // Helper function to calculate period end date for weekly package
+  const calculateWeeklyEnd = (date: Date): Date => {
+    const nextWeek = addWeeks(date, 1);
+    return nextWeek <= endDate ? nextWeek : endDate;
+  };
+
+  let periodIndex = 0; // Track period index for discount calculation
+
+  while (currentDate < endDate) {
+    const remainingDays = differenceInDays(endDate, currentDate);
+    console.log('Processing remaining days:', remainingDays);
+
+    // Try to fit complete months first
+    if (property.monthlyRate && differenceInCalendarMonths(endDate, currentDate) >= 1) {
+      const monthlyEnd = calculateMonthlyEnd(currentDate);
+      // Only use monthly rate if we have a complete month
+      if (differenceInCalendarMonths(monthlyEnd, currentDate) === 1) {
+        const baseRate = Number(property.monthlyRate);
+        const discountedRate = calculateDiscountedRate(baseRate, periodIndex);
+        const period = {
+          type: 'monthly' as const,
+          startDate: currentDate,
+          endDate: monthlyEnd,
+          amount: discountedRate,
+          baseRate: baseRate,
+          duration: 1,
+          discountPercent: Math.min(periodIndex * 10, 50)
+        };
+        console.log('Adding monthly period:', period);
+        periods.push(period);
+        currentDate = monthlyEnd;
+        periodIndex++;
+        continue;
+      }
+    }
+
+    // For the remaining period, try to fit complete weeks
+    if (property.weeklyRate && differenceInDays(endDate, currentDate) >= 7) {
+      const weeklyEnd = calculateWeeklyEnd(currentDate);
+      const baseRate = Number(property.weeklyRate);
+      const discountedRate = calculateDiscountedRate(baseRate, periodIndex);
+      const period = {
+        type: 'weekly' as const,
+        startDate: currentDate,
+        endDate: weeklyEnd,
+        amount: discountedRate,
+        baseRate: baseRate,
+        duration: 1,
+        discountPercent: Math.min(periodIndex * 10, 50)
+      };
+      console.log('Adding weekly period:', period);
+      periods.push(period);
+      currentDate = weeklyEnd;
+      periodIndex++;
+      continue;
+    }
+
+    // Use daily rate for any remaining days
+    const remainingDaysCount = differenceInDays(endDate, currentDate);
+    if (remainingDaysCount > 0) {
+      const baseRate = normalDailyRate * remainingDaysCount;
+      const discountedRate = calculateDiscountedRate(baseRate, periodIndex);
+      const period = {
+        type: 'daily' as const,
+        startDate: currentDate,
+        endDate: endDate,
+        amount: discountedRate,
+        baseRate: baseRate,
+        duration: remainingDaysCount,
+        discountPercent: Math.min(periodIndex * 10, 50)
+      };
+      console.log('Adding daily period:', period);
+      periods.push(period);
+      currentDate = endDate;
+    }
+  }
+
+  console.log('Final price periods:', periods);
+  return periods;
 }

@@ -1,21 +1,20 @@
 import { useState } from "react";
-import { useLocation } from "wouter";
+import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft } from "lucide-react";
 
 export default function DepositPolicyPage() {
-  const [, setLocation] = useLocation();
-
   return (
     <div className="container max-w-3xl py-8">
-      <Button
-        variant="ghost"
-        className="mb-4"
-        onClick={() => setLocation(-1)}
-      >
-        <ChevronLeft className="h-4 w-4 mr-2" />
-        Back
-      </Button>
+      <Link href="/">
+        <Button
+          variant="ghost"
+          className="mb-4"
+        >
+          <ChevronLeft className="h-4 w-4 mr-2" />
+          Back
+        </Button>
+      </Link>
 
       <div className="prose prose-slate dark:prose-invert max-w-none">
         <h1>Deposit Policy</h1>

@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { CalendarIcon } from "lucide-react";
-import { format } from "date-fns";
+import { differenceInDays, differenceInWeeks, differenceInMonths } from "date-fns";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -31,17 +31,48 @@ import { useToast } from "@/hooks/use-toast";
 import { insertPaymentSchema } from "@db/schema";
 import * as z from "zod";
 
-const PaymentForm = ({ property, booking, onSuccess }) => {
+interface PaymentFormProps {
+  property: any;
+  booking: any;
+  onSuccess?: () => void;
+}
+
+const PaymentForm = ({ property, booking, onSuccess }: PaymentFormProps) => {
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [paymentAmount, setPaymentAmount] = useState('partial');
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // Calculate deposit amount based on stay duration and payment type
+  const calculateDepositAmount = () => {
+    const stayDuration = differenceInDays(new Date(booking.checkOut), new Date(booking.checkIn));
+    const isFullyPrepaid = paymentAmount === 'full';
+
+    // No deposit for fully prepaid bookings
+    if (isFullyPrepaid) return 0;
+
+    // Calculate base deposit amount based on stay duration
+    let baseDeposit = 0;
+    if (stayDuration <= 3) {
+      return 0; // No deposit for stays of 3 days or less
+    } else if (stayDuration < 14) { // Less than 2 weeks
+      baseDeposit = 90; // One daily rate deposit
+    } else if (stayDuration < 60) { // Less than 2 months
+      baseDeposit = 420; // One weekly rate deposit
+    } else {
+      baseDeposit = 1200; // One monthly rate deposit
+    }
+
+    // Check if eligible for deposit reduction (2+ packs of same type prepaid)
+    const hasTwoPacksPrepaid = false; // TODO: Implement pack prepayment check
+    return hasTwoPacksPrepaid ? baseDeposit / 2 : baseDeposit;
+  };
+
   const handlePayment = async () => {
     try {
       // Validate sequential payment rule
       const unpaidPeriods = await fetch(`/api/payments/unpaid-periods?bookingId=${booking.id}`).then(r => r.json());
-      
+
       if (unpaidPeriods.hasPriorUnpaid) {
         toast({
           title: "Payment Error",
@@ -56,14 +87,16 @@ const PaymentForm = ({ property, booking, onSuccess }) => {
       const discount = Math.min(periodIndex * 10, 50);
       const discountedAmount = paymentAmount === 'full' ? 
         booking.totalAmount * (1 - discount/100) : 
-        booking.depositAmount;
+        calculateDepositAmount();
+
       const response = await fetch('/api/payments/process', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           bookingId: booking.id,
           method: paymentMethod,
-          amount: paymentAmount === 'full' ? booking.totalAmount : booking.depositAmount,
+          amount: discountedAmount,
+          type: paymentAmount === 'full' ? 'full_payment' : 'deposit',
           status: 'confirmed'
         })
       });
@@ -85,6 +118,8 @@ const PaymentForm = ({ property, booking, onSuccess }) => {
       });
     }
   };
+
+  const depositAmount = calculateDepositAmount();
 
   return (
     <div className="space-y-4">
@@ -110,10 +145,17 @@ const PaymentForm = ({ property, booking, onSuccess }) => {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="partial">Deposit Only (${booking.depositAmount})</SelectItem>
+            {depositAmount > 0 && (
+              <SelectItem value="partial">Security Deposit (${depositAmount})</SelectItem>
+            )}
             <SelectItem value="full">Full Amount (${booking.totalAmount})</SelectItem>
           </SelectContent>
         </Select>
+        {depositAmount > 0 && paymentAmount === 'partial' && (
+          <p className="text-sm text-muted-foreground mt-2">
+            Note: Security deposit is fully refundable at checkout
+          </p>
+        )}
       </div>
 
       <Button onClick={handlePayment} className="w-full">
@@ -123,21 +165,14 @@ const PaymentForm = ({ property, booking, onSuccess }) => {
   );
 };
 
-
 interface PaymentRegistrationProps {
   guestId: number;
   onSuccess?: () => void;
-  property: any; //Added property prop
-  booking: any; //Added booking prop
+  property: any;
+  booking: any;
 }
 
 export default function PaymentRegistration({ guestId, onSuccess, property, booking }: PaymentRegistrationProps) {
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  //Removed existing form and mutation logic
-
   return (
     <PaymentForm property={property} booking={booking} onSuccess={onSuccess}/>
   );

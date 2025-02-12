@@ -1,6 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { Server as HttpServer } from "http";
 
 const app = express();
 app.use(express.json());
@@ -37,16 +38,17 @@ app.use((req, res, next) => {
   next();
 });
 
-async function startServer() {
+async function startServer(): Promise<HttpServer> {
   const startPort = parseInt(process.env.PORT || "5000", 10);
   const maxRetries = 10;
   let currentPort = startPort;
   let retries = 0;
+  let server: HttpServer | null = null;
 
   while (retries < maxRetries) {
     try {
       log(`Starting server on port ${currentPort}...`);
-      const server = registerRoutes(app);
+      server = registerRoutes(app);
 
       // Error handling middleware
       app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
@@ -71,36 +73,55 @@ async function startServer() {
 
       // Start server with a promise that resolves immediately after listening
       await new Promise<void>((resolve, reject) => {
+        if (!server) {
+          reject(new Error("Failed to create server instance"));
+          return;
+        }
+
+        const onError = (err: NodeJS.ErrnoException) => {
+          server?.removeListener('error', onError);
+          if (err.code === 'EADDRINUSE') {
+            log(`Port ${currentPort} is in use, trying next port`);
+            currentPort++;
+            retries++;
+            resolve(); // Continue to next iteration
+          } else {
+            reject(err);
+          }
+        };
+
+        const onListening = () => {
+          server?.removeListener('error', onError);
+          log(`Server started successfully on port ${currentPort}`);
+          resolve();
+        };
+
         server
-          .listen(currentPort, "0.0.0.0")
-          .once("listening", () => {
-            log(`Server started successfully on port ${currentPort}`);
-            resolve();
-          })
-          .once("error", (err: NodeJS.ErrnoException) => {
-            if (err.code === "EADDRINUSE") {
-              log(`Port ${currentPort} is in use, trying next port`);
-              server.close();
-              currentPort++;
-              retries++;
-              resolve(); // Continue to next iteration
-            } else {
-              reject(err);
-            }
-          });
+          .on('error', onError)
+          .on('listening', onListening)
+          .listen(currentPort, "0.0.0.0");
       });
 
-      // If we get here without an error, break the loop
+      // If we get here without throwing, we've successfully started
       break;
     } catch (error) {
       log(`Attempt ${retries + 1} failed: ${error}`);
       if (retries >= maxRetries - 1) {
-        log(`Failed to start server after ${maxRetries} attempts`);
-        throw error;
+        throw new Error(`Failed to start server after ${maxRetries} attempts`);
       }
       retries++;
+      // Close the server if it exists before trying again
+      if (server) {
+        await new Promise<void>((resolve) => server?.close(() => resolve()));
+      }
     }
   }
+
+  if (!server) {
+    throw new Error("Failed to start server");
+  }
+
+  return server;
 }
 
 // Start the server
