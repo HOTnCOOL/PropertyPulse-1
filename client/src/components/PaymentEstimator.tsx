@@ -27,6 +27,15 @@ interface PaymentPeriod {
   label: string;
 }
 
+interface PaymentPeriod {
+  type: 'monthly' | 'weekly' | 'daily';
+  startDate: Date;
+  endDate: Date;
+  amount: number;
+  label: string;
+  isPrepaid?: boolean;
+}
+
 interface PaymentBreakdown {
   primaryType: 'monthly' | 'weekly' | 'daily';
   periods: PaymentPeriod[];
@@ -110,9 +119,24 @@ const calculateOptimalPaymentBreakdown = (
                      periodCount.weekly > 0 ? 'weekly' : 'daily';
 
   const totalAmount = periods.reduce((sum, period) => sum + period.amount, 0);
-  const depositAmount = primaryType === 'monthly' ? Number(property.monthlyRate) :
-                       primaryType === 'weekly' ? Number(property.weeklyRate) :
-                       Number(property.rate) * 7;
+  // Calculate deposit amount based on stay duration and payment type
+  const totalDays = differenceInDays(endDate, startDate);
+  const isFullyPrepaid = periods.every(p => p.isPrepaid);
+  const prepaidPacksCount = periods.filter(p => p.type === primaryType && p.isPrepaid).length;
+  
+  let baseDepositAmount = 0;
+  if (totalDays > 60) { // > 2 months
+    baseDepositAmount = 1200;
+  } else if (totalDays > 14) { // > 2 weeks
+    baseDepositAmount = 420;
+  } else if (totalDays > 3) { // > 3 days
+    baseDepositAmount = 90;
+  }
+
+  // Apply deposit reductions
+  const depositAmount = isFullyPrepaid ? 0 : // No deposit for fully prepaid bookings
+                       prepaidPacksCount >= 2 ? baseDepositAmount / 2 : // Half deposit if 2+ packs prepaid
+                       baseDepositAmount; // Full deposit otherwise
 
   return {
     primaryType,
