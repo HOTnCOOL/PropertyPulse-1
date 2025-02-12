@@ -2,18 +2,8 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { CalendarIcon } from "lucide-react";
 import { differenceInDays, differenceInWeeks, differenceInMonths } from "date-fns";
 import { Button } from "@/components/ui/button";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -21,15 +11,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Calendar } from "@/components/ui/calendar";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { insertPaymentSchema } from "@db/schema";
 import * as z from "zod";
+import { Link } from "wouter";
 
 interface PaymentFormProps {
   property: any;
@@ -48,24 +33,36 @@ const PaymentForm = ({ property, booking, onSuccess }: PaymentFormProps) => {
     const stayDuration = differenceInDays(new Date(booking.checkOut), new Date(booking.checkIn));
     const isFullyPrepaid = paymentAmount === 'full';
 
+    console.log('Calculating deposit for stay duration:', stayDuration, 'days');
+    console.log('Payment type:', isFullyPrepaid ? 'Full prepayment' : 'Partial payment');
+
     // No deposit for fully prepaid bookings
-    if (isFullyPrepaid) return 0;
+    if (isFullyPrepaid) {
+      console.log('No deposit required - booking is fully prepaid');
+      return 0;
+    }
 
     // Calculate base deposit amount based on stay duration
     let baseDeposit = 0;
     if (stayDuration <= 3) {
-      return 0; // No deposit for stays of 3 days or less
+      console.log('Stay duration ≤ 3 days - no deposit required');
+      return 0;
     } else if (stayDuration < 14) { // Less than 2 weeks
       baseDeposit = 90; // One daily rate deposit
+      console.log('Stay duration < 2 weeks - daily rate deposit:', baseDeposit);
     } else if (stayDuration < 60) { // Less than 2 months
       baseDeposit = 420; // One weekly rate deposit
+      console.log('Stay duration < 2 months - weekly rate deposit:', baseDeposit);
     } else {
       baseDeposit = 1200; // One monthly rate deposit
+      console.log('Stay duration ≥ 2 months - monthly rate deposit:', baseDeposit);
     }
 
     // Check if eligible for deposit reduction (2+ packs of same type prepaid)
     const hasTwoPacksPrepaid = false; // TODO: Implement pack prepayment check
-    return hasTwoPacksPrepaid ? baseDeposit / 2 : baseDeposit;
+    const finalDeposit = hasTwoPacksPrepaid ? baseDeposit / 2 : baseDeposit;
+    console.log('Final deposit amount:', finalDeposit, hasTwoPacksPrepaid ? '(50% reduction applied)' : '(no reduction)');
+    return finalDeposit;
   };
 
   const handlePayment = async () => {
@@ -89,6 +86,13 @@ const PaymentForm = ({ property, booking, onSuccess }: PaymentFormProps) => {
         booking.totalAmount * (1 - discount/100) : 
         calculateDepositAmount();
 
+      console.log('Processing payment:', {
+        bookingId: booking.id,
+        method: paymentMethod,
+        amount: discountedAmount,
+        type: paymentAmount === 'full' ? 'full_payment' : 'deposit'
+      });
+
       const response = await fetch('/api/payments/process', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -109,8 +113,9 @@ const PaymentForm = ({ property, booking, onSuccess }: PaymentFormProps) => {
         title: 'Success',
         description: 'Payment processed successfully'
       });
-      window.location.href = `/guest-dashboard?ref=${booking.reference}&email=${booking.guest.email}`;
+      if (onSuccess) onSuccess();
     } catch (error) {
+      console.error('Payment error:', error);
       toast({
         title: 'Error',
         description: 'Payment processing failed',
@@ -152,9 +157,14 @@ const PaymentForm = ({ property, booking, onSuccess }: PaymentFormProps) => {
           </SelectContent>
         </Select>
         {depositAmount > 0 && paymentAmount === 'partial' && (
-          <p className="text-sm text-muted-foreground mt-2">
-            Note: Security deposit is fully refundable at checkout
-          </p>
+          <div className="mt-2">
+            <p className="text-sm text-muted-foreground">
+              Note: Security deposit is fully refundable at checkout
+            </p>
+            <Link href="/deposit-policy" className="text-sm text-primary hover:underline">
+              View Deposit Policy
+            </Link>
+          </div>
         )}
       </div>
 

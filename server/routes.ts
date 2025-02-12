@@ -520,6 +520,105 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Add this new endpoint after the existing payments endpoints
+  app.get("/api/payments/unpaid-periods", async (req, res) => {
+    try {
+      const { bookingId } = req.query;
+      if (!bookingId) {
+        return res.status(400).json({ message: "Booking ID is required" });
+      }
+
+      // Get all payments for this booking
+      const booking = await db.query.bookings.findFirst({
+        where: eq(bookings.id, Number(bookingId)),
+        with: {
+          payments: true,
+        },
+      });
+
+      if (!booking) {
+        return res.status(404).json({ message: "Booking not found" });
+      }
+
+      // Sort payments by due date
+      const sortedPayments = booking.payments.sort(
+        (a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()
+      );
+
+      // Check if there are any unpaid prior periods
+      const hasPriorUnpaid = sortedPayments.some(
+        (payment, index) =>
+          payment.status === 'pending' &&
+          sortedPayments.slice(index + 1).some(p => p.status === 'confirmed')
+      );
+
+      // Count number of paid periods
+      const paidPeriodsCount = sortedPayments.filter(
+        payment => payment.status === 'confirmed'
+      ).length;
+
+      res.json({
+        hasPriorUnpaid,
+        paidPeriodsCount,
+        totalPeriods: sortedPayments.length
+      });
+    } catch (error) {
+      console.error('Error fetching unpaid periods:', error);
+      res.status(500).json({ message: "Failed to fetch payment periods" });
+    }
+  });
+
+  // Add this endpoint to process payments
+  app.post("/api/payments/process", async (req, res) => {
+    try {
+      const { bookingId, method, amount, type, status } = req.body;
+
+      // Start a transaction
+      const result = await db.transaction(async (tx) => {
+        // Get the booking
+        const booking = await tx.query.bookings.findFirst({
+          where: eq(bookings.id, Number(bookingId)),
+          with: {
+            guest: true,
+          },
+        });
+
+        if (!booking) {
+          throw new Error("Booking not found");
+        }
+
+        // Create the payment
+        const [payment] = await tx.insert(payments).values({
+          guestId: booking.guest.id,
+          method,
+          amount: String(amount),
+          type,
+          status,
+          date: new Date(),
+          dueDate: new Date(),
+          description: `${type === 'deposit' ? 'Security deposit' : 'Full payment'} for booking ${booking.bookingReference}`,
+        }).returning();
+
+        // If this is a full payment, mark the booking as confirmed
+        if (type === 'full_payment') {
+          await tx.update(bookings)
+            .set({ status: 'confirmed' })
+            .where(eq(bookings.id, Number(bookingId)));
+        }
+
+        return payment;
+      });
+
+      res.json(result);
+    } catch (error) {
+      console.error('Error processing payment:', error);
+      res.status(500).json({
+        message: "Failed to process payment",
+        details: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  });
+
   // Add a new endpoint to get payment details with documents
   app.get("/api/payments/:id/details", async (req, res) => {
     try {
@@ -843,7 +942,7 @@ function calculatePricePeriods(
     return nextMonth <= endDate ? nextMonth : endDate;
   };
 
-  // Helper function to calculate period end date for weekly package
+  // Helper function to calculateperiod end date for weekly package
   const calculateWeeklyEnd = (date: Date): Date => {
     const nextWeek = addWeeks(date, 1);
     return nextWeek <= endDate ? nextWeek : endDate;

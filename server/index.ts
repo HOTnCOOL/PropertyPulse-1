@@ -39,7 +39,7 @@ app.use((req, res, next) => {
 });
 
 async function startServer(): Promise<HttpServer> {
-  const startPort = parseInt(process.env.PORT || "5000", 10);
+  const startPort = parseInt(process.env.PORT || "3000", 10); // Changed default port to 3000
   const maxRetries = 10;
   let currentPort = startPort;
   let retries = 0;
@@ -71,6 +71,13 @@ async function startServer(): Promise<HttpServer> {
         serveStatic(app);
       }
 
+      // Track active connections to ensure clean shutdown
+      const connections = new Set<any>();
+      server.on('connection', (conn) => {
+        connections.add(conn);
+        conn.on('close', () => connections.delete(conn));
+      });
+
       // Start server with a promise that resolves immediately after listening
       await new Promise<void>((resolve, reject) => {
         if (!server) {
@@ -78,10 +85,18 @@ async function startServer(): Promise<HttpServer> {
           return;
         }
 
-        const onError = (err: NodeJS.ErrnoException) => {
+        const cleanup = () => {
           server?.removeListener('error', onError);
+          server?.removeListener('listening', onListening);
+        };
+
+        const onError = (err: NodeJS.ErrnoException) => {
+          cleanup();
           if (err.code === 'EADDRINUSE') {
             log(`Port ${currentPort} is in use, trying next port`);
+            // Close all existing connections
+            connections.forEach((conn) => conn.destroy());
+            server?.close();
             currentPort++;
             retries++;
             resolve(); // Continue to next iteration
@@ -91,7 +106,7 @@ async function startServer(): Promise<HttpServer> {
         };
 
         const onListening = () => {
-          server?.removeListener('error', onError);
+          cleanup();
           log(`Server started successfully on port ${currentPort}`);
           resolve();
         };
@@ -112,7 +127,13 @@ async function startServer(): Promise<HttpServer> {
       retries++;
       // Close the server if it exists before trying again
       if (server) {
-        await new Promise<void>((resolve) => server?.close(() => resolve()));
+        await new Promise<void>((resolve) => {
+          if (!server) {
+            resolve();
+            return;
+          }
+          server.close(() => resolve());
+        });
       }
     }
   }
