@@ -123,7 +123,7 @@ export default function GuestRegistration() {
           if (docMatch) {
             info.documentNumber = docMatch[0];
           }
-          
+
           // Name (assuming format: "Name: John Doe" or just "John Doe")
           const nameMatch = line.match(/(?:Name:|^)\s*([A-Z][a-z]+\s+[A-Z][a-z]+)/);
           if (nameMatch) {
@@ -132,7 +132,7 @@ export default function GuestRegistration() {
             form.setValue('firstName', firstName);
             form.setValue('lastName', lastName);
           }
-          
+
           // Date of birth (various formats)
           const dobMatch = line.match(/(?:DOB|Date of Birth|Born):\s*(\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4})/i) ||
                           line.match(/(\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4})/);
@@ -147,7 +147,7 @@ export default function GuestRegistration() {
               console.error('Failed to parse date:', e);
             }
           }
-          
+
           // Place of birth
           const pobMatch = line.match(/(?:Place of Birth|Born in):\s*(.+)/i);
           if (pobMatch) {
