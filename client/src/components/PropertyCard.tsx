@@ -17,11 +17,20 @@ import {
   Check,
   X,
   Pencil,
+  Edit,
 } from "lucide-react";
 import { useState } from "react";
 import { useLocation } from "wouter";
 import type { Property } from "@db/schema";
 import { type DateRange } from "react-day-picker";
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 
 interface PropertyCardProps {
   property: Property;
