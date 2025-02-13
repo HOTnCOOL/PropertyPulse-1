@@ -31,7 +31,7 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
   const processImage = async (imageSource: string | File) => {
     setIsProcessing(true);
     try {
-      const worker = await createWorker('eng');
+      const worker = await createWorker('eng+bul');
       let result;
 
       if (typeof imageSource === 'string') {
@@ -46,26 +46,31 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
       }
 
       const text = result.data.text;
-      console.log('Extracted text:', text);
+      console.log('Raw extracted text:', text);
 
+      // Bulgarian ID specific patterns
       const extractedData = {
-        firstName: extractField(text, /(?:Given Names?|First Names?|Nombres?):?\s*([A-Za-z\s]+)/i),
-        lastName: extractField(text, /(?:Surname|Last Names?|Family Names?|Apellidos?):?\s*([A-Za-z\s]+)/i),
+        firstName: extractField(text, /(?:Names?|Име|Given Names?|First Names?|Nombres?):?\s*([A-Za-zА-Яа-я\s]+)/i),
+        lastName: extractField(text, /(?:Surname|Family Name|Фамилия|Last Names?|Apellidos?):?\s*([A-Za-zА-Яа-я\s]+)/i),
         dateOfBirth: extractDate(text),
-        placeOfBirth: extractField(text, /(?:Place of Birth|Birth Place|Lugar de Nacimiento):?\s*([A-Za-z\s,]+)/i),
-        idNumber: extractField(text, /(?:Passport No|ID No|Document No|Número):?\s*([A-Z0-9]+)/i),
+        placeOfBirth: extractField(text, /(?:Place of Birth|Birth Place|Място на раждане):?\s*([A-Za-zА-Яа-я\s,]+)/i),
+        idNumber: extractField(text, /(?:ЕГН|ID No|ЛНЧ|Document No|Número):?\s*([A-Z0-9]+)/i) ||
+                 extractField(text, /(?:\b\d{2}\.\d{2}\.\d{4}\b.*?)(\d{10})/),  // Pattern for Bulgarian ID number after date
         homeAddress: extractAddress(text),
         idType: text.toLowerCase().includes('passport') ? 'passport' : 'national_id'
       };
 
-      console.log('Extracted data:', extractedData);
+      console.log('Parsed data from ID:', extractedData);
       await worker.terminate();
 
       if (Object.values(extractedData).some(value => value)) {
         onDataExtracted(extractedData);
         toast({
           title: "Data Extracted",
-          description: "ID/Passport information has been processed successfully.",
+          description: `Found: ${Object.entries(extractedData)
+            .filter(([_, v]) => v)
+            .map(([k]) => k)
+            .join(', ')}`,
         });
       } else {
         toast({
@@ -188,8 +193,9 @@ function extractField(text: string, pattern: RegExp): string | undefined {
 
 function extractDate(text: string): string | undefined {
   const datePatterns = [
-    /(?:Date of Birth|Birth Date|DOB):?\s*(\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4})/i,
-    /(\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4})/i  
+    /(?:Date of Birth|Birth Date|DOB|Дата на раждане):?\s*(\d{1,2}[-./]\d{1,2}[-./]\d{2,4})/i,
+    /(\d{1,2}[-./]\d{1,2}[-./]\d{2,4})/i,
+    /(\d{2}\.\d{2}\.\d{4})/  // Bulgarian date format
   ];
 
   for (const pattern of datePatterns) {
@@ -201,8 +207,9 @@ function extractDate(text: string): string | undefined {
 
 function extractAddress(text: string): string | undefined {
   const addressPatterns = [
-    /(?:Address|Residence|Domicile):?\s*([A-Za-z0-9\s,.-]+(?:\n[A-Za-z0-9\s,.-]+)*)/i,
-    /(?:Street|Ave|Road|Boulevard).*?([A-Za-z0-9\s,.-]+)/i
+    /(?:Address|Residence|Domicile|Адрес|Местоживеене):?\s*([A-Za-zА-Яа-я0-9\s,.-]+(?:\n[A-Za-zА-Яа-я0-9\s,.-]+)*)/i,
+    /(?:гр\.|с\.)\s*([A-Za-zА-Яа-я0-9\s,.-]+)/i,  // Bulgarian city/village pattern
+    /(?:Street|Ave|Road|Boulevard|ул\.|бул\.)\s*([A-Za-zА-Яа-я0-9\s,.-]+)/i
   ];
 
   for (const pattern of addressPatterns) {
