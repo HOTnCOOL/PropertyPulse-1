@@ -268,18 +268,7 @@ function extractDate(text: string): string | undefined {
   return undefined;
 }
 
-function extractIdNumber(text: string): string | undefined {
-  const idPatterns = [
-    /(\d{10})/,  // EGN format
-    /[0-9]{6,10}/  // Generic number format
-  ];
 
-  for (const pattern of idPatterns) {
-    const match = text.match(pattern);
-    if (match) return match[1];
-  }
-  return undefined;
-}
 
 function extractAddress(text: string): string | undefined {
   const addressPatterns = [
