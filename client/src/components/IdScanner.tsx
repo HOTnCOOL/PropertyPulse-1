@@ -1,11 +1,12 @@
 import React, { useState, useRef } from 'react';
 import Webcam from 'react-webcam';
-import { createWorker, type Worker } from 'tesseract.js';
+import { createWorker } from 'tesseract.js';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
+import { CameraIcon, FlipHorizontal } from 'lucide-react';
 
 interface IdScannerProps {
   onDataExtracted: (data: {
@@ -25,6 +26,7 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
   const webcamRef = useRef<Webcam>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [activeTab, setActiveTab] = useState('upload');
+  const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
 
   const processImage = async (imageSource: string | File) => {
     setIsProcessing(true);
@@ -35,7 +37,6 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
       if (typeof imageSource === 'string') {
         result = await worker.recognize(imageSource);
       } else {
-        // Convert File to base64
         const reader = new FileReader();
         const base64String = await new Promise<string>((resolve) => {
           reader.onload = () => resolve(reader.result as string);
@@ -47,23 +48,32 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
       const text = result.data.text;
       console.log('Extracted text:', text);
 
-      // Simple pattern matching for common ID/passport fields
       const extractedData = {
-        firstName: extractField(text, /Given Names?:?\s*([A-Za-z\s]+)/i),
-        lastName: extractField(text, /Surname:?\s*([A-Za-z\s]+)/i),
+        firstName: extractField(text, /(?:Given Names?|First Names?|Nombres?):?\s*([A-Za-z\s]+)/i),
+        lastName: extractField(text, /(?:Surname|Last Names?|Family Names?|Apellidos?):?\s*([A-Za-z\s]+)/i),
         dateOfBirth: extractDate(text),
-        placeOfBirth: extractField(text, /Place of Birth:?\s*([A-Za-z\s,]+)/i),
-        idNumber: extractField(text, /Passport No:?\s*([A-Z0-9]+)/i) || 
-                 extractField(text, /ID No:?\s*([A-Z0-9]+)/i),
+        placeOfBirth: extractField(text, /(?:Place of Birth|Birth Place|Lugar de Nacimiento):?\s*([A-Za-z\s,]+)/i),
+        idNumber: extractField(text, /(?:Passport No|ID No|Document No|Número):?\s*([A-Z0-9]+)/i),
         homeAddress: extractAddress(text),
+        idType: text.toLowerCase().includes('passport') ? 'passport' : 'national_id'
       };
 
+      console.log('Extracted data:', extractedData);
       await worker.terminate();
-      onDataExtracted(extractedData);
-      toast({
-        title: "Data Extracted",
-        description: "ID/Passport information has been processed successfully.",
-      });
+
+      if (Object.values(extractedData).some(value => value)) {
+        onDataExtracted(extractedData);
+        toast({
+          title: "Data Extracted",
+          description: "ID/Passport information has been processed successfully.",
+        });
+      } else {
+        toast({
+          title: "Extraction Warning",
+          description: "Could not extract data from the image. Please try again or enter details manually.",
+          variant: "destructive",
+        });
+      }
     } catch (error) {
       console.error('OCR Error:', error);
       toast({
@@ -82,7 +92,6 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
     const imageSrc = webcamRef.current.getScreenshot();
     if (!imageSrc) return;
 
-    // Convert base64 to File object
     const byteString = atob(imageSrc.split(',')[1]);
     const ab = new ArrayBuffer(byteString.length);
     const ia = new Uint8Array(ab);
@@ -101,6 +110,10 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
 
     onImageCaptured(file);
     await processImage(file);
+  };
+
+  const toggleCamera = () => {
+    setFacingMode(prev => prev === 'user' ? 'environment' : 'user');
   };
 
   return (
@@ -126,16 +139,32 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
 
           <TabsContent value="camera">
             <div className="space-y-4">
-              <Webcam
-                ref={webcamRef}
-                screenshotFormat="image/jpeg"
-                className="w-full rounded-lg"
-              />
+              <div className="relative">
+                <Webcam
+                  ref={webcamRef}
+                  screenshotFormat="image/jpeg"
+                  className="w-full rounded-lg"
+                  videoConstraints={{
+                    facingMode,
+                    width: { ideal: 1920 },
+                    height: { ideal: 1080 }
+                  }}
+                />
+                <Button
+                  size="icon"
+                  variant="outline"
+                  className="absolute top-2 right-2"
+                  onClick={toggleCamera}
+                >
+                  <FlipHorizontal className="h-4 w-4" />
+                </Button>
+              </div>
               <Button 
                 onClick={captureImage}
                 disabled={isProcessing}
                 className="w-full"
               >
+                <CameraIcon className="mr-2 h-4 w-4" />
                 Capture
               </Button>
             </div>
@@ -152,21 +181,33 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
   );
 }
 
-// Helper functions for text extraction
 function extractField(text: string, pattern: RegExp): string | undefined {
   const match = text.match(pattern);
   return match?.[1]?.trim();
 }
 
 function extractDate(text: string): string | undefined {
-  const datePattern = /(?:Date of Birth|Birth Date|DOB):?\s*(\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4})/i;
-  const match = text.match(datePattern);
-  if (!match) return undefined;
-  return match[1];
+  const datePatterns = [
+    /(?:Date of Birth|Birth Date|DOB):?\s*(\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4})/i,
+    /(\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4})/i  
+  ];
+
+  for (const pattern of datePatterns) {
+    const match = text.match(pattern);
+    if (match) return match[1];
+  }
+  return undefined;
 }
 
 function extractAddress(text: string): string | undefined {
-  const addressPattern = /(?:Address|Residence):?\s*([A-Za-z0-9\s,.-]+)/i;
-  const match = text.match(addressPattern);
-  return match?.[1]?.trim();
+  const addressPatterns = [
+    /(?:Address|Residence|Domicile):?\s*([A-Za-z0-9\s,.-]+(?:\n[A-Za-z0-9\s,.-]+)*)/i,
+    /(?:Street|Ave|Road|Boulevard).*?([A-Za-z0-9\s,.-]+)/i
+  ];
+
+  for (const pattern of addressPatterns) {
+    const match = text.match(pattern);
+    if (match) return match[1].trim().replace(/\n/g, ', ');
+  }
+  return undefined;
 }

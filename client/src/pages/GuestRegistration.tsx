@@ -196,15 +196,42 @@ export default function GuestRegistration() {
     homeAddress?: string;
     idType?: 'passport' | 'national_id';
   }) => {
-    Object.entries(data).forEach(([key, value]) => {
+    console.log('Received extracted data:', data);
+
+    // Helper function to safely set form values
+    const setFormValue = (key: keyof FormData, value: any) => {
       if (value) {
-        if (key === 'dateOfBirth' && value) {
-          form.setValue(key as keyof FormData, new Date(value));
+        console.log(`Setting ${key}:`, value);
+        if (key === 'dateOfBirth' && typeof value === 'string') {
+          // Parse the date string to a Date object
+          try {
+            const [day, month, year] = value.split(/[-./]/).map(Number);
+            // Assume 20xx for two-digit years, 19xx for others
+            const fullYear = year < 100 ? (year < 50 ? 2000 + year : 1900 + year) : year;
+            const date = new Date(fullYear, month - 1, day);
+            if (!isNaN(date.getTime())) {
+              form.setValue(key, date);
+            }
+          } catch (error) {
+            console.error('Failed to parse date:', value, error);
+          }
         } else {
-          form.setValue(key as keyof FormData, value);
+          form.setValue(key, value);
         }
       }
-    });
+    };
+
+    // Set each field individually
+    setFormValue('firstName', data.firstName);
+    setFormValue('lastName', data.lastName);
+    setFormValue('dateOfBirth', data.dateOfBirth);
+    setFormValue('placeOfBirth', data.placeOfBirth);
+    setFormValue('idNumber', data.idNumber);
+    setFormValue('homeAddress', data.homeAddress);
+    setFormValue('idType', data.idType);
+
+    // Force form validation after setting values
+    form.trigger();
   };
 
   const handleIdImageCaptured = async (file: File) => {
