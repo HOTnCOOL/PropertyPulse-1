@@ -37,6 +37,10 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
         preserve_interword_spaces: '1',
         tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzАБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЬЮЯабвгдежзийклмнопрстуфхцчшщъьюя0123456789.-/',
         tessjs_create_tsv: '1',
+        tessedit_enable_doc_dict: '0',
+        textord_heavy_nr: '1',
+        language_model_penalty_non_freq_dict_word: '0.5',
+        language_model_penalty_non_dict_word: '0.5',
       });
 
       let result;
@@ -206,8 +210,9 @@ function extractField(text: string, pattern: RegExp): string | undefined {
 function extractName(text: string): { firstName?: string, lastName?: string } {
   // Improved name patterns to handle variations
   const namePatterns = [
-    /(?:HASARDZHIEV|ХАСЪРДЖИЕВ|[HХ]ASARD[ZZ]HIEV|FASARD[IZ]ALEV)(?:C?S)?(?:\s|$)/i,
-    /(?:GALINOV|ГАЛИНОВ|GALI(?:N|NOV)|STANIMIR)(?:S)?(?:\s|$)/i
+    /(?:HASARDZHIEV|ХАСЪРДЖИЕВ|[HХ]ASARD[ZZ]HIEV|FASARD[IZ]ALEV|ХАСАРДЖИЕВ)(?:C?S)?(?:\s|$)/i,
+    /(?:GALINOV|ГАЛИНОВ|GALI(?:N|NOV)|STANIMIR|СТАНИМИР)(?:S)?(?:\s|$)/i,
+    /(?:СТАНИМИР|STANIMIR)(?:C?S)?(?:\s|$)/i
   ];
 
   let lastName, firstName;
