@@ -64,7 +64,6 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
 
       // Bulgarian ID specific patterns
       const names = extractName(text);
-      const names = extractName(text);
       const dates = extractDate(text);
       
       const extractedData = {
