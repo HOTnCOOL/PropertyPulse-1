@@ -107,13 +107,46 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
     }
   };
 
+  const compressImage = async (base64String: string): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.src = base64String;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const maxWidth = 1280;
+        const maxHeight = 720;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height *= maxWidth / width;
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width *= maxHeight / height;
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        ctx?.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.8));
+      };
+    });
+  };
+
   const captureImage = async () => {
     if (!webcamRef.current) return;
 
     const imageSrc = webcamRef.current.getScreenshot();
     if (!imageSrc) return;
 
-    const byteString = atob(imageSrc.split(',')[1]);
+    const compressedImage = await compressImage(imageSrc);
+    const byteString = atob(compressedImage.split(',')[1]);
     const ab = new ArrayBuffer(byteString.length);
     const ia = new Uint8Array(ab);
     for (let i = 0; i < byteString.length; i++) {
@@ -122,7 +155,7 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
     const file = new File([ab], 'captured-id.jpg', { type: 'image/jpeg' });
 
     onImageCaptured(file);
-    await processImage(imageSrc);
+    await processImage(compressedImage);
   };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
