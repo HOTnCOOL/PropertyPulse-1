@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import multer from "multer";
 import path from "path";
 import { db } from "@db";
+import bcrypt from "bcrypt";
 import {
   properties,
   guests,
@@ -248,7 +249,10 @@ export function registerRoutes(app: Express): Server {
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
-      if (admin.password !== result.data.password) {
+      // Use bcrypt to compare passwords
+      const passwordMatch = await bcrypt.compare(result.data.password, admin.password);
+      if (!passwordMatch) {
+        console.log('Password does not match');
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
