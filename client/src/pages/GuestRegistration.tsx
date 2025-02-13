@@ -39,7 +39,6 @@ import PaymentHistory from "../components/PaymentHistory";
 import PaymentRegistration from "../components/PaymentRegistration";
 import cn from 'classnames';
 
-
 export default function GuestRegistration() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
@@ -67,15 +66,15 @@ export default function GuestRegistration() {
       lastName: "",
       email: "",
       phone: "",
-      dateOfBirth: undefined,
+      dateOfBirth: new Date(),
       placeOfBirth: "",
       address: "",
       documentNumber: "",
-      documentType: "passport",
+      documentType: "passport" as const,
       documentImageUrl: "",
       propertyId: preSelectedPropertyId ? Number(preSelectedPropertyId) : undefined as unknown as number,
-      checkIn: undefined,
-      checkOut: undefined,
+      checkIn: new Date(),
+      checkOut: new Date(),
     },
   });
 
@@ -89,16 +88,6 @@ export default function GuestRegistration() {
         setDocumentPreview(reader.result as string);
       };
       reader.readAsDataURL(file);
-
-      // Upload to S3
-      const formData = new FormData();
-      formData.append('file', file);
-      const uploadResponse = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      });
-      const { url } = await uploadResponse.json();
-      form.setValue('documentImageUrl', url);
 
       // Process with Tesseract
       const worker = await createWorker();
@@ -164,9 +153,6 @@ export default function GuestRegistration() {
       // Update form with extracted information
       if (extractedInfo.documentNumber) {
         form.setValue('documentNumber', extractedInfo.documentNumber);
-      }
-      if (extractedInfo.dateOfBirth) {
-        form.setValue('dateOfBirth', new Date(extractedInfo.dateOfBirth));
       }
 
       toast({
