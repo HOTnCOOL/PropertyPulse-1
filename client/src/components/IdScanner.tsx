@@ -239,8 +239,8 @@ function extractName(text: string): { firstName?: string, lastName?: string } {
 
 function extractDate(text: string): string | undefined {
   const datePatterns = [
-    /(\d{2}\.\d{2}\.\d{4})/,  // Bulgarian date format
-    /(\d{1,2}[-./]\d{1,2}[-./]\d{2,4})/i,
+    /(\d{2}\.\d{2}\.\d{4})/g,  // Bulgarian date format
+    /(\d{1,2}[-./]\d{1,2}[-./]\d{2,4})/gi,
   ];
 
   for (const pattern of datePatterns) {
