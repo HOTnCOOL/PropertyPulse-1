@@ -18,7 +18,7 @@ interface IdScannerProps {
     homeAddress?: string;
     idType?: 'passport' | 'national_id';
   }) => void;
-  onImageCaptured: (imageFile: File) => void;
+  onImageCaptured: (file: File) => void;
 }
 
 export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScannerProps) {
@@ -32,8 +32,13 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
     setIsProcessing(true);
     try {
       const worker = await createWorker('eng+bul');
-      let result;
+      await worker.setParameters({
+        tessedit_pageseg_mode: '1',
+        preserve_interword_spaces: '1',
+        tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzАБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЬЮЯабвгдежзийклмнопрстуфхцчшщъьюя0123456789.-/',
+      });
 
+      let result;
       if (typeof imageSource === 'string') {
         result = await worker.recognize(imageSource);
       } else {
@@ -62,6 +67,10 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
 
       console.log('Parsed data from ID:', extractedData);
       await worker.terminate();
+
+      // Process the text line by line for debugging
+      const lines = text.split('\n');
+      console.log('Text lines:', lines);
 
       if (Object.values(extractedData).some(value => value)) {
         onDataExtracted(extractedData);

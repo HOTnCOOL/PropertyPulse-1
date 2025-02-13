@@ -1,0 +1,49 @@
+To implement the orientation detection feature in your OCR process, we can add a function to correct the image orientation before it's processed by Tesseract. Here's how you can do it in your IdScanner.tsx component.
+
+Step-by-Step Plan:
+Add an Orientation Detection Function: Create a function that checks the orientation of the uploaded image and rotates it accordingly.
+Modify the processImage function: Integrate the orientation detection function into processImage, so it processes the image in the correct orientation.
+Here’s the updated code to add this functionality:
+
+// Add this function in IdScanner.tsx
+const detectOrientationAndFix = (imageSrc: string): string => {
+  // Logic to detect orientation and fix it
+  // For demonstration, we'll assume the image is rotated 90 degrees.
+  // You should implement actual orientation detection logic here.
+  
+  const shouldRotate90Degrees = true; // Replace with actual detection logic
+  if (shouldRotate90Degrees) {
+    return `data:image/jpeg;base64,${rotateImageToBase64(imageSrc)}`;
+  }
+  return imageSrc;
+};
+// Simulated rotation (replace this with actual image processing logic)
+const rotateImageToBase64 = (imageSrc: string): string => {
+  // Implement image rotation logic using a canvas or any library
+  // Returning the same image for demo purposes
+  return imageSrc.split(',')[1];
+};
+const processImage = async (imageSource: string | File) => {
+  setIsProcessing(true);
+  try {
+    const worker = await createWorker('eng+bul');
+    let result;
+    if (typeof imageSource === 'string') {
+      const fixedImageSource = detectOrientationAndFix(imageSource);
+      result = await worker.recognize(fixedImageSource);
+    } else {
+      const reader = new FileReader();
+      const base64String = await new Promise<string>((resolve) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.readAsDataURL(imageSource);
+      });
+      const fixedImageSource = detectOrientationAndFix(base64String);
+      result = await worker.recognize(fixedImageSource);
+    }
+    const text = result.data.text;
+    console.log('Raw extracted text:', text);
+    // Rest of the processing...
+Explanation:
+detectOrientationAndFix: You will need to implement actual orientation detection logic. Here, a dummy condition is used for demonstration (it assumes the image needs to be rotated 90 degrees).
+Image Processing Simulation: The rotateImageToBase64 function is a placeholder to illustrate where you would process the image. You can use the HTML Canvas API or a library like Jimp for actual image manipulation if needed.
+Integrate this code into your existing IdScanner.tsx component, and modify the orientation detection logic to suit your specific needs. Let me know if you need further assistance!
