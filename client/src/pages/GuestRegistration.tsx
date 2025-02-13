@@ -1,7 +1,6 @@
 import { useState, useMemo, useCallback } from "react";
 import { createWorker } from 'tesseract.js';
 import { Upload } from "lucide-react";
-import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -102,7 +101,9 @@ export default function GuestRegistration() {
       form.setValue('documentImageUrl', url);
 
       // Process with Tesseract
-      const worker = await createWorker('eng');
+      const worker = await createWorker();
+      await worker.loadLanguage('eng');
+      await worker.initialize('eng');
       const { data: { text } } = await worker.recognize(file);
       await worker.terminate();
 
@@ -117,13 +118,42 @@ export default function GuestRegistration() {
         };
 
         lines.forEach(line => {
-          if (line.match(/[A-Z]{2}[0-9]{6}/)) {
-            info.documentNumber = line.match(/[A-Z]{2}[0-9]{6}/)[0];
+          // Document number (various formats)
+          const docMatch = line.match(/[A-Z0-9]{6,}/);
+          if (docMatch) {
+            info.documentNumber = docMatch[0];
           }
-          if (line.match(/DOB|Date of Birth/i)) {
-            info.dateOfBirth = line.match(/\d{2}.\d{2}.\d{4}/)?.[0] || '';
+          
+          // Name (assuming format: "Name: John Doe" or just "John Doe")
+          const nameMatch = line.match(/(?:Name:|^)\s*([A-Z][a-z]+\s+[A-Z][a-z]+)/);
+          if (nameMatch) {
+            info.name = nameMatch[1];
+            const [firstName, lastName] = nameMatch[1].split(' ');
+            form.setValue('firstName', firstName);
+            form.setValue('lastName', lastName);
           }
-          // Add more pattern matching as needed
+          
+          // Date of birth (various formats)
+          const dobMatch = line.match(/(?:DOB|Date of Birth|Born):\s*(\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4})/i) ||
+                          line.match(/(\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4})/);
+          if (dobMatch) {
+            info.dateOfBirth = dobMatch[1];
+            try {
+              const date = new Date(dobMatch[1]);
+              if (!isNaN(date.getTime())) {
+                form.setValue('dateOfBirth', date);
+              }
+            } catch (e) {
+              console.error('Failed to parse date:', e);
+            }
+          }
+          
+          // Place of birth
+          const pobMatch = line.match(/(?:Place of Birth|Born in):\s*(.+)/i);
+          if (pobMatch) {
+            info.placeOfBirth = pobMatch[1];
+            form.setValue('placeOfBirth', pobMatch[1]);
+          }
         });
 
         return info;
