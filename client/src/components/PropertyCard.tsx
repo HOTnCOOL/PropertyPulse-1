@@ -17,7 +17,7 @@ import {
   Check,
   X,
   Pencil,
-  Edit,
+  edit,
 } from "lucide-react";
 import { useState } from "react";
 import { useLocation } from "wouter";
@@ -218,7 +218,7 @@ export default function PropertyCard({ property, onEdit, isPublic = false }: Pro
                   size="sm"
                   onClick={() => onEdit(property)}
                 >
-                  <Edit className="h-4 w-4" />
+                  <edit className="h-4 w-4" />
                 </Button>
               )}
               <Button

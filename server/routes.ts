@@ -245,7 +245,7 @@ export function registerRoutes(app: Express): Server {
 
       console.log('Admin found:', admin);
 
-      if (!admin) {
+      if (!admin || !admin.id) {
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
