@@ -33,9 +33,10 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
     try {
       const worker = await createWorker('eng+bul');
       await worker.setParameters({
-        tessedit_pageseg_mode: '1',
+        tessedit_pageseg_mode: '3',
         preserve_interword_spaces: '1',
         tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzАБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЬЮЯабвгдежзийклмнопрстуфхцчшщъьюя0123456789.-/',
+        tessjs_create_tsv: '1',
       });
 
       let result;
@@ -53,6 +54,10 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
       const text = result.data.text;
       console.log('Raw extracted text:', text);
 
+      // Process the text line by line for debugging
+      const lines = text.split('\n');
+      console.log('Text lines:', lines);
+
       // Bulgarian ID specific patterns
       const extractedData = {
         firstName: extractField(text, /(?:Names?|Име|Given Names?|First Names?|Nombres?):?\s*([A-Za-zА-Яа-я\s]+)/i),
@@ -67,10 +72,6 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
 
       console.log('Parsed data from ID:', extractedData);
       await worker.terminate();
-
-      // Process the text line by line for debugging
-      const lines = text.split('\n');
-      console.log('Text lines:', lines);
 
       if (Object.values(extractedData).some(value => value)) {
         onDataExtracted(extractedData);
