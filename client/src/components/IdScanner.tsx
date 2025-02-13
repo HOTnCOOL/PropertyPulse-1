@@ -64,9 +64,13 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
 
       // Bulgarian ID specific patterns
       const names = extractName(text);
+      const names = extractName(text);
+      const dates = extractDate(text);
+      
       const extractedData = {
-        ...names,
-        dateOfBirth: extractDate(text),
+        firstName: names.firstName,
+        lastName: names.lastName,
+        dateOfBirth: dates.dateOfBirth,
         idNumber: extractIdNumber(text),
         homeAddress: extractAddress(text),
         idType: text.toLowerCase().includes('passport') ? 'passport' : 'national_id'
@@ -241,30 +245,20 @@ function extractField(text: string, pattern: RegExp): string | undefined {
 }
 
 function extractName(text: string): { firstName?: string, lastName?: string } {
-  // Improved name patterns to handle variations
-  const namePatterns = [
-    /(?:HASARDZHIEV|ХАСЪРДЖИЕВ|[HХ]ASARD[ZZ]HIEV|FASARD[IZ]ALEV|ХАСАРДЖИЕВ)(?:C?S)?(?:\s|$)/i,
-    /(?:GALINOV|ГАЛИНОВ|GALI(?:N|NOV)|STANIMIR|СТАНИМИР)(?:S)?(?:\s|$)/i,
-    /(?:СТАНИМИР|STANIMIR)(?:C?S)?(?:\s|$)/i
-  ];
-
-  let lastName, firstName;
   const lines = text.split('\n');
   
+  // Look for the line containing name information (usually the last line with multiple uppercase words)
   for (const line of lines) {
-    for (const pattern of namePatterns) {
-      const match = line.match(pattern);
-      if (match) {
-        if (!lastName) {
-          lastName = match[0].trim();
-        } else if (!firstName) {
-          firstName = match[0].trim();
-        }
+    if (/[A-ZА-Я]{3,}\s+[A-ZА-Я]{3,}/.test(line)) {
+      const nameParts = line.split(/[CS]+/).filter(part => part.length > 2);
+      if (nameParts.length >= 2) {
+        const firstName = nameParts[1]?.replace(/[^A-ZА-Я]/g, '').trim();
+        const lastName = nameParts[0]?.replace(/[^A-ZА-Я]/g, '').trim();
+        return { firstName, lastName };
       }
     }
   }
-
-  return { firstName, lastName };
+  return {};
 }
 
 function extractIdNumber(text: string): string | undefined {
@@ -281,24 +275,31 @@ function extractIdNumber(text: string): string | undefined {
   return undefined;
 }
 
-function extractDate(text: string): string | undefined {
+function extractDate(text: string): { dateOfBirth?: string, expiryDate?: string } {
   const datePatterns = [
     /(\d{2}\.\d{2}\.\d{4})/g,  // Bulgarian date format
     /(\d{1,2}[-./]\d{1,2}[-./]\d{2,4})/g,  // Generic date format
   ];
 
+  const dates = [];
   for (const pattern of datePatterns) {
-    const matches = text.matchAll(pattern);
-    for (const match of matches) {
+    const matches = Array.from(text.matchAll(pattern));
+    matches.forEach(match => {
       const date = match[1];
-      // Validate if it's a reasonable date
       const year = parseInt(date.split(/[-./]/)[2]);
-      if (year > 1900 && year < new Date().getFullYear()) {
-        return date;
+      if (year > 1900) {
+        dates.push({ date, year });
       }
-    }
+    });
   }
-  return undefined;
+
+  // Sort dates - earliest is likely birth date, latest is expiry
+  dates.sort((a, b) => a.year - b.year);
+  
+  return {
+    dateOfBirth: dates[0]?.date,
+    expiryDate: dates[dates.length - 1]?.date
+  };
 }
 
 
