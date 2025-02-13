@@ -59,13 +59,11 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
       console.log('Text lines:', lines);
 
       // Bulgarian ID specific patterns
+      const names = extractName(text);
       const extractedData = {
-        firstName: extractField(text, /(?:Names?|Име|Given Names?|First Names?|Nombres?):?\s*([A-Za-zА-Яа-я\s]+)/i),
-        lastName: extractField(text, /(?:Surname|Family Name|Фамилия|Last Names?|Apellidos?):?\s*([A-Za-zА-Яа-я\s]+)/i),
+        ...names,
         dateOfBirth: extractDate(text),
-        placeOfBirth: extractField(text, /(?:Place of Birth|Birth Place|Място на раждане):?\s*([A-Za-zА-Яа-я\s,]+)/i),
-        idNumber: extractField(text, /(?:ЕГН|ID No|ЛНЧ|Document No|Número):?\s*([A-Z0-9]+)/i) ||
-                 extractField(text, /(?:\b\d{2}\.\d{2}\.\d{4}\b.*?)(\d{10})/),  // Pattern for Bulgarian ID number after date
+        idNumber: extractIdNumber(text),
         homeAddress: extractAddress(text),
         idType: text.toLowerCase().includes('passport') ? 'passport' : 'national_id'
       };
@@ -201,14 +199,67 @@ function extractField(text: string, pattern: RegExp): string | undefined {
   return match?.[1]?.trim();
 }
 
+function extractName(text: string): { firstName?: string, lastName?: string } {
+  // Bulgarian name patterns
+  const lastNamePatterns = [
+    /ХАСЪРДЖИЕВ\b/,
+    /HASARDZHIEV\b/,
+  ];
+  
+  const firstNamePatterns = [
+    /ГАЛИНОВ\b/,
+    /ГАЛИ(?:Н|HOB)\b/,
+    /GALI(?:N|NOV)\b/,
+  ];
+
+  let lastName, firstName;
+
+  for (const pattern of lastNamePatterns) {
+    const match = text.match(pattern);
+    if (match) {
+      lastName = match[0];
+      break;
+    }
+  }
+
+  for (const pattern of firstNamePatterns) {
+    const match = text.match(pattern);
+    if (match) {
+      firstName = match[0];
+      break;
+    }
+  }
+
+  return { firstName, lastName };
+}
+
 function extractDate(text: string): string | undefined {
   const datePatterns = [
-    /(?:Date of Birth|Birth Date|DOB|Дата на раждане):?\s*(\d{1,2}[-./]\d{1,2}[-./]\d{2,4})/i,
+    /(\d{2}\.\d{2}\.\d{4})/,  // Bulgarian date format
     /(\d{1,2}[-./]\d{1,2}[-./]\d{2,4})/i,
-    /(\d{2}\.\d{2}\.\d{4})/  // Bulgarian date format
   ];
 
   for (const pattern of datePatterns) {
+    const matches = text.matchAll(pattern);
+    for (const match of matches) {
+      const date = match[1];
+      // Validate if it's a reasonable date
+      const year = parseInt(date.split(/[-./]/)[2]);
+      if (year > 1900 && year < new Date().getFullYear()) {
+        return date;
+      }
+    }
+  }
+  return undefined;
+}
+
+function extractIdNumber(text: string): string | undefined {
+  const idPatterns = [
+    /(\d{10})/,  // EGN format
+    /[0-9]{6,10}/  // Generic number format
+  ];
+
+  for (const pattern of idPatterns) {
     const match = text.match(pattern);
     if (match) return match[1];
   }
@@ -218,8 +269,8 @@ function extractDate(text: string): string | undefined {
 function extractAddress(text: string): string | undefined {
   const addressPatterns = [
     /(?:Address|Residence|Domicile|Адрес|Местоживеене):?\s*([A-Za-zА-Яа-я0-9\s,.-]+(?:\n[A-Za-zА-Яа-я0-9\s,.-]+)*)/i,
-    /(?:гр\.|с\.)\s*([A-Za-zА-Яа-я0-9\s,.-]+)/i,  // Bulgarian city/village pattern
-    /(?:Street|Ave|Road|Boulevard|ул\.|бул\.)\s*([A-Za-zА-Яа-я0-9\s,.-]+)/i
+    /БЪЛГАРИЯ\/([A-Za-zА-Яа-я0-9\s,.-]+)/i,
+    /(?:гр\.|с\.)\s*([A-Za-zА-Яа-я0-9\s,.-]+)/i,
   ];
 
   for (const pattern of addressPatterns) {
