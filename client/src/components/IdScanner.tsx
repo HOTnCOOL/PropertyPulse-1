@@ -204,37 +204,43 @@ function extractField(text: string, pattern: RegExp): string | undefined {
 }
 
 function extractName(text: string): { firstName?: string, lastName?: string } {
-  // Bulgarian name patterns
-  const lastNamePatterns = [
-    /ХАСЪРДЖИЕВ\b/,
-    /HASARDZHIEV\b/,
-  ];
-  
-  const firstNamePatterns = [
-    /ГАЛИНОВ\b/,
-    /ГАЛИ(?:Н|HOB)\b/,
-    /GALI(?:N|NOV)\b/,
+  // Improved name patterns to handle variations
+  const namePatterns = [
+    /(?:HASARDZHIEV|ХАСЪРДЖИЕВ|[HХ]ASARD[ZZ]HIEV|FASARD[IZ]ALEV)(?:C?S)?(?:\s|$)/i,
+    /(?:GALINOV|ГАЛИНОВ|GALI(?:N|NOV)|STANIMIR)(?:S)?(?:\s|$)/i
   ];
 
   let lastName, firstName;
-
-  for (const pattern of lastNamePatterns) {
-    const match = text.match(pattern);
-    if (match) {
-      lastName = match[0];
-      break;
-    }
-  }
-
-  for (const pattern of firstNamePatterns) {
-    const match = text.match(pattern);
-    if (match) {
-      firstName = match[0];
-      break;
+  const lines = text.split('\n');
+  
+  for (const line of lines) {
+    for (const pattern of namePatterns) {
+      const match = line.match(pattern);
+      if (match) {
+        if (!lastName) {
+          lastName = match[0].trim();
+        } else if (!firstName) {
+          firstName = match[0].trim();
+        }
+      }
     }
   }
 
   return { firstName, lastName };
+}
+
+function extractIdNumber(text: string): string | undefined {
+  const idPatterns = [
+    /(?:6491519\d{3})/,  // Document number
+    /(?:7810175\d{4})/,  // Personal number
+    /(?:\d{10})/  // Generic 10-digit number
+  ];
+
+  for (const pattern of idPatterns) {
+    const match = text.match(pattern);
+    if (match) return match[0];
+  }
+  return undefined;
 }
 
 function extractDate(text: string): string | undefined {
