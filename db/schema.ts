@@ -21,20 +21,6 @@ export const properties = pgTable("properties", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const bookings = pgTable("bookings", {
-  id: serial("id").primaryKey(),
-  propertyId: integer("property_id").references(() => properties.id),
-  guestId: integer("guest_id").references(() => guests.id),
-  checkIn: timestamp("check_in").notNull(),
-  checkOut: timestamp("check_out").notNull(),
-  status: text("status").notNull(), // pending, confirmed, cancelled
-  totalAmount: numeric("total_amount", { precision: 10, scale: 0 }).notNull(),
-  notes: text("notes"),
-  bookingReference: varchar("booking_reference", { length: 10 }).notNull().unique(), // Added for guest access
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
 export const guests = pgTable("guests", {
   id: serial("id").primaryKey(),
   firstName: text("first_name").notNull(),
@@ -44,30 +30,50 @@ export const guests = pgTable("guests", {
   propertyId: integer("property_id").references(() => properties.id),
   checkIn: timestamp("check_in").notNull(),
   checkOut: timestamp("check_out").notNull(),
-  accessCode: varchar("access_code", { length: 6 }), // Added for door access
-  bookingReference: varchar("booking_reference", { length: 10 }), // Reference to booking
+  accessCode: varchar("access_code", { length: 6 }),
+  bookingReference: varchar("booking_reference", { length: 10 }),
+  dateOfBirth: timestamp("date_of_birth"),
+  placeOfBirth: text("place_of_birth"),
+  homeAddress: text("home_address"),
+  idNumber: text("id_number"),
+  idType: text("id_type"),
+  idImageUrl: text("id_image_url"),
   createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const bookings = pgTable("bookings", {
+  id: serial("id").primaryKey(),
+  propertyId: integer("property_id").references(() => properties.id),
+  guestId: integer("guest_id").references(() => guests.id),
+  checkIn: timestamp("check_in").notNull(),
+  checkOut: timestamp("check_out").notNull(),
+  status: text("status").notNull(),
+  totalAmount: numeric("total_amount", { precision: 10, scale: 0 }).notNull(),
+  notes: text("notes"),
+  bookingReference: varchar("booking_reference", { length: 10 }).notNull().unique(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const payments = pgTable("payments", {
   id: serial("id").primaryKey(),
   guestId: integer("guest_id").references(() => guests.id),
   amount: numeric("amount").notNull(),
-  status: text("status").notNull(), // pending, confirmed, refunded
-  type: text("type").notNull(), // rent, deposit, service
-  method: text("payment_method").notNull(), // cash, bank, card
-  reference: text("reference"), // reference number for bank/card payments
+  status: text("status").notNull(),
+  type: text("type").notNull(),
+  method: text("payment_method").notNull(),
+  reference: text("reference"),
   dueDate: timestamp("due_date").notNull(),
   date: timestamp("date").notNull(),
   description: text("description"),
-  confirmedBy: text("confirmed_by"), // manager who confirmed the payment
+  confirmedBy: text("confirmed_by"),
   confirmedAt: timestamp("confirmed_at"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const assets = pgTable("assets", {
   id: serial("id").primaryKey(),
-  type: text("type").notNull(), // cash, bank
+  type: text("type").notNull(),
   amount: numeric("amount").notNull(),
   date: timestamp("date").notNull(),
   description: text("description"),
@@ -92,7 +98,6 @@ export const admins = pgTable("admins", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-// Relations
 export const propertiesRelations = relations(properties, ({ many }) => ({
   guests: many(guests),
   bookings: many(bookings),
@@ -123,8 +128,6 @@ export const paymentsRelations = relations(payments, ({ one }) => ({
   }),
 }));
 
-
-// Schemas
 const amenitiesSchema = z.object({
   tv: z.boolean().default(false),
   aircon: z.boolean().default(false),
@@ -168,6 +171,12 @@ export const insertGuestSchema = z.object({
   checkOut: z.coerce.date(),
   accessCode: z.string().length(6).optional(),
   bookingReference: z.string().length(10).optional(),
+  dateOfBirth: z.coerce.date().optional(),
+  placeOfBirth: z.string().optional(),
+  homeAddress: z.string().optional(),
+  idNumber: z.string().optional(),
+  idType: z.enum(['passport', 'national_id']).optional(),
+  idImageUrl: z.string().optional(),
 });
 export const selectGuestSchema = createSelectSchema(guests);
 export const insertPaymentSchema = createInsertSchema(payments);
@@ -194,7 +203,6 @@ export const loginAdminSchema = z.object({
   password: z.string().min(1, "Password is required"),
 });
 
-// Types
 export type Property = typeof properties.$inferSelect;
 export type Guest = typeof guests.$inferSelect;
 export type Payment = typeof payments.$inferSelect;

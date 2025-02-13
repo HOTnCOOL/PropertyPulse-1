@@ -16,6 +16,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Calendar } from "@/components/ui/calendar";
 import {
   Select,
   SelectContent,
@@ -23,7 +24,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Calendar } from "@/components/ui/calendar";
 import {
   Popover,
   PopoverContent,
@@ -35,7 +35,10 @@ import GuestList from "../components/GuestList";
 import PaymentEstimator from "../components/PaymentEstimator";
 import PaymentHistory from "../components/PaymentHistory";
 import PaymentRegistration from "../components/PaymentRegistration";
+import IdScanner from "../components/IdScanner";
+import type { z } from "zod";
 
+type FormData = z.infer<typeof insertGuestSchema>;
 
 export default function GuestRegistration() {
   const { toast } = useToast();
@@ -54,16 +57,22 @@ export default function GuestRegistration() {
   const params = new URLSearchParams(window.location.search);
   const preSelectedPropertyId = params.get('propertyId');
 
-  const form = useForm({
+  const form = useForm<FormData>({
     resolver: zodResolver(insertGuestSchema),
     defaultValues: {
       firstName: "",
       lastName: "",
       email: "",
       phone: "",
-      propertyId: preSelectedPropertyId ? Number(preSelectedPropertyId) : undefined as unknown as number,
-      checkIn: undefined,
-      checkOut: undefined,
+      propertyId: preSelectedPropertyId ? Number(preSelectedPropertyId) : undefined,
+      checkIn: new Date(),
+      checkOut: new Date(),
+      dateOfBirth: new Date(),
+      placeOfBirth: "",
+      homeAddress: "",
+      idNumber: "",
+      idType: undefined,
+      idImageUrl: "",
     },
   });
 
@@ -85,24 +94,24 @@ export default function GuestRegistration() {
     }
   });
 
-  const selectedProperty = useMemo(() => {
-    if (!properties || !form.getValues("propertyId")) return undefined;
-    return properties.find(p => p.id === form.getValues("propertyId"));
-  }, [properties, form.watch("propertyId")]);
-
   const { data: payments = [] } = useQuery<Payment[]>({
-    queryKey: ['/api/payments', activeGuest?.id],
+    queryKey: ["/api/payments", activeGuest?.id],
     queryFn: async () => {
       if (!activeGuest?.id) return [];
       const response = await fetch(`/api/payments?guestId=${activeGuest.id}`);
       if (!response.ok) throw new Error("Failed to fetch payments");
       return response.json();
     },
-    enabled: !!activeGuest,
+    enabled: !!activeGuest
   });
 
+  const selectedProperty = useMemo(() => {
+    if (!properties || !form.getValues("propertyId")) return undefined;
+    return properties.find(p => p.id === form.getValues("propertyId"));
+  }, [properties, form.watch("propertyId")]);
+
   const registerGuest = useMutation({
-    mutationFn: async (values: typeof insertGuestSchema._type) => {
+    mutationFn: async (values: FormData) => {
       console.log('Registering guest with values:', values);
       const response = await fetch("/api/guests", {
         method: "POST",
@@ -125,10 +134,7 @@ export default function GuestRegistration() {
 
       // Redirect to payment page with the booking reference and email
       if (data.booking?.bookingReference && data.guest?.email) {
-        console.log('Redirecting to payment page with:', data);
         setLocation(`/payment?ref=${data.booking.bookingReference}&email=${data.guest.email}`);
-      } else {
-        console.error('Missing booking reference or email in response:', data);
       }
     },
     onError: (error) => {
@@ -141,8 +147,7 @@ export default function GuestRegistration() {
     },
   });
 
-
-  async function onSubmit(values: typeof insertGuestSchema._type) {
+  async function onSubmit(values: FormData) {
     try {
       if (!selectedDates.from || !selectedDates.to) {
         toast({
@@ -152,10 +157,6 @@ export default function GuestRegistration() {
         });
         return;
       }
-
-      // Update form values with selected dates
-      form.setValue("checkIn", selectedDates.from);
-      form.setValue("checkOut", selectedDates.to);
 
       await registerGuest.mutateAsync({
         ...values,
@@ -172,6 +173,54 @@ export default function GuestRegistration() {
     }
   }
 
+  const uploadIdImage = async (file: File) => {
+    const formData = new FormData();
+    formData.append("idImage", file);
+
+    const response = await fetch("/api/upload/id-image", {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!response.ok) throw new Error("Failed to upload ID image");
+    const data = await response.json();
+    return data.url;
+  };
+
+  const handleExtractedData = (data: {
+    firstName?: string;
+    lastName?: string;
+    dateOfBirth?: string;
+    placeOfBirth?: string;
+    idNumber?: string;
+    homeAddress?: string;
+    idType?: 'passport' | 'national_id';
+  }) => {
+    Object.entries(data).forEach(([key, value]) => {
+      if (value) {
+        if (key === 'dateOfBirth' && value) {
+          form.setValue(key as keyof FormData, new Date(value));
+        } else {
+          form.setValue(key as keyof FormData, value);
+        }
+      }
+    });
+  };
+
+  const handleIdImageCaptured = async (file: File) => {
+    try {
+      const imageUrl = await uploadIdImage(file);
+      form.setValue("idImageUrl", imageUrl);
+    } catch (error) {
+      console.error('Failed to upload ID image:', error);
+      toast({
+        title: "Error",
+        description: "Failed to upload ID image",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold">Guest Registration</h1>
@@ -187,27 +236,44 @@ export default function GuestRegistration() {
                 <FormField
                   control={form.control}
                   name="checkIn"
-                  render={() => (
+                  render={({ field }) => (
                     <FormItem className="flex flex-col">
                       <FormLabel>Stay Dates</FormLabel>
-                      <FormControl>
-                        <Calendar
-                          mode="range"
-                          selected={selectedDates}
-                          onSelect={(range) => {
-                            setSelectedDates(range ?? { from: undefined, to: undefined });
-                            if (range?.from) {
-                              form.setValue("checkIn", range.from);
-                              if (range.to) {
-                                form.setValue("checkOut", range.to);
-                              }
-                            }
-                          }}
-                          disabled={(date) => date < new Date()}
-                          numberOfMonths={2}
-                          className="rounded-md border"
-                        />
-                      </FormControl>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant={"outline"}
+                              className={`w-full pl-3 text-left font-normal ${
+                                !field.value && "text-muted-foreground"
+                              }`}
+                            >
+                              {selectedDates.from ? (
+                                selectedDates.to ? (
+                                  <>
+                                    {format(selectedDates.from, "LLL dd, y")} -{" "}
+                                    {format(selectedDates.to, "LLL dd, y")}
+                                  </>
+                                ) : (
+                                  format(selectedDates.from, "LLL dd, y")
+                                )
+                              ) : (
+                                <span>Pick a date</span>
+                              )}
+                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="range"
+                            selected={selectedDates}
+                            onSelect={setSelectedDates}
+                            disabled={(date) => date < new Date()}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -227,24 +293,115 @@ export default function GuestRegistration() {
                         {format(selectedDates.to, "MMMM d, yyyy")}
                       </span>
                     </div>
-                    <div className="flex justify-between text-sm pt-2 border-t">
-                      <span className="font-medium">
-                        Total nights:
-                      </span>
-                      <span className="font-medium">
-                        {Math.ceil((selectedDates.to.getTime() - selectedDates.from.getTime()) / (1000 * 60 * 60 * 24))}
-                      </span>
-                    </div>
                   </div>
                 )}
 
-                <div className="grid grid-cols-2 gap-4">
+                {/* Add ID Scanner */}
+                <div className="mb-6">
+                  <IdScanner
+                    onDataExtracted={handleExtractedData}
+                    onImageCaptured={handleIdImageCaptured}
+                  />
+                </div>
+
+                {/* Personal Information Section */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-medium">Personal Information</h3>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="firstName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>First Name</FormLabel>
+                          <FormControl>
+                            <Input {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="lastName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Last Name</FormLabel>
+                          <FormControl>
+                            <Input {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="email"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Email</FormLabel>
+                          <FormControl>
+                            <Input type="email" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="phone"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Phone</FormLabel>
+                          <FormControl>
+                            <Input {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+
+                {/* ID/Passport Information Section */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-medium">ID/Passport Information</h3>
+
                   <FormField
                     control={form.control}
-                    name="firstName"
+                    name="idType"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>First Name</FormLabel>
+                        <FormLabel>ID Type</FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select ID type" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="passport">Passport</SelectItem>
+                            <SelectItem value="national_id">National ID</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="idNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>ID/Passport Number</FormLabel>
                         <FormControl>
                           <Input {...field} />
                         </FormControl>
@@ -252,12 +409,46 @@ export default function GuestRegistration() {
                       </FormItem>
                     )}
                   />
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="dateOfBirth"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Date of Birth</FormLabel>
+                          <FormControl>
+                            <Input 
+                              type="date" 
+                              value={field.value ? format(new Date(field.value), 'yyyy-MM-dd') : ''}
+                              onChange={e => field.onChange(e.target.value ? new Date(e.target.value) : null)}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="placeOfBirth"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Place of Birth</FormLabel>
+                          <FormControl>
+                            <Input {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
                   <FormField
                     control={form.control}
-                    name="lastName"
+                    name="homeAddress"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Last Name</FormLabel>
+                        <FormLabel>Home Address</FormLabel>
                         <FormControl>
                           <Input {...field} />
                         </FormControl>
@@ -269,41 +460,13 @@ export default function GuestRegistration() {
 
                 <FormField
                   control={form.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Email</FormLabel>
-                      <FormControl>
-                        <Input type="email" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="phone"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Phone</FormLabel>
-                      <FormControl>
-                        <Input {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
                   name="propertyId"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Property</FormLabel>
                       <Select
                         onValueChange={(value) => field.onChange(Number(value))}
-                        value={field.value?.toString() || ""}
+                        value={field.value?.toString()}
                       >
                         <FormControl>
                           <SelectTrigger>
@@ -337,8 +500,8 @@ export default function GuestRegistration() {
         {selectedProperty && (
           <PaymentEstimator
             property={selectedProperty}
-            checkIn={form.watch("checkIn")}
-            checkOut={form.watch("checkOut")}
+            checkIn={selectedDates.from}
+            checkOut={selectedDates.to}
           />
         )}
 
@@ -351,8 +514,8 @@ export default function GuestRegistration() {
               <div>
                 <h3 className="text-lg font-medium mb-4">Recent Guests</h3>
                 <GuestList
-                  guests={guests.slice(0, 5)}
-                  onSelectGuest={(guest) => setActiveGuest(guest)}
+                  guests={guests}
+                  onSelectGuest={setActiveGuest}
                   selectedGuestId={activeGuest?.id}
                 />
               </div>
@@ -373,25 +536,7 @@ export default function GuestRegistration() {
 
                   <Card>
                     <CardHeader>
-                      <CardTitle>Register New Payment</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <PaymentRegistration
-                        guestId={activeGuest.id}
-                        property={selectedProperty}
-                        booking={null}
-                        onSuccess={() => {
-                          queryClient.invalidateQueries({
-                            queryKey: ['/api/payments', activeGuest.id]
-                          });
-                        }}
-                      />
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Payment History & Pending Payments</CardTitle>
+                      <CardTitle>Payment History</CardTitle>
                     </CardHeader>
                     <CardContent>
                       <div className="space-y-4">

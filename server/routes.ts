@@ -31,12 +31,20 @@ declare module 'express-session' {
   }
 }
 
-// Configure multer with proper types
+// Update Multer configurations with proper types
 const storage = multer.diskStorage({
-  destination: function (_req: Express.Request, _file: Express.Multer.File, cb: multer.FileFilterCallback) {
+  destination: (
+    _req: Express.Request,
+    _file: Express.Multer.File,
+    cb: (error: Error | null, destination: string) => void
+  ) => {
     cb(null, path.join(process.cwd(), "uploads"));
   },
-  filename: function (_req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback) {
+  filename: (
+    _req: Express.Request,
+    file: Express.Multer.File,
+    cb: (error: Error | null, filename: string) => void
+  ) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     cb(null, uniqueSuffix + path.extname(file.originalname));
   }
@@ -196,6 +204,44 @@ const uploadPaymentDocs = multer({
     ];
     if (!allowedTypes.includes(file.mimetype)) {
       cb(new Error('Invalid file type. Only JPEG, PNG, WebP, PDF and DOC files are allowed'));
+      return;
+    }
+    cb(null, true);
+  }
+});
+
+// Add ID image upload configuration
+const idImageStorage = multer.diskStorage({
+  destination: (
+    _req: Express.Request,
+    _file: Express.Multer.File,
+    cb: (error: Error | null, destination: string) => void
+  ) => {
+    cb(null, path.join(process.cwd(), "uploads/id-images"));
+  },
+  filename: (
+    _req: Express.Request,
+    file: Express.Multer.File,
+    cb: (error: Error | null, filename: string) => void
+  ) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, 'id-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const uploadIdImage = multer({
+  storage: idImageStorage,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  },
+  fileFilter: (
+    _req: Express.Request,
+    file: Express.Multer.File,
+    cb: multer.FileFilterCallback
+  ) => {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.mimetype)) {
+      cb(new Error('Invalid file type. Only JPEG, PNG and WebP are allowed'));
       return;
     }
     cb(null, true);
@@ -700,7 +746,6 @@ export function registerRoutes(app: Express): Server {
   });
 
 
-
   // Assets endpoints
   app.get("/api/assets", async (req: Request, res: Response) => {
     const { type } = req.query;
@@ -891,8 +936,7 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-
-  // Add this endpoint after the existing bookings endpoints
+  // Update the booking query endpoint
   app.get("/api/bookings/guest", async (req: Request, res: Response) => {
     try {
       const { ref, email } = req.query;
@@ -901,34 +945,32 @@ export function registerRoutes(app: Express): Server {
         return res.status(400).json({ message: "Booking reference and email are required" });
       }
 
-      // Find the booking with related guest and property information
-      const booking = await db.query.bookings.findFirst({
-        where: and(
-          eq(bookings.bookingReference, String(ref))
-        ),
+      // Find the booking with guest and property info
+      const bookingData = await db.query.bookings.findFirst({
+        where: eq(bookings.bookingReference, String(ref)),
         with: {
           guest: true,
-          property: true,
-        },
+          property: true
+        }
       });
 
-      if (!booking) {
+      if (!bookingData || !bookingData.guest) {
         return res.status(404).json({ message: "Booking not found" });
       }
 
-      if (booking.guest?.email !== email) {
+      if (bookingData.guest.email !== email) {
         return res.status(404).json({ message: "Booking not found" });
       }
 
       // Get related payments
       const bookingPayments = await db.query.payments.findMany({
-        where: eq(payments.guestId, booking.guest.id),
+        where: eq(payments.guestId, bookingData.guest.id)
       });
 
       // Combine the data
       const fullBookingData = {
-        ...booking,
-        payments: bookingPayments,
+        ...bookingData,
+        payments: bookingPayments
       };
 
       res.json(fullBookingData);
@@ -938,25 +980,14 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  app.post("/api/auth/logout", (req: Request, res: Response) => {
-    req.session.destroy((err) => {
-      if (err) {
-        console.error('Logout error:', err);
-        return res.status(500).json({ message: "Logout failed" });
-      }
-      res.clearCookie("connect.sid");
-      res.json({ message: "Logged out successfully" });
-    });
-  });
+  // Add ID image upload endpoint
+  app.post("/api/upload/id-image", uploadIdImage.single("idImage"), (req: Request, res: Response) => {
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
 
-  app.get("/api/auth/session", (req: Request, res: Response) => {
-    if (req.session?.adminId) {
-      return res.json({ type: "admin", id: req.session.adminId });
-    }
-    if (req.session?.guestId) {
-      return res.json({ type: "guest", id: req.session.guestId });
-    }
-    res.status(401).json({ message: "Not authenticated" });
+    const imageUrl = `/uploads/id-images/${req.file.filename}`;
+    res.json({ url: imageUrl });
   });
 
   // Update the property query with proper types
