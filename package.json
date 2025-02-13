@@ -11,8 +11,8 @@
     "db:push": "drizzle-kit push"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.744.0",
-    "@aws-sdk/lib-storage": "^3.744.0",
+    "@aws-sdk/client-s3": "^3.726.0",
+    "@aws-sdk/lib-storage": "^3.726.0",
     "@hookform/resolvers": "^3.10.0",
     "@jridgewell/trace-mapping": "^0.3.25",
     "@radix-ui/react-accordion": "^1.2.1",
@@ -48,7 +48,6 @@
     "@types/multer": "^1.4.12",
     "@types/pg": "^8.11.11",
     "class-variance-authority": "^0.7.0",
-    "classnames": "^2.5.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.0",
     "connect-pg-simple": "^10.0.0",
@@ -75,7 +74,6 @@
     "recharts": "^2.13.0",
     "tailwind-merge": "^2.5.4",
     "tailwindcss-animate": "^1.0.7",
-    "tesseract.js": "^6.0.0",
     "vaul": "^1.1.0",
     "wouter": "^3.3.5",
     "ws": "^8.18.0",

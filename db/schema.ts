@@ -41,17 +41,11 @@ export const guests = pgTable("guests", {
   lastName: text("last_name").notNull(),
   email: text("email").notNull(),
   phone: text("phone").notNull(),
-  dateOfBirth: timestamp("date_of_birth").notNull(),
-  placeOfBirth: text("place_of_birth").notNull(),
-  address: text("address").notNull(),
-  documentNumber: text("document_number").notNull(),
-  documentType: text("document_type").notNull(), // passport or id
-  documentImageUrl: text("document_image_url"),
   propertyId: integer("property_id").references(() => properties.id),
   checkIn: timestamp("check_in").notNull(),
   checkOut: timestamp("check_out").notNull(),
-  accessCode: varchar("access_code", { length: 6 }),
-  bookingReference: varchar("booking_reference", { length: 10 }),
+  accessCode: varchar("access_code", { length: 6 }), // Added for door access
+  bookingReference: varchar("booking_reference", { length: 10 }), // Reference to booking
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -169,12 +163,6 @@ export const insertGuestSchema = z.object({
   lastName: z.string().min(1, "Last name is required"),
   email: z.string().email("Invalid email address"),
   phone: z.string().min(1, "Phone number is required"),
-  dateOfBirth: z.coerce.date(),
-  placeOfBirth: z.string().min(1, "Place of birth is required"),
-  address: z.string().min(1, "Address is required"),
-  documentNumber: z.string().min(1, "Document number is required"),
-  documentType: z.enum(["passport", "id"]),
-  documentImageUrl: z.string().optional(),
   propertyId: z.number(),
   checkIn: z.coerce.date(),
   checkOut: z.coerce.date(),
