@@ -284,7 +284,7 @@ function extractIdNumber(text: string): string | undefined {
 function extractDate(text: string): string | undefined {
   const datePatterns = [
     /(\d{2}\.\d{2}\.\d{4})/g,  // Bulgarian date format
-    /(\d{1,2}[-./]\d{1,2}[-./]\d{2,4})/gi,
+    /(\d{1,2}[-./]\d{1,2}[-./]\d{2,4})/g,  // Generic date format
   ];
 
   for (const pattern of datePatterns) {
