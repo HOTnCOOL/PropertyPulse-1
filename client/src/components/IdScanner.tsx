@@ -88,10 +88,14 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
         });
       }
     } catch (error) {
-      console.error('OCR Error:', error);
+      console.error('OCR Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
       toast({
         title: "Processing Error",
-        description: "Failed to process the image. Please try again or enter details manually.",
+        description: `Failed to process the image: ${error.message}. Please try again or enter details manually.`,
         variant: "destructive",
       });
     } finally {
