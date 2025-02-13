@@ -246,14 +246,26 @@ function extractField(text: string, pattern: RegExp): string | undefined {
 function extractName(text: string): { firstName?: string, lastName?: string } {
   const lines = text.split('\n');
   
-  // Look for the line containing name information (usually the last line with multiple uppercase words)
   for (const line of lines) {
-    if (/[A-ZА-Я]{3,}\s+[A-ZА-Я]{3,}/.test(line)) {
-      const nameParts = line.split(/[CS]+/).filter(part => part.length > 2);
-      if (nameParts.length >= 2) {
-        const firstName = nameParts[1]?.replace(/[^A-ZА-Я]/g, '').trim();
-        const lastName = nameParts[0]?.replace(/[^A-ZА-Я]/g, '').trim();
-        return { firstName, lastName };
+    // Look for lines with uppercase letters and potential name patterns
+    if (/[A-ZА-Я]{3,}/.test(line)) {
+      // Clean up the line and split by common separators
+      const cleanLine = line.replace(/[0-9]/g, '').trim();
+      const parts = cleanLine.split(/[CS\s]+/).filter(part => 
+        part.length > 2 && /^[A-ZА-Я]+$/.test(part)
+      );
+      
+      if (parts.length >= 2) {
+        // Try to identify last name (usually comes first) and first name
+        const lastName = parts[0];
+        const firstName = parts[1];
+        
+        if (lastName && firstName) {
+          return {
+            firstName: firstName.trim(),
+            lastName: lastName.trim()
+          };
+        }
       }
     }
   }
