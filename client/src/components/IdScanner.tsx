@@ -32,9 +32,16 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
 
   const processImage = async (imageSource: string | File) => {
     setIsProcessing(true);
+    toast({
+      title: "Processing",
+      description: "Initializing ID scanner...",
+    });
     try {
       const worker = await createWorker({
         logger: (m) => console.log(m),
+        workerPath: 'https://unpkg.com/tesseract.js@v5.0.3/dist/worker.min.js',
+        workerBlobURL: false,
+        corePath: 'https://unpkg.com/tesseract.js-core@v5.0.3/tesseract-core.wasm.js',
       });
       await worker.load();
       await worker.loadLanguage('eng+bul');
