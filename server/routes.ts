@@ -498,13 +498,26 @@ export function registerRoutes(app: Express): Server {
   app.post("/api/guests", async (req: Request, res: Response) => {
     try {
       console.log('Received guest registration request:', req.body);
+
+      // Parse and validate dates
       const checkInDate = new Date(req.body.checkIn);
       const checkOutDate = new Date(req.body.checkOut);
+      const dateOfBirth = req.body.dateOfBirth ? new Date(req.body.dateOfBirth) : null;
 
       // Validate dates
       if (isNaN(checkInDate.getTime()) || isNaN(checkOutDate.getTime())) {
+        console.error('Invalid date format:', { checkIn: req.body.checkIn, checkOut: req.body.checkOut });
         return res.status(400).json({
-          message: "Invalid date format",
+          message: "Invalid date format for check-in or check-out dates",
+          details: { checkIn: req.body.checkIn, checkOut: req.body.checkOut }
+        });
+      }
+
+      if (dateOfBirth && isNaN(dateOfBirth.getTime())) {
+        console.error('Invalid date of birth format:', req.body.dateOfBirth);
+        return res.status(400).json({
+          message: "Invalid date format for date of birth",
+          details: { dateOfBirth: req.body.dateOfBirth }
         });
       }
 
@@ -520,9 +533,12 @@ export function registerRoutes(app: Express): Server {
             ...req.body,
             checkIn: checkInDate,
             checkOut: checkOutDate,
-            bookingReference, // Add booking reference to guest
+            dateOfBirth: dateOfBirth,
+            bookingReference,
           })
           .returning();
+
+        console.log('Created guest:', guest);
 
         // Get property details
         const property = await tx.query.properties.findFirst({
@@ -533,7 +549,7 @@ export function registerRoutes(app: Express): Server {
           throw new Error("Property not found");
         }
 
-        // Calculate total amount using the new price calculation
+        // Calculate total amount using the price calculation
         const pricePeriods = calculatePricePeriods(property, checkInDate, checkOutDate);
         const totalAmount = pricePeriods.reduce((sum, period) => sum + period.amount, 0);
 
@@ -552,7 +568,7 @@ export function registerRoutes(app: Express): Server {
           })
           .returning();
 
-        console.log('Registration successful:', { guest, booking });
+        console.log('Created booking:', booking);
         return { guest, booking };
       });
 

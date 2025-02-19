@@ -118,7 +118,17 @@ export default function GuestRegistration() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(values),
       });
-      if (!response.ok) throw new Error("Failed to register guest");
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Server response error:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorData
+        });
+        throw new Error(errorData.message || 'Failed to register guest');
+      }
+
       const data = await response.json();
       console.log('Registration response:', data);
       return data;
@@ -141,7 +151,7 @@ export default function GuestRegistration() {
       console.error('Registration error:', error);
       toast({
         title: "Error",
-        description: "Failed to register guest",
+        description: error instanceof Error ? error.message : "Failed to register guest",
         variant: "destructive",
       });
     },
@@ -149,6 +159,7 @@ export default function GuestRegistration() {
 
   async function onSubmit(values: FormData) {
     try {
+      console.log('Form values being submitted:', values);
       if (!selectedDates.from || !selectedDates.to) {
         toast({
           title: "Error",
@@ -158,16 +169,25 @@ export default function GuestRegistration() {
         return;
       }
 
-      await registerGuest.mutateAsync({
+      // Ensure proper date formatting
+      const formattedValues = {
         ...values,
-        checkIn: selectedDates.from,
-        checkOut: selectedDates.to,
-      });
+        checkIn: selectedDates.from.toISOString(),
+        checkOut: selectedDates.to.toISOString(),
+        dateOfBirth: values.dateOfBirth ? new Date(values.dateOfBirth).toISOString() : null,
+      };
+
+      console.log('Formatted values being sent to API:', formattedValues);
+
+      await registerGuest.mutateAsync(formattedValues);
     } catch (error) {
-      console.error('Registration error:', error);
+      console.error('Registration error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        error
+      });
       toast({
         title: "Error",
-        description: "Failed to register guest",
+        description: error instanceof Error ? error.message : "Failed to register guest",
         variant: "destructive",
       });
     }
@@ -445,8 +465,8 @@ export default function GuestRegistration() {
                         <FormItem>
                           <FormLabel>Date of Birth</FormLabel>
                           <FormControl>
-                            <Input 
-                              type="date" 
+                            <Input
+                              type="date"
                               value={field.value ? format(new Date(field.value), 'yyyy-MM-dd') : ''}
                               onChange={e => field.onChange(e.target.value ? new Date(e.target.value) : null)}
                             />
