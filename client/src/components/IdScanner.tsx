@@ -38,11 +38,7 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
     });
     try {
       const worker = await createWorker({
-        logger: m => {
-          if (typeof m === 'string' || typeof m.progress === 'number') {
-            console.log(m);
-          }
-        },
+        logger: console.log,
         workerPath: 'https://unpkg.com/tesseract.js@v5.0.3/dist/worker.min.js',
         workerBlobURL: false,
         corePath: 'https://unpkg.com/tesseract.js-core@v5.0.3/tesseract-core.wasm.js',
