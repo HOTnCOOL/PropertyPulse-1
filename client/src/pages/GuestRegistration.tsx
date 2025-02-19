@@ -31,12 +31,11 @@ import {
 } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { insertGuestSchema, type Property, type Guest, type Payment } from "@db/schema";
+import * as z from "zod";
 import GuestList from "../components/GuestList";
 import PaymentEstimator from "../components/PaymentEstimator";
 import PaymentHistory from "../components/PaymentHistory";
-import PaymentRegistration from "../components/PaymentRegistration";
 import IdScanner from "../components/IdScanner";
-import type { z } from "zod";
 
 type FormData = z.infer<typeof insertGuestSchema>;
 
@@ -44,7 +43,6 @@ export default function GuestRegistration() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
-  const [activeGuest, setActiveGuest] = useState<Guest | null>(null);
   const [selectedDates, setSelectedDates] = useState<{
     from: Date | undefined;
     to: Date | undefined;
@@ -65,9 +63,10 @@ export default function GuestRegistration() {
       email: "",
       phone: "",
       propertyId: preSelectedPropertyId ? Number(preSelectedPropertyId) : undefined,
-      checkIn: new Date(),
-      checkOut: new Date(),
-      dateOfBirth: new Date(),
+      address: "", // Add default value for required address field
+      checkIn: undefined,
+      checkOut: undefined,
+      dateOfBirth: undefined,
       placeOfBirth: "",
       homeAddress: "",
       idNumber: "",
@@ -94,6 +93,7 @@ export default function GuestRegistration() {
     }
   });
 
+  const [activeGuest, setActiveGuest] = useState<Guest | null>(null);
   const { data: payments = [] } = useQuery<Payment[]>({
     queryKey: ["/api/payments", activeGuest?.id],
     queryFn: async () => {
@@ -112,11 +112,25 @@ export default function GuestRegistration() {
 
   const registerGuest = useMutation({
     mutationFn: async (values: FormData) => {
-      console.log('Registering guest with values:', values);
+      console.log('Starting guest registration with values:', values);
+
+      if (!selectedDates.from || !selectedDates.to) {
+        throw new Error("Please select your stay dates");
+      }
+
+      const formattedValues = {
+        ...values,
+        checkIn: selectedDates.from.toISOString(),
+        checkOut: selectedDates.to.toISOString(),
+        dateOfBirth: values.dateOfBirth ? new Date(values.dateOfBirth).toISOString() : null,
+      };
+
+      console.log('Sending formatted values to API:', formattedValues);
+
       const response = await fetch("/api/guests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(values),
+        body: JSON.stringify(formattedValues),
       });
 
       if (!response.ok) {
@@ -129,20 +143,18 @@ export default function GuestRegistration() {
         throw new Error(errorData.message || 'Failed to register guest');
       }
 
-      const data = await response.json();
-      console.log('Registration response:', data);
-      return data;
+      return response.json();
     },
     onSuccess: (data) => {
+      console.log('Registration successful:', data);
       queryClient.invalidateQueries({ queryKey: ["/api/guests"] });
       form.reset();
-      setSelectedDates({from: undefined, to: undefined});
+      setSelectedDates({ from: undefined, to: undefined });
       toast({
         title: "Success",
         description: "Guest has been registered successfully",
       });
 
-      // Redirect to payment page with the booking reference and email
       if (data.booking?.bookingReference && data.guest?.email) {
         setLocation(`/payment?ref=${data.booking.bookingReference}&email=${data.guest.email}`);
       }
@@ -157,9 +169,31 @@ export default function GuestRegistration() {
     },
   });
 
+  const handleDateSelect = (range: { from: Date | undefined; to: Date | undefined } | undefined) => {
+    if (!range) {
+      setSelectedDates({ from: undefined, to: undefined });
+      form.setValue("checkIn", undefined);
+      form.setValue("checkOut", undefined);
+      return;
+    }
+
+    setSelectedDates({
+      from: range.from,
+      to: range.to
+    });
+
+    if (range.from) {
+      form.setValue("checkIn", range.from);
+    }
+    if (range.to) {
+      form.setValue("checkOut", range.to);
+    }
+  };
+
   async function onSubmit(values: FormData) {
     try {
-      console.log('Form values being submitted:', values);
+      console.log('Form submission started with values:', values);
+
       if (!selectedDates.from || !selectedDates.to) {
         toast({
           title: "Error",
@@ -169,22 +203,18 @@ export default function GuestRegistration() {
         return;
       }
 
-      // Ensure proper date formatting
-      const formattedValues = {
-        ...values,
-        checkIn: selectedDates.from.toISOString(),
-        checkOut: selectedDates.to.toISOString(),
-        dateOfBirth: values.dateOfBirth ? new Date(values.dateOfBirth).toISOString() : null,
-      };
+      if (!values.propertyId) {
+        toast({
+          title: "Error",
+          description: "Please select a property",
+          variant: "destructive",
+        });
+        return;
+      }
 
-      console.log('Formatted values being sent to API:', formattedValues);
-
-      await registerGuest.mutateAsync(formattedValues);
+      await registerGuest.mutateAsync(values);
     } catch (error) {
-      console.error('Registration error details:', {
-        message: error instanceof Error ? error.message : 'Unknown error',
-        error
-      });
+      console.error('Form submission error:', error);
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to register guest",
@@ -268,285 +298,166 @@ export default function GuestRegistration() {
     }
   };
 
-  // Update the date selection handler in the Calendar component
-  const handleDateSelect = (range: { from: Date; to: Date } | undefined) => {
-    setSelectedDates({
-      from: range?.from,
-      to: range?.to
-    });
-
-    if (range?.from) {
-      form.setValue("checkIn", range.from);
-      if (range.to) {
-        form.setValue("checkOut", range.to);
-      }
-    }
-  };
-
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold">Guest Registration</h1>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Register New Guest</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Register New Guest</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              {/* Date Selection */}
+              <FormField
+                control={form.control}
+                name="checkIn"
+                render={() => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Stay Dates</FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant={"outline"}
+                            className={`w-full pl-3 text-left font-normal ${
+                              !selectedDates.from && "text-muted-foreground"
+                            }`}
+                          >
+                            {selectedDates.from ? (
+                              selectedDates.to ? (
+                                <>
+                                  {format(selectedDates.from, "LLL dd, y")} -{" "}
+                                  {format(selectedDates.to, "LLL dd, y")}
+                                </>
+                              ) : (
+                                format(selectedDates.from, "LLL dd, y")
+                              )
+                            ) : (
+                              <span>Pick a date</span>
+                            )}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="range"
+                          selected={{
+                            from: selectedDates.from,
+                            to: selectedDates.to
+                          }}
+                          onSelect={handleDateSelect}
+                          disabled={(date) => date < new Date()}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Personal Information */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium">Personal Information</h3>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="firstName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>First Name</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="lastName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Last Name</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Email</FormLabel>
+                        <FormControl>
+                          <Input type="email" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="phone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Phone</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
                 <FormField
                   control={form.control}
-                  name="checkIn"
+                  name="address"
                   render={({ field }) => (
-                    <FormItem className="flex flex-col">
-                      <FormLabel>Stay Dates</FormLabel>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <FormControl>
-                            <Button
-                              variant={"outline"}
-                              className={`w-full pl-3 text-left font-normal ${
-                                !field.value && "text-muted-foreground"
-                              }`}
-                            >
-                              {selectedDates.from ? (
-                                selectedDates.to ? (
-                                  <>
-                                    {format(selectedDates.from, "LLL dd, y")} -{" "}
-                                    {format(selectedDates.to, "LLL dd, y")}
-                                  </>
-                                ) : (
-                                  format(selectedDates.from, "LLL dd, y")
-                                )
-                              ) : (
-                                <span>Pick a date</span>
-                              )}
-                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                            </Button>
-                          </FormControl>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar
-                            mode="range"
-                            selected={{
-                              from: selectedDates.from,
-                              to: selectedDates.to
-                            }}
-                            onSelect={handleDateSelect}
-                            disabled={(date) => date < new Date()}
-                            initialFocus
-                          />
-                        </PopoverContent>
-                      </Popover>
+                    <FormItem>
+                      <FormLabel>Current Address</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+              </div>
 
-                {selectedDates.from && selectedDates.to && (
-                  <div className="space-y-2 p-4 bg-muted rounded-lg">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Check-in:</span>
-                      <span className="font-medium">
-                        {format(selectedDates.from, "MMMM d, yyyy")}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Check-out:</span>
-                      <span className="font-medium">
-                        {format(selectedDates.to, "MMMM d, yyyy")}
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Add ID Scanner */}
-                <div className="mb-6">
-                  <IdScanner
-                    onDataExtracted={handleExtractedData}
-                    onImageCaptured={handleIdImageCaptured}
-                  />
-                </div>
-
-                {/* Personal Information Section */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-medium">Personal Information</h3>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="firstName"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>First Name</FormLabel>
-                          <FormControl>
-                            <Input {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="lastName"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Last Name</FormLabel>
-                          <FormControl>
-                            <Input {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="email"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Email</FormLabel>
-                          <FormControl>
-                            <Input type="email" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="phone"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Phone</FormLabel>
-                          <FormControl>
-                            <Input {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </div>
-
-                {/* ID/Passport Information Section */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-medium">ID/Passport Information</h3>
-
-                  <FormField
-                    control={form.control}
-                    name="idType"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>ID Type</FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          value={field.value}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select ID type" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="passport">Passport</SelectItem>
-                            <SelectItem value="national_id">National ID</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="idNumber"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>ID/Passport Number</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="dateOfBirth"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Date of Birth</FormLabel>
-                          <FormControl>
-                            <Input
-                              type="date"
-                              value={field.value ? format(new Date(field.value), 'yyyy-MM-dd') : ''}
-                              onChange={e => field.onChange(e.target.value ? new Date(e.target.value) : null)}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="placeOfBirth"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Place of Birth</FormLabel>
-                          <FormControl>
-                            <Input {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
-                  <FormField
-                    control={form.control}
-                    name="homeAddress"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Home Address</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
+              {/* ID/Passport Information Section */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium">ID/Passport Information</h3>
 
                 <FormField
                   control={form.control}
-                  name="propertyId"
+                  name="idType"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Property</FormLabel>
+                      <FormLabel>ID Type</FormLabel>
                       <Select
-                        onValueChange={(value) => field.onChange(Number(value))}
-                        value={field.value?.toString()}
+                        onValueChange={field.onChange}
+                        value={field.value}
                       >
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder="Select a property" />
+                            <SelectValue placeholder="Select ID type" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {properties?.map((property) => (
-                            <SelectItem
-                              key={property.id}
-                              value={property.id.toString()}
-                            >
-                              {property.name}
-                            </SelectItem>
-                          ))}
+                          <SelectItem value="passport">Passport</SelectItem>
+                          <SelectItem value="national_id">National ID</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -554,13 +465,121 @@ export default function GuestRegistration() {
                   )}
                 />
 
-                <Button type="submit" className="w-full">
-                  Register Guest
-                </Button>
-              </form>
-            </Form>
-          </CardContent>
-        </Card>
+                <FormField
+                  control={form.control}
+                  name="idNumber"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>ID/Passport Number</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="dateOfBirth"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Date of Birth</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="date"
+                            value={field.value ? format(new Date(field.value), 'yyyy-MM-dd') : ''}
+                            onChange={e => field.onChange(e.target.value ? new Date(e.target.value) : null)}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="placeOfBirth"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Place of Birth</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name="homeAddress"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Home Address</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {/* Property Selection */}
+              <FormField
+                control={form.control}
+                name="propertyId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Property</FormLabel>
+                    <Select
+                      onValueChange={(value) => field.onChange(Number(value))}
+                      value={field.value?.toString()}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a property" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {properties?.map((property) => (
+                          <SelectItem
+                            key={property.id}
+                            value={property.id.toString()}
+                          >
+                            {property.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Add ID Scanner */}
+              <div className="mb-6">
+                <IdScanner
+                  onDataExtracted={handleExtractedData}
+                  onImageCaptured={handleIdImageCaptured}
+                />
+              </div>
+
+
+              <Button 
+                type="submit" 
+                className="w-full"
+                disabled={registerGuest.isPending}
+              >
+                {registerGuest.isPending ? "Registering..." : "Register Guest"}
+              </Button>
+            </form>
+          </Form>
+        </CardContent>
+      </Card>
+      <div className="grid gap-6 md:grid-cols-2">
 
         {selectedProperty && (
           <PaymentEstimator
