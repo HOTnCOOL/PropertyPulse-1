@@ -268,6 +268,21 @@ export default function GuestRegistration() {
     }
   };
 
+  // Update the date selection handler in the Calendar component
+  const handleDateSelect = (range: { from: Date; to: Date } | undefined) => {
+    setSelectedDates({
+      from: range?.from,
+      to: range?.to
+    });
+
+    if (range?.from) {
+      form.setValue("checkIn", range.from);
+      if (range.to) {
+        form.setValue("checkOut", range.to);
+      }
+    }
+  };
+
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold">Guest Registration</h1>
@@ -314,8 +329,11 @@ export default function GuestRegistration() {
                         <PopoverContent className="w-auto p-0" align="start">
                           <Calendar
                             mode="range"
-                            selected={selectedDates}
-                            onSelect={setSelectedDates}
+                            selected={{
+                              from: selectedDates.from,
+                              to: selectedDates.to
+                            }}
+                            onSelect={handleDateSelect}
                             disabled={(date) => date < new Date()}
                             initialFocus
                           />

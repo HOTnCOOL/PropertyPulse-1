@@ -54,12 +54,38 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
     },
   });
 
+  const handleDateSelect = (range: { from: Date; to: Date } | undefined) => {
+    setDateRange({
+      from: range?.from,
+      to: range?.to
+    });
+
+    if (range?.from) {
+      form.setValue("checkIn", range.from);
+      if (range.to) {
+        form.setValue("checkOut", range.to);
+      }
+    }
+  };
+
+  const generateBookingReference = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = '';
+    for (let i = 0; i < 10; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+  };
+
   const createBookingAndGuest = useMutation({
     mutationFn: async (values: BookingFormValues) => {
       try {
         if (!dateRange.from || !dateRange.to) {
           throw new Error("Please select check-in and check-out dates");
         }
+
+        // Generate booking reference
+        const bookingReference = generateBookingReference();
 
         // First create the guest
         const guestResponse = await fetch("/api/guests", {
@@ -73,6 +99,7 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
             propertyId: property.id,
             checkIn: dateRange.from,
             checkOut: dateRange.to,
+            bookingReference // Add booking reference to guest
           }),
         });
 
@@ -91,6 +118,7 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
           status: values.status,
           totalAmount: calculateTotalAmount(dateRange.from, dateRange.to),
           notes: values.notes || "",
+          bookingReference // Add same booking reference to booking
         };
 
         const bookingResponse = await fetch("/api/bookings", {
@@ -144,9 +172,9 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
         return;
       }
 
-      // Update form values with selected dates
-      form.setValue("checkIn", dateRange.from);
-      form.setValue("checkOut", dateRange.to);
+      // Update form values with selected dates (this part is now handled in handleDateSelect)
+      // form.setValue("checkIn", dateRange.from);
+      // form.setValue("checkOut", dateRange.to);
 
       await createBookingAndGuest.mutateAsync({
         ...values,
@@ -171,16 +199,11 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
                 <FormControl>
                   <Calendar
                     mode="range"
-                    selected={dateRange}
-                    onSelect={(range) => {
-                      setDateRange(range ?? { from: undefined, to: undefined });
-                      if (range?.from) {
-                        form.setValue("checkIn", range.from);
-                        if (range.to) {
-                          form.setValue("checkOut", range.to);
-                        }
-                      }
+                    selected={{
+                      from: dateRange.from,
+                      to: dateRange.to
                     }}
+                    onSelect={handleDateSelect}
                     disabled={(date) => date < new Date()}
                     numberOfMonths={2}
                     className="rounded-md border"
