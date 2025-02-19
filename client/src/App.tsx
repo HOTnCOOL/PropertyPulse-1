@@ -6,8 +6,9 @@ import Properties from "./pages/Properties";
 import Financials from "./pages/Financials";
 import { PublicPropertyList } from "./pages/PublicPropertyList";
 import GuestPayment from "./pages/GuestPayment";
+import PaymentPlanSelection from "./pages/PaymentPlanSelection"; // Added import
 import Auth from "./pages/Auth";
-import DepositPolicyPage from "./pages/DepositPolicyPage"; // Added import
+import DepositPolicyPage from "./pages/DepositPolicyPage";
 import Sidebar from "./components/Sidebar";
 import React from "react";
 
@@ -71,6 +72,12 @@ function App() {
       <Route path="/register">
         <PublicLayout>
           <GuestRegistration />
+        </PublicLayout>
+      </Route>
+
+      <Route path="/payment-plan">
+        <PublicLayout>
+          <PaymentPlanSelection />
         </PublicLayout>
       </Route>
 

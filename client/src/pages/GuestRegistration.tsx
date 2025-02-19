@@ -155,12 +155,13 @@ export default function GuestRegistration() {
         description: "Guest has been registered successfully",
       });
 
+      // Update the redirect to go to payment plan selection page
       if (data.booking?.bookingReference && data.guest?.email) {
-        setLocation(`/payment?ref=${data.booking.bookingReference}&email=${data.guest.email}`);
+        setLocation(`/payment-plan?ref=${data.booking.bookingReference}&email=${data.guest.email}`);
       }
     },
     onError: (error) => {
-      console.error('Registration error:', error);
+      console.error('Form submission error:', error);
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to register guest",
