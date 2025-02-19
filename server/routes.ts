@@ -531,6 +531,7 @@ export function registerRoutes(app: Express): Server {
           .insert(guests)
           .values({
             ...req.body,
+            address: req.body.homeAddress || 'Not provided', // Map homeAddress to address
             checkIn: checkInDate,
             checkOut: checkOutDate,
             dateOfBirth: dateOfBirth,
