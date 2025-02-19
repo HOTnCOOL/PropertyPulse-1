@@ -9,10 +9,10 @@ export const properties = pgTable("properties", {
   description: text("description").notNull(),
   type: text("type").notNull(),
   capacity: text("capacity").notNull(),
-  hourlyRate: numeric("hourly_rate", { precision: 10, scale: 0 }),
-  rate: numeric("rate", { precision: 10, scale: 0 }).notNull(),
-  weeklyRate: numeric("weekly_rate", { precision: 10, scale: 0 }),
-  monthlyRate: numeric("monthly_rate", { precision: 10, scale: 0 }),
+  hourlyRate: numeric("hourly_rate", { precision: 10, scale: 2 }),
+  rate: numeric("rate", { precision: 10, scale: 2 }).notNull(),
+  weeklyRate: numeric("weekly_rate", { precision: 10, scale: 2 }),
+  monthlyRate: numeric("monthly_rate", { precision: 10, scale: 2 }),
   isOccupied: boolean("is_occupied").default(false),
   imageUrls: jsonb("image_urls").default('[]').notNull(),
   amenities: jsonb("amenities").default('{}').notNull(),
@@ -49,7 +49,7 @@ export const bookings = pgTable("bookings", {
   checkIn: timestamp("check_in").notNull(),
   checkOut: timestamp("check_out").notNull(),
   status: text("status").notNull(),
-  totalAmount: numeric("total_amount", { precision: 10, scale: 0 }).notNull(),
+  totalAmount: numeric("total_amount", { precision: 10, scale: 2 }).notNull(),
   notes: text("notes"),
   bookingReference: varchar("booking_reference", { length: 10 }).notNull().unique(),
   createdAt: timestamp("created_at").defaultNow(),
@@ -59,7 +59,7 @@ export const bookings = pgTable("bookings", {
 export const payments = pgTable("payments", {
   id: serial("id").primaryKey(),
   guestId: integer("guest_id").references(() => guests.id),
-  amount: numeric("amount").notNull(),
+  amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
   status: text("status").notNull(),
   type: text("type").notNull(),
   method: text("payment_method").notNull(),
@@ -75,7 +75,7 @@ export const payments = pgTable("payments", {
 export const assets = pgTable("assets", {
   id: serial("id").primaryKey(),
   type: text("type").notNull(),
-  amount: numeric("amount").notNull(),
+  amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
   date: timestamp("date").notNull(),
   description: text("description"),
   paymentId: integer("payment_id").references(() => payments.id),
@@ -91,14 +91,7 @@ export const todos = pgTable("todos", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const admins = pgTable("admins", {
-  id: serial("id").primaryKey(),
-  email: text("email").notNull().unique(),
-  password: text("password").notNull(),
-  name: text("name").notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
+// Relations
 export const propertiesRelations = relations(properties, ({ many }) => ({
   guests: many(guests),
   bookings: many(bookings),
@@ -129,6 +122,7 @@ export const paymentsRelations = relations(payments, ({ one }) => ({
   }),
 }));
 
+// Schemas
 const amenitiesSchema = z.object({
   tv: z.boolean().default(false),
   aircon: z.boolean().default(false),
@@ -161,7 +155,6 @@ export const insertPropertySchema = createInsertSchema(properties).extend({
   monthlyRate: z.number().nullable(),
 });
 
-export const selectPropertySchema = createSelectSchema(properties);
 export const insertGuestSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
@@ -180,6 +173,8 @@ export const insertGuestSchema = z.object({
   idType: z.enum(['passport', 'national_id']).optional(),
   idImageUrl: z.string().optional(),
 });
+
+export const selectPropertySchema = createSelectSchema(properties);
 export const selectGuestSchema = createSelectSchema(guests);
 export const insertPaymentSchema = createInsertSchema(payments);
 export const selectPaymentSchema = createSelectSchema(payments);
@@ -216,3 +211,10 @@ export type Admin = typeof admins.$inferSelect;
 export type NewAdmin = z.infer<typeof insertAdminSchema>;
 export type LoginGuest = z.infer<typeof loginGuestSchema>;
 export type LoginAdmin = z.infer<typeof loginAdminSchema>;
+export const admins = pgTable("admins", {
+  id: serial("id").primaryKey(),
+  email: text("email").notNull().unique(),
+  password: text("password").notNull(),
+  name: text("name").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
