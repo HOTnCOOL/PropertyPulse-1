@@ -54,8 +54,9 @@ interface PaymentBreakdown {
 const NIGHTLY_RATE = 70;
 const BASE_DEPOSIT = 70;
 
-const calculateDiscount = (totalPrepaidNights: number): number => {
-  if (totalPrepaidNights >= 7) return 10; // $60 per night
+const calculateDiscount = (totalPrepaidNights: number, periodType: 'monthly' | 'weekly' | 'daily'): number => {
+  if (periodType === 'monthly') return 28.57; // $50 per night
+  if (totalPrepaidNights >= 7) return 14.29; // $60 per night
   return 0;
 };
 
@@ -158,7 +159,7 @@ const calculateOptimalPaymentBreakdown = (
 
   periods.forEach((period, index) => {
     if (selectedPeriods.includes(index) || prepayAll) {
-      const discountPercent = calculateDiscount(totalPrepaidNights);
+      const discountPercent = calculateDiscount(totalPrepaidNights, period.type);
       const discountAmount = period.baseAmount * (discountPercent / 100);
       period.amount = period.baseAmount - discountAmount;
       period.isPrepaid = true;

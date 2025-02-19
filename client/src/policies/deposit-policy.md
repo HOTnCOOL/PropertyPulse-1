@@ -18,6 +18,7 @@ The standard security deposit is $70, with the following prepayment benefits:
 2. Prepay 2 nights: Security deposit reduced to $35 (50% off)
 3. Prepay 3 or more nights: No security deposit required
 4. Prepay a full week: Special rate of $60 per night (regular rate is $70)
+5. Prepay a full month: Special rate of $50 per night (regular rate is $70)
 
 ## Summary of Payment Options
 
