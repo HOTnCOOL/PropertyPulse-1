@@ -13,7 +13,7 @@ export default function PaymentPlanSelection() {
   const bookingRef = params.get('ref');
   const guestEmail = params.get('email');
 
-  const { data: booking } = useQuery<{ booking: Booking; guest: Guest }>({
+  const { data: booking } = useQuery<Booking>({
     queryKey: ["/api/bookings/guest", bookingRef, guestEmail],
     queryFn: async () => {
       if (!bookingRef || !guestEmail) throw new Error("Missing booking reference or email");
@@ -26,19 +26,19 @@ export default function PaymentPlanSelection() {
 
   const handlePlanSelection = (plan: 'full' | 'deposit') => {
     if (!booking) return;
-    
-    const amount = plan === 'full' ? booking.booking.totalAmount : Number(booking.booking.totalAmount) * 0.3;
+
+    const amount = plan === 'full' ? Number(booking.totalAmount) : Number(booking.totalAmount) * 0.3;
     setLocation(`/payment?ref=${bookingRef}&email=${guestEmail}&amount=${amount}&plan=${plan}`);
   };
 
   if (!booking) return null;
 
-  const depositAmount = Number(booking.booking.totalAmount) * 0.3;
+  const depositAmount = Number(booking.totalAmount) * 0.3;
 
   return (
     <div className="container mx-auto py-8">
       <h1 className="text-3xl font-bold mb-8">Select Payment Plan</h1>
-      
+
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
           <CardHeader>
@@ -46,7 +46,7 @@ export default function PaymentPlanSelection() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <p className="text-2xl font-bold">${Number(booking.booking.totalAmount).toFixed(2)}</p>
+              <p className="text-2xl font-bold">${Number(booking.totalAmount).toFixed(2)}</p>
               <p className="text-muted-foreground">Pay the full amount now and complete your booking</p>
               <Button 
                 className="w-full"
