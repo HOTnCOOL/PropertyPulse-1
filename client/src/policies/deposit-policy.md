@@ -11,12 +11,13 @@ We aim to make your booking process as straightforward as possible. Below are th
 - The deposit is fully refundable at checkout
 - If at least two packs of the same type are prepaid, the deposit can be reduced by half
 
-### Deposit Amount
-The amount of the deposit is determined according to the duration of your stay:
+### Deposit Amount and Prepayment Benefits
+The standard security deposit is $70, with the following prepayment benefits:
 
-1. $90 for stays longer than 3 days and shorter than 2 weeks (one daily rate deposit)
-2. $420 for stays longer than 2 weeks and shorter than 2 months (one weekly rate deposit)
-3. $1200 for stays longer than 2 months (one monthly rate deposit)
+1. Standard booking: $70 security deposit required at check-in
+2. Prepay 2 nights: Security deposit reduced to $35 (50% off)
+3. Prepay 3 or more nights: No security deposit required
+4. Prepay a full week: Special rate of $60 per night (regular rate is $70)
 
 ## Summary of Payment Options
 

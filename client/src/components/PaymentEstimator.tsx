@@ -51,10 +51,18 @@ interface PaymentBreakdown {
   effectiveRate: number;
 }
 
-const calculateDiscount = (periodType: 'monthly' | 'weekly' | 'daily', index: number, selectedPeriodsOfType: number): number => {
-  if (index === 0) return 0;
-  const discountPercent = Math.min(selectedPeriodsOfType * 10, 50);
-  return discountPercent / 100;
+const NIGHTLY_RATE = 70;
+const BASE_DEPOSIT = 70;
+
+const calculateDiscount = (totalPrepaidNights: number): number => {
+  if (totalPrepaidNights >= 7) return 10; // $60 per night
+  return 0;
+};
+
+const calculateDepositAmount = (prepaidNights: number): number => {
+  if (prepaidNights >= 3) return 0; // No deposit for 3+ nights prepaid
+  if (prepaidNights >= 2) return BASE_DEPOSIT / 2; // 50% deposit for 2 nights prepaid
+  return BASE_DEPOSIT; // Full deposit otherwise
 };
 
 const calculateOptimalPaymentBreakdown = (
@@ -73,7 +81,7 @@ const calculateOptimalPaymentBreakdown = (
 
   if (preferredType === 'daily') {
     if (totalDays > 0) {
-      const baseAmount = Number(property.rate) * totalDays;
+      const baseAmount = NIGHTLY_RATE * totalDays;
       periods.push({
         type: 'daily',
         startDate: currentDate,
@@ -123,7 +131,7 @@ const calculateOptimalPaymentBreakdown = (
 
     const remainingDays = differenceInDays(endDate, currentDate);
     if (remainingDays > 0) {
-      const baseAmount = Number(property.rate) * remainingDays;
+      const baseAmount = NIGHTLY_RATE * remainingDays;
       periods.push({
         type: 'daily',
         startDate: currentDate,
@@ -140,21 +148,22 @@ const calculateOptimalPaymentBreakdown = (
   const selectedPeriodsCount = periods.filter((p, i) => selectedPeriods.includes(i) || prepayAll).length;
   const isFullyPrepaid = prepayAll || selectedPeriodsCount === periods.length;
 
+  let totalPrepaidNights = 0;
   periods.forEach((period, index) => {
     if (selectedPeriods.includes(index) || prepayAll) {
-      const selectedPeriodsOfType = periods
-        .filter((p, i) =>
-          p.type === period.type &&
-          (selectedPeriods.includes(i) || prepayAll) &&
-          i <= index
-        ).length;
+      totalPrepaidNights += differenceInDays(period.endDate, period.startDate);
+    }
+  });
 
-      const discountPercent = calculateDiscount(period.type, index, selectedPeriodsOfType);
-      const discountAmount = period.baseAmount * discountPercent;
+
+  periods.forEach((period, index) => {
+    if (selectedPeriods.includes(index) || prepayAll) {
+      const discountPercent = calculateDiscount(totalPrepaidNights);
+      const discountAmount = period.baseAmount * (discountPercent / 100);
       period.amount = period.baseAmount - discountAmount;
       period.isPrepaid = true;
       period.discountAmount = discountAmount;
-      period.discountPercent = discountPercent * 100;
+      period.discountPercent = discountPercent;
     } else {
       period.amount = period.baseAmount;
       period.isPrepaid = false;
@@ -164,7 +173,7 @@ const calculateOptimalPaymentBreakdown = (
   });
 
   const totalSavings = periods.reduce((sum, period) => sum + (period.discountAmount || 0), 0);
-  const depositAmount = calculateDepositAmount(property, totalDays, selectedPeriodsCount, isFullyPrepaid);
+  const depositAmount = calculateDepositAmount(totalPrepaidNights);
 
   return {
     primaryType: preferredType === 'daily' ? 'daily' :
@@ -179,22 +188,6 @@ const calculateOptimalPaymentBreakdown = (
   };
 };
 
-const calculateDepositAmount = (property: Property, totalDays: number, prepaidPeriodsCount: number, isFullyPrepaid: boolean): number => {
-  if (isFullyPrepaid) return 0;
-
-  let baseDepositAmount = 0;
-  if (totalDays > 3) {
-    if (totalDays > 60) {
-      baseDepositAmount = property.monthlyRate ? Number(property.monthlyRate) : 1200;
-    } else if (totalDays > 14) {
-      baseDepositAmount = property.weeklyRate ? Number(property.weeklyRate) : 420;
-    } else {
-      baseDepositAmount = property.rate ? Number(property.rate) : 90;
-    }
-  }
-
-  return prepaidPeriodsCount >= 2 ? baseDepositAmount / 2 : baseDepositAmount;
-};
 
 const calculateInitialPayment = (
   periods: PaymentPeriod[],
