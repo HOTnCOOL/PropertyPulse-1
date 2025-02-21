@@ -7,8 +7,10 @@ import {
   addMonths,
   addWeeks,
   startOfDay,
+  isSameDay,
+  getDate,
 } from "date-fns";
-import { AlertTriangle, Info, TrendingDown } from "lucide-react";
+import { AlertTriangle, Info, TrendingDown, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { Property } from "@db/schema";
@@ -19,6 +21,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -153,10 +156,10 @@ const calculateOptimalPaymentBreakdown = (
   const totalAmount = periods.reduce((sum, period) => sum + period.amount, 0);
   const depositAmount = calculateDepositAmount(preferredType, prepaidPeriodsCount);
 
-  const initialPayment = periods.reduce((sum, period, index) => 
+  const initialPayment = periods.reduce((sum, period, index) =>
     sum + ((prepayAll || selectedPeriods.includes(index)) ? period.amount : 0), 0) + depositAmount;
 
-  const totalSavings = periods.reduce((sum, period) => 
+  const totalSavings = periods.reduce((sum, period) =>
     sum + (period.baseAmount - period.amount), 0);
 
   return {
@@ -189,18 +192,60 @@ const itemVariants = {
 
 const discountVariants = {
   hidden: { scale: 0.8, opacity: 0 },
-  visible: { 
-    scale: 1, 
+  visible: {
+    scale: 1,
     opacity: 1,
     transition: { type: "spring", stiffness: 300, damping: 25 }
   }
 };
 
+const isEligibleForMonthlyPlan = (checkIn: Date, checkOut: Date): boolean => {
+  const nextMonthSameDate = addMonths(checkIn, 1);
+  const checkInDate = getDate(checkIn);
+  const lastDayNextMonth = addMonths(new Date(checkIn.getFullYear(), checkIn.getMonth() + 1, 0), 1);
+
+  // Handle special case for end of month dates
+  const targetDate = checkInDate > getDate(lastDayNextMonth) ? lastDayNextMonth : nextMonthSameDate;
+
+  return checkOut >= targetDate;
+};
+
+const isEligibleForWeeklyPlan = (checkIn: Date, checkOut: Date): boolean => {
+  return differenceInDays(checkOut, checkIn) >= 7;
+};
+
 export default function PaymentEstimator({ property, checkIn, checkOut }: PaymentEstimatorProps) {
   const [, setLocation] = useLocation();
-  const [preferredPackageType, setPreferredPackageType] = useState<'monthly' | 'weekly' | 'daily'>('monthly');
+  const [preferredPackageType, setPreferredPackageType] = useState<'monthly' | 'weekly' | 'daily'>('daily');
   const [selectedPeriods, setSelectedPeriods] = useState<number[]>([0]);
   const [prepayAll, setPrepayAll] = useState(false);
+  const [planError, setPlanError] = useState<string | null>(null);
+
+  const eligibility = useMemo(() => {
+    if (!checkIn || !checkOut) return { weekly: false, monthly: false };
+    return {
+      weekly: isEligibleForWeeklyPlan(checkIn, checkOut),
+      monthly: isEligibleForMonthlyPlan(checkIn, checkOut)
+    };
+  }, [checkIn, checkOut]);
+
+  const handlePackageTypeChange = (type: 'monthly' | 'weekly' | 'daily') => {
+    setPlanError(null);
+
+    if (type === 'monthly' && !eligibility.monthly) {
+      setPlanError('Monthly plan requires stay until at least the same date of next month');
+      return;
+    }
+
+    if (type === 'weekly' && !eligibility.weekly) {
+      setPlanError('Weekly plan requires minimum 7 days stay');
+      return;
+    }
+
+    setPreferredPackageType(type);
+    setSelectedPeriods([0]); // Reset selected periods when plan changes
+    setPrepayAll(false);
+  };
 
   const paymentBreakdown = useMemo(() => {
     if (!checkIn || !checkOut) return null;
@@ -214,7 +259,7 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
   }, [checkIn, checkOut, preferredPackageType, selectedPeriods, prepayAll]);
 
   const handlePeriodSelect = (index: number) => {
-    if (index === 0) return; 
+    if (index === 0) return;
     setSelectedPeriods(prev => {
       if (prev.includes(index)) {
         return prev.filter(i => i !== index);
@@ -243,13 +288,13 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
           <CardTitle>Payment Plan Selection</CardTitle>
         </CardHeader>
         <CardContent>
-          <motion.div 
+          <motion.div
             className="space-y-6"
             variants={containerVariants}
             initial="hidden"
             animate="visible"
           >
-            <motion.div 
+            <motion.div
               className="p-4 bg-primary/5 rounded-lg space-y-4"
               variants={itemVariants}
             >
@@ -261,8 +306,8 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                     checked={prepayAll}
                     onCheckedChange={handlePrepayAll}
                   />
-                  <motion.label 
-                    htmlFor="prepayAll" 
+                  <motion.label
+                    htmlFor="prepayAll"
                     className="text-sm cursor-pointer"
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
@@ -271,66 +316,78 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                   </motion.label>
                 </div>
               </div>
+
+              {planError && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{planError}</AlertDescription>
+                </Alert>
+              )}
+
               <div className="grid gap-4 sm:grid-cols-3">
-                {property.monthlyRate && (
-                  <motion.div 
-                    className="space-y-2"
-                    variants={itemVariants}
-                  >
-                    <motion.div
-                      className={`p-3 bg-white rounded border cursor-pointer transition-colors ${
+                <motion.div className="space-y-2" variants={itemVariants}>
+                  <motion.div
+                    className={`p-3 bg-white rounded border cursor-pointer transition-colors ${
+                      !eligibility.monthly ? 'opacity-50 cursor-not-allowed' :
                         preferredPackageType === 'monthly' ? 'border-primary' : ''
-                      }`}
-                      onClick={() => setPreferredPackageType('monthly')}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      <div className="text-sm font-medium">Monthly Plan</div>
-                      <div className="text-2xl font-bold">${MONTHLY_RATE * 30}</div>
-                      <div className="text-xs text-muted-foreground">per month</div>
-                    </motion.div>
-                  </motion.div>
-                )}
-                {property.weeklyRate && (
-                  <motion.div 
-                    className="space-y-2"
-                    variants={itemVariants}
+                    }`}
+                    onClick={() => handlePackageTypeChange('monthly')}
+                    whileHover={eligibility.monthly ? { scale: 1.02 } : {}}
+                    whileTap={eligibility.monthly ? { scale: 0.98 } : {}}
                   >
-                    <motion.div
-                      className={`p-3 bg-white rounded border cursor-pointer transition-colors ${
-                        preferredPackageType === 'weekly' ? 'border-primary' : ''
-                      }`}
-                      onClick={() => setPreferredPackageType('weekly')}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      <div className="text-sm font-medium">Weekly Plan</div>
-                      <div className="text-2xl font-bold">${WEEKLY_RATE * 7}</div>
-                      <div className="text-xs text-muted-foreground">per week</div>
-                    </motion.div>
+                    <div className="text-sm font-medium">Monthly Plan</div>
+                    <div className="text-2xl font-bold">${MONTHLY_RATE * 30}</div>
+                    <div className="text-xs text-muted-foreground">per month</div>
+                    {!eligibility.monthly && (
+                      <div className="text-xs text-red-500 mt-1">
+                        Requires full month stay
+                      </div>
+                    )}
                   </motion.div>
-                )}
-                <motion.div 
-                  className="space-y-2"
-                  variants={itemVariants}
-                >
+                </motion.div>
+
+                <motion.div className="space-y-2" variants={itemVariants}>
+                  <motion.div
+                    className={`p-3 bg-white rounded border cursor-pointer transition-colors ${
+                      !eligibility.weekly ? 'opacity-50 cursor-not-allowed' :
+                        preferredPackageType === 'weekly' ? 'border-primary' : ''
+                    }`}
+                    onClick={() => handlePackageTypeChange('weekly')}
+                    whileHover={eligibility.weekly ? { scale: 1.02 } : {}}
+                    whileTap={eligibility.weekly ? { scale: 0.98 } : {}}
+                  >
+                    <div className="text-sm font-medium">Weekly Plan</div>
+                    <div className="text-2xl font-bold">${WEEKLY_RATE * 7}</div>
+                    <div className="text-xs text-muted-foreground">per week</div>
+                    {!eligibility.weekly && (
+                      <div className="text-xs text-red-500 mt-1">
+                        Minimum 7 days required
+                      </div>
+                    )}
+                  </motion.div>
+                </motion.div>
+
+                <motion.div className="space-y-2" variants={itemVariants}>
                   <motion.div
                     className={`p-3 bg-white rounded border cursor-pointer transition-colors ${
                       preferredPackageType === 'daily' ? 'border-primary' : ''
                     }`}
-                    onClick={() => setPreferredPackageType('daily')}
+                    onClick={() => handlePackageTypeChange('daily')}
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                   >
                     <div className="text-sm font-medium">Daily Rate</div>
                     <div className="text-2xl font-bold">${DAILY_RATE}</div>
                     <div className="text-xs text-muted-foreground">per day</div>
+                    <div className="text-xs text-green-500 mt-1">
+                      Always available
+                    </div>
                   </motion.div>
                 </motion.div>
               </div>
             </motion.div>
 
-            <motion.div 
+            <motion.div
               className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg space-y-4"
               variants={itemVariants}
             >
@@ -394,7 +451,7 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
 
             <AnimatePresence>
               {paymentBreakdown.totalSavings > 0 && (
-                <motion.div 
+                <motion.div
                   className="p-4 bg-green-50 border border-green-200 rounded-lg"
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
@@ -406,12 +463,12 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                     <h3 className="font-semibold text-green-700">Your Savings</h3>
                   </motion.div>
                   <div className="space-y-2">
-                    <motion.div 
+                    <motion.div
                       className="flex justify-between"
                       variants={discountVariants}
                     >
                       <span>Total Savings</span>
-                      <motion.span 
+                      <motion.span
                         className="font-semibold text-green-600"
                         initial={{ scale: 0.8 }}
                         animate={{ scale: 1 }}
@@ -420,7 +477,7 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                         ${paymentBreakdown.totalSavings.toLocaleString()}
                       </motion.span>
                     </motion.div>
-                    <motion.div 
+                    <motion.div
                       className="flex justify-between"
                       variants={discountVariants}
                     >
@@ -438,7 +495,7 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                 {paymentBreakdown.periods.map((period, index) => {
                   const isSelected = selectedPeriods.includes(index) || prepayAll;
                   return (
-                    <motion.div 
+                    <motion.div
                       key={index}
                       className="py-4"
                       variants={itemVariants}
@@ -458,19 +515,18 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                             </motion.div>
                           )}
                           <div className="space-y-1">
-                            <motion.div 
+                            <motion.div
                               className="font-medium"
                               layout
                             >
                               {period.label}
                               {isSelected && (
-                                <motion.span 
+                                <motion.span
                                   className="ml-2 text-sm text-green-600"
                                   initial={{ opacity: 0, x: -10 }}
                                   animate={{ opacity: 1, x: 0 }}
                                   exit={{ opacity: 0, x: 10 }}
                                 >
-                                  
                                 </motion.span>
                               )}
                             </motion.div>
@@ -479,17 +535,17 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                             </div>
                           </div>
                         </div>
-                        <motion.div 
+                        <motion.div
                           className="text-right"
                           layout
                         >
-                          <motion.div 
+                          <motion.div
                             className="font-medium"
                             layout
                           >
                             ${period.amount.toLocaleString()}
                           </motion.div>
-                          <motion.div 
+                          <motion.div
                             className="text-xs text-muted-foreground"
                             layout
                           >
@@ -503,7 +559,7 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
               </div>
             </motion.div>
 
-            <motion.div 
+            <motion.div
               className="space-y-4 pt-4 border-t"
               variants={itemVariants}
             >
