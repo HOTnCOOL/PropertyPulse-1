@@ -148,16 +148,25 @@ export default function GuestRegistration() {
     onSuccess: (data) => {
       console.log('Registration successful:', data);
       queryClient.invalidateQueries({ queryKey: ["/api/guests"] });
+
+      // Reset form but keep dates
+      const currentDates = {
+        from: selectedDates.from,
+        to: selectedDates.to
+      };
       form.reset();
-      setSelectedDates({ from: undefined, to: undefined });
+      setSelectedDates(currentDates);
+
+      // Show detailed success message
       toast({
-        title: "Success",
-        description: "Guest has been registered successfully",
+        title: "Guest Registration Successful",
+        description: `Guest ${data.guest.firstName} ${data.guest.lastName} has been registered successfully. 
+                     Booking reference: ${data.booking.bookingReference}`,
+        duration: 5000,
       });
 
-      if (data.booking?.bookingReference && data.guest?.email) {
-        setLocation(`/payment?ref=${data.booking.bookingReference}&email=${data.guest.email}`);
-      }
+      // Scroll to the payment estimator section
+      document.querySelector('.payment-estimator')?.scrollIntoView({ behavior: 'smooth' });
     },
     onError: (error) => {
       console.error('Registration error:', error);
@@ -568,8 +577,8 @@ export default function GuestRegistration() {
               </div>
 
 
-              <Button 
-                type="submit" 
+              <Button
+                type="submit"
                 className="w-full"
                 disabled={registerGuest.isPending}
               >
@@ -582,11 +591,13 @@ export default function GuestRegistration() {
       <div className="grid gap-6 md:grid-cols-2">
 
         {selectedProperty && (
-          <PaymentEstimator
-            property={selectedProperty}
-            checkIn={selectedDates.from}
-            checkOut={selectedDates.to}
-          />
+          <div className="payment-estimator">
+            <PaymentEstimator
+              property={selectedProperty}
+              checkIn={selectedDates.from}
+              checkOut={selectedDates.to}
+            />
+          </div>
         )}
 
         <Card className="md:col-span-2">
