@@ -37,8 +37,6 @@ interface PaymentPeriod {
   label: string;
   isPrepaid?: boolean;
   index?: number;
-  discountAmount?: number; 
-  discountPercent?: number; 
 }
 
 interface PaymentBreakdown {
@@ -51,23 +49,29 @@ interface PaymentBreakdown {
   effectiveRate: number;
 }
 
-const NIGHTLY_RATE = 70;
-const BASE_DEPOSIT = 70;
+const DAILY_RATE = 70;
+const WEEKLY_RATE = 60;
+const MONTHLY_RATE = 50;
 
-const calculateDiscount = (totalPrepaidNights: number, periodType: 'monthly' | 'weekly' | 'daily'): number => {
-  if (periodType === 'monthly') return 28.57; // $50 per night
-  if (totalPrepaidNights >= 7) return 14.29; // $60 per night
-  return 0;
-};
-
-const calculateDepositAmount = (prepaidNights: number): number => {
-  if (prepaidNights >= 3) return 0; // No deposit for 3+ nights prepaid
-  if (prepaidNights >= 2) return BASE_DEPOSIT / 2; // 50% deposit for 2 nights prepaid
-  return BASE_DEPOSIT; // Full deposit otherwise
+const calculateDepositAmount = (plan: 'monthly' | 'weekly' | 'daily', prepaidCount: number): number => {
+  if (prepaidCount >= 3) return 0; // No deposit for 3+ prepaid periods
+  if (prepaidCount >= 2) {
+    // 50% off deposit for 2+ prepaid periods
+    switch (plan) {
+      case 'monthly': return MONTHLY_RATE * 15; // Half month deposit
+      case 'weekly': return WEEKLY_RATE * 3.5; // Half week deposit
+      case 'daily': return DAILY_RATE * 0.5; // Half day deposit
+    }
+  }
+  // Full deposit
+  switch (plan) {
+    case 'monthly': return MONTHLY_RATE * 30; // One month deposit
+    case 'weekly': return WEEKLY_RATE * 7; // One week deposit
+    case 'daily': return DAILY_RATE; // One day deposit
+  }
 };
 
 const calculateOptimalPaymentBreakdown = (
-  property: Property,
   checkIn: Date,
   checkOut: Date,
   preferredType: 'monthly' | 'weekly' | 'daily',
@@ -77,133 +81,93 @@ const calculateOptimalPaymentBreakdown = (
   const periods: PaymentPeriod[] = [];
   let currentDate = startOfDay(new Date(checkIn));
   const endDate = startOfDay(new Date(checkOut));
-  let periodCount = { monthly: 0, weekly: 0, daily: 0 };
   const totalDays = differenceInDays(endDate, currentDate);
 
-  if (preferredType === 'daily') {
-    if (totalDays > 0) {
-      const baseAmount = NIGHTLY_RATE * totalDays;
-      periods.push({
-        type: 'daily',
-        startDate: currentDate,
-        endDate: endDate,
-        baseAmount,
-        amount: baseAmount,
-        label: `${totalDays} Day${totalDays > 1 ? 's' : ''}`,
-        index: 0
-      });
-      periodCount.daily = totalDays;
-    }
-  } else {
-    let periodIndex = 0;
-    if (property.monthlyRate && preferredType !== 'daily') {
-      while (differenceInCalendarMonths(endDate, currentDate) >= 1) {
-        const monthlyEnd = addMonths(currentDate, 1);
-        const baseAmount = Number(property.monthlyRate);
-        periods.push({
-          type: 'monthly',
-          startDate: currentDate,
-          endDate: monthlyEnd,
-          baseAmount,
-          amount: baseAmount,
-          label: `Month ${++periodCount.monthly}`,
-          index: periodIndex++
-        });
-        currentDate = monthlyEnd;
-      }
-    }
+  // Calculate number of complete months
+  const completeMonths = differenceInCalendarMonths(endDate, currentDate);
+  let periodIndex = 0;
 
-    if (property.weeklyRate && preferredType !== 'daily') {
-      while (differenceInDays(endDate, currentDate) >= 7) {
-        const weeklyEnd = addWeeks(currentDate, 1);
-        const baseAmount = Number(property.weeklyRate);
-        periods.push({
-          type: 'weekly',
-          startDate: currentDate,
-          endDate: weeklyEnd,
-          baseAmount,
-          amount: baseAmount,
-          label: `Week ${++periodCount.weekly}`,
-          index: periodIndex++
-        });
-        currentDate = weeklyEnd;
-      }
-    }
-
-    const remainingDays = differenceInDays(endDate, currentDate);
-    if (remainingDays > 0) {
-      const baseAmount = NIGHTLY_RATE * remainingDays;
+  if (preferredType === 'monthly' && completeMonths >= 1) {
+    // Add monthly periods
+    for (let i = 0; i < completeMonths; i++) {
+      const monthEnd = addMonths(currentDate, 1);
+      const daysInPeriod = differenceInDays(monthEnd, currentDate);
       periods.push({
-        type: 'daily',
+        type: 'monthly',
         startDate: currentDate,
-        endDate: endDate,
-        baseAmount,
-        amount: baseAmount,
-        label: `${remainingDays} Day${remainingDays > 1 ? 's' : ''}`,
+        endDate: monthEnd,
+        baseAmount: MONTHLY_RATE * daysInPeriod,
+        amount: MONTHLY_RATE * daysInPeriod,
+        label: `Month ${i + 1}`,
         index: periodIndex++
       });
-      periodCount.daily = remainingDays;
+      currentDate = monthEnd;
+    }
+  } else if (preferredType === 'weekly' && totalDays >= 7) {
+    // Add weekly periods
+    while (differenceInDays(endDate, currentDate) >= 7) {
+      const weekEnd = addWeeks(currentDate, 1);
+      periods.push({
+        type: 'weekly',
+        startDate: currentDate,
+        endDate: weekEnd,
+        baseAmount: WEEKLY_RATE * 7,
+        amount: WEEKLY_RATE * 7,
+        label: `Week ${periodIndex + 1}`,
+        index: periodIndex++
+      });
+      currentDate = weekEnd;
     }
   }
 
-  const selectedPeriodsCount = periods.filter((p, i) => selectedPeriods.includes(i) || prepayAll).length;
-  const isFullyPrepaid = prepayAll || selectedPeriodsCount === periods.length;
+  // Add remaining days as daily periods
+  const remainingDays = differenceInDays(endDate, currentDate);
+  if (remainingDays > 0) {
+    periods.push({
+      type: 'daily',
+      startDate: currentDate,
+      endDate: endDate,
+      baseAmount: DAILY_RATE * remainingDays,
+      amount: DAILY_RATE * remainingDays,
+      label: `${remainingDays} Day${remainingDays > 1 ? 's' : ''}`,
+      index: periodIndex++
+    });
+  }
 
-  let totalPrepaidNights = 0;
-  periods.forEach((period, index) => {
-    if (selectedPeriods.includes(index) || prepayAll) {
-      totalPrepaidNights += differenceInDays(period.endDate, period.startDate);
+  // Apply prepayment benefits
+  const prepaidPeriodsCount = prepayAll ? periods.length : selectedPeriods.length;
+
+  // Calculate sixth period discount if applicable
+  if (prepaidPeriodsCount >= 5 && periods.length >= 6) {
+    const sixthPeriod = periods[5];
+    if (sixthPeriod) {
+      sixthPeriod.amount = sixthPeriod.baseAmount * 0.5; // 50% off 6th period
     }
+  }
+
+  // Mark prepaid periods
+  periods.forEach((period, index) => {
+    period.isPrepaid = prepayAll || selectedPeriods.includes(index);
   });
 
+  const totalAmount = periods.reduce((sum, period) => sum + period.amount, 0);
+  const depositAmount = calculateDepositAmount(preferredType, prepaidPeriodsCount);
 
-  periods.forEach((period, index) => {
-    if (selectedPeriods.includes(index) || prepayAll) {
-      const discountPercent = calculateDiscount(totalPrepaidNights, period.type);
-      const discountAmount = period.baseAmount * (discountPercent / 100);
-      period.amount = period.baseAmount - discountAmount;
-      period.isPrepaid = true;
-      period.discountAmount = discountAmount;
-      period.discountPercent = discountPercent;
-    } else {
-      period.amount = period.baseAmount;
-      period.isPrepaid = false;
-      period.discountAmount = 0;
-      period.discountPercent = 0;
-    }
-  });
+  const initialPayment = periods.reduce((sum, period, index) => 
+    sum + ((prepayAll || selectedPeriods.includes(index)) ? period.amount : 0), 0) + depositAmount;
 
-  const totalSavings = periods.reduce((sum, period) => sum + (period.discountAmount || 0), 0);
-  const depositAmount = calculateDepositAmount(totalPrepaidNights);
+  const totalSavings = periods.reduce((sum, period) => 
+    sum + (period.baseAmount - period.amount), 0);
 
   return {
-    primaryType: preferredType === 'daily' ? 'daily' :
-                periodCount.monthly > 0 ? 'monthly' :
-                periodCount.weekly > 0 ? 'weekly' : 'daily',
+    primaryType: preferredType,
     periods,
-    totalAmount: periods.reduce((sum, period) => sum + period.amount, 0),
+    totalAmount,
     depositAmount,
-    initialPayment: calculateInitialPayment(periods, selectedPeriods, prepayAll, depositAmount),
+    initialPayment,
     totalSavings,
-    effectiveRate: calculateEffectiveRate(periods, totalDays)
+    effectiveRate: totalAmount / totalDays
   };
-};
-
-
-const calculateInitialPayment = (
-  periods: PaymentPeriod[],
-  selectedPeriods: number[],
-  prepayAll: boolean,
-  depositAmount: number
-): number => {
-  const prepaidAmount = periods.reduce((sum, period, index) =>
-    sum + (selectedPeriods.includes(index) || prepayAll ? period.amount : 0), 0);
-  return prepaidAmount + depositAmount;
-};
-
-const calculateEffectiveRate = (periods: PaymentPeriod[], totalDays: number): number => {
-  const totalAmount = periods.reduce((sum, period) => sum + period.amount, 0);
-  return totalAmount / totalDays; 
 };
 
 const containerVariants = {
@@ -235,20 +199,19 @@ const discountVariants = {
 export default function PaymentEstimator({ property, checkIn, checkOut }: PaymentEstimatorProps) {
   const [, setLocation] = useLocation();
   const [preferredPackageType, setPreferredPackageType] = useState<'monthly' | 'weekly' | 'daily'>('monthly');
-  const [selectedPeriods, setSelectedPeriods] = useState<number[]>([0]); 
+  const [selectedPeriods, setSelectedPeriods] = useState<number[]>([0]);
   const [prepayAll, setPrepayAll] = useState(false);
 
   const paymentBreakdown = useMemo(() => {
-    if (!property || !checkIn || !checkOut) return null;
+    if (!checkIn || !checkOut) return null;
     return calculateOptimalPaymentBreakdown(
-      property,
       checkIn,
       checkOut,
       preferredPackageType,
       selectedPeriods,
       prepayAll
     );
-  }, [property, checkIn, checkOut, preferredPackageType, selectedPeriods, prepayAll]);
+  }, [checkIn, checkOut, preferredPackageType, selectedPeriods, prepayAll]);
 
   const handlePeriodSelect = (index: number) => {
     if (index === 0) return; 
@@ -323,7 +286,7 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                       whileTap={{ scale: 0.98 }}
                     >
                       <div className="text-sm font-medium">Monthly Plan</div>
-                      <div className="text-2xl font-bold">${Number(property.monthlyRate).toLocaleString()}</div>
+                      <div className="text-2xl font-bold">${MONTHLY_RATE * 30}</div>
                       <div className="text-xs text-muted-foreground">per month</div>
                     </motion.div>
                   </motion.div>
@@ -342,7 +305,7 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                       whileTap={{ scale: 0.98 }}
                     >
                       <div className="text-sm font-medium">Weekly Plan</div>
-                      <div className="text-2xl font-bold">${Number(property.weeklyRate).toLocaleString()}</div>
+                      <div className="text-2xl font-bold">${WEEKLY_RATE * 7}</div>
                       <div className="text-xs text-muted-foreground">per week</div>
                     </motion.div>
                   </motion.div>
@@ -360,7 +323,7 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                     whileTap={{ scale: 0.98 }}
                   >
                     <div className="text-sm font-medium">Daily Rate</div>
-                    <div className="text-2xl font-bold">${Number(property.rate).toLocaleString()}</div>
+                    <div className="text-2xl font-bold">${DAILY_RATE}</div>
                     <div className="text-xs text-muted-foreground">per day</div>
                   </motion.div>
                 </motion.div>
@@ -390,7 +353,7 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                   if (!period) return null;
                   return (
                     <motion.div key={index} className="flex justify-between text-sm" variants={itemVariants}>
-                      <span>{period.label} {period.discountPercent > 0 && `(${formatPercent(period.discountPercent)} off)`}</span>
+                      <span>{period.label} </span>
                       <span>${period.amount.toLocaleString()}</span>
                     </motion.div>
                   );
@@ -500,14 +463,14 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                               layout
                             >
                               {period.label}
-                              {isSelected && period.discountPercent && period.discountPercent > 0 && (
+                              {isSelected && (
                                 <motion.span 
                                   className="ml-2 text-sm text-green-600"
                                   initial={{ opacity: 0, x: -10 }}
                                   animate={{ opacity: 1, x: 0 }}
                                   exit={{ opacity: 0, x: 10 }}
                                 >
-                                  ({formatPercent(period.discountPercent)} off)
+                                  
                                 </motion.span>
                               )}
                             </motion.div>
@@ -525,16 +488,6 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                             layout
                           >
                             ${period.amount.toLocaleString()}
-                            {isSelected && period.discountAmount && period.discountAmount > 0 && (
-                              <motion.div 
-                                className="text-sm text-muted-foreground line-through"
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 0.6 }}
-                                exit={{ opacity: 0 }}
-                              >
-                                ${period.baseAmount.toLocaleString()}
-                              </motion.div>
-                            )}
                           </motion.div>
                           <motion.div 
                             className="text-xs text-muted-foreground"
@@ -562,16 +515,6 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                       <motion.div key={index} className="flex justify-between text-sm" variants={itemVariants}>
                         <span>
                           {period.label}
-                          {(selectedPeriods.includes(index) || prepayAll) && period.discountAmount && period.discountAmount > 0 && (
-                            <motion.span 
-                              className="ml-2 text-green-600"
-                              initial={{ opacity: 0, x: -10 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              exit={{ opacity: 0, x: 10 }}
-                            >
-                              ({formatPercent(period.discountPercent)} off)
-                            </motion.span>
-                          )}
                         </span>
                         <span>${period.amount.toLocaleString()}</span>
                       </motion.div>

@@ -66,107 +66,21 @@ const upload = multer({
 });
 
 // Add these helper functions after the existing imports
-function calculateDiscountedRate(baseRate: number, periodIndex: number): number {
-  // Apply 10% discount per period, max 50%
-  const discountPercent = Math.min(periodIndex * 10, 50);
-  return baseRate * (1 - discountPercent / 100);
-}
-
-function calculatePricePeriods(property: any, checkIn: Date, checkOut: Date): PricePeriod[] {
-  console.log('Calculating price periods for stay:', { checkIn, checkOut });
-  const periods: PricePeriod[] = [];
-  let currentDate = startOfDay(new Date(checkIn));
-  const endDate = startOfDay(new Date(checkOut));
-  const normalDailyRate = Number(property.rate);
-
-  // Helper function to calculate period end date for monthly package
-  const calculateMonthlyEnd = (date: Date): Date => {
-    const nextMonth = addMonths(date, 1);
-    return nextMonth <= endDate ? nextMonth : endDate;
-  };
-
-  // Helper function to calculate period end date for weekly package
-  const calculateWeeklyEnd = (date: Date): Date => {
-    const nextWeek = addWeeks(date, 1);
-    return nextWeek <= endDate ? nextWeek : endDate;
-  };
-
-  let periodIndex = 0; // Track period index for discount calculation
-
-  while (currentDate < endDate) {
-    const remainingDays = differenceInDays(endDate, currentDate);
-    console.log('Processing remaining days:', remainingDays);
-
-    // Try to fit complete months first
-    if (property.monthlyRate && differenceInCalendarMonths(endDate, currentDate) >= 1) {
-      const monthlyEnd = calculateMonthlyEnd(currentDate);
-      // Only use monthly rate if we have a complete month
-      if (differenceInCalendarMonths(monthlyEnd, currentDate) === 1) {
-        const baseRate = Number(property.monthlyRate);
-        const discountedRate = calculateDiscountedRate(baseRate, periodIndex);
-        const period = {
-          type: 'monthly' as const,
-          startDate: currentDate,
-          endDate: monthlyEnd,
-          amount: discountedRate,
-          baseRate: baseRate,
-          duration: 1,
-          discountPercent: Math.min(periodIndex * 10, 50)
-        };
-        console.log('Adding monthly period:', period);
-        periods.push(period);
-        currentDate = monthlyEnd;
-        periodIndex++;
-        continue;
-      }
-    }
-
-    // For the remaining period, try to fit complete weeks
-    if (property.weeklyRate && differenceInDays(endDate, currentDate) >= 7) {
-      const weeklyEnd = calculateWeeklyEnd(currentDate);
-      const baseRate = Number(property.weeklyRate);
-      const discountedRate = calculateDiscountedRate(baseRate, periodIndex);
-      const period = {
-        type: 'weekly' as const,
-        startDate: currentDate,
-        endDate: weeklyEnd,
-        amount: discountedRate,
-        baseRate: baseRate,
-        duration: 1,
-        discountPercent: Math.min(periodIndex * 10, 50)
-      };
-      console.log('Adding weekly period:', period);
-      periods.push(period);
-      currentDate = weeklyEnd;
-      periodIndex++;
-      continue;
-    }
-
-    // Use daily rate for any remaining days
-    const remainingDaysCount = differenceInDays(endDate, currentDate);
-    if (remainingDaysCount > 0) {
-      const baseRate = normalDailyRate * remainingDaysCount;
-      const discountedRate = calculateDiscountedRate(baseRate, periodIndex);
-      const period = {
-        type: 'daily' as const,
-        startDate: currentDate,
-        endDate: endDate,
-        amount: discountedRate,
-        baseRate: baseRate,
-        duration: remainingDaysCount,
-        discountPercent: Math.min(periodIndex * 10, 50)
-      };
-      console.log('Adding daily period:', period);
-      periods.push(period);
-      currentDate = endDate;
-    }
+function calculateNightlyRate(periodType: 'monthly' | 'weekly' | 'daily'): number {
+  switch (periodType) {
+    case 'monthly': return 50; // BGN per night for monthly plan
+    case 'weekly': return 60;  // BGN per night for weekly plan
+    case 'daily': return 70;   // BGN per night for daily plan
   }
-
-  console.log('Final price periods:', periods);
-  return periods;
 }
 
-// Update the PricePeriod interface
+function calculateDepositAmount(plan: 'monthly' | 'weekly' | 'daily', prepaidPeriodsCount: number): number {
+  if (prepaidPeriodsCount >= 3) return 0; // No deposit for 3+ prepaid periods
+
+  const baseDeposit = calculateNightlyRate(plan) * (plan === 'monthly' ? 30 : plan === 'weekly' ? 7 : 1);
+  return prepaidPeriodsCount >= 2 ? baseDeposit * 0.5 : baseDeposit; // 50% off for 2+ prepaid periods
+}
+
 interface PricePeriod {
   type: 'monthly' | 'weekly' | 'daily';
   startDate: Date;
@@ -174,7 +88,65 @@ interface PricePeriod {
   amount: number;
   baseRate: number;
   duration: number;
-  discountPercent: number;
+}
+
+function calculatePricePeriods(checkIn: Date, checkOut: Date, preferredType: 'monthly' | 'weekly' | 'daily'): PricePeriod[] {
+  const periods: PricePeriod[] = [];
+  let currentDate = startOfDay(new Date(checkIn));
+  const endDate = startOfDay(new Date(checkOut));
+  const totalDays = differenceInDays(endDate, currentDate);
+
+  const nightlyRate = calculateNightlyRate(preferredType);
+
+  if (preferredType === 'monthly' && differenceInCalendarMonths(endDate, currentDate) >= 1) {
+    // Handle monthly periods
+    while (differenceInCalendarMonths(endDate, currentDate) >= 1) {
+      const monthEnd = addMonths(currentDate, 1);
+      const daysInMonth = differenceInDays(monthEnd, currentDate);
+
+      periods.push({
+        type: 'monthly',
+        startDate: currentDate,
+        endDate: monthEnd,
+        amount: nightlyRate * daysInMonth,
+        baseRate: nightlyRate,
+        duration: daysInMonth
+      });
+
+      currentDate = monthEnd;
+    }
+  } else if (preferredType === 'weekly' && totalDays >= 7) {
+    // Handle weekly periods
+    while (differenceInDays(endDate, currentDate) >= 7) {
+      const weekEnd = addWeeks(currentDate, 1);
+
+      periods.push({
+        type: 'weekly',
+        startDate: currentDate,
+        endDate: weekEnd,
+        amount: nightlyRate * 7,
+        baseRate: nightlyRate,
+        duration: 7
+      });
+
+      currentDate = weekEnd;
+    }
+  }
+
+  // Handle remaining days with daily rate
+  const remainingDays = differenceInDays(endDate, currentDate);
+  if (remainingDays > 0) {
+    periods.push({
+      type: 'daily',
+      startDate: currentDate,
+      endDate: endDate,
+      amount: calculateNightlyRate('daily') * remainingDays,
+      baseRate: calculateNightlyRate('daily'),
+      duration: remainingDays
+    });
+  }
+
+  return periods;
 }
 
 // Add this near the multer configuration
@@ -551,7 +523,7 @@ export function registerRoutes(app: Express): Server {
         }
 
         // Calculate total amount using the price calculation
-        const pricePeriods = calculatePricePeriods(property, checkInDate, checkOutDate);
+        const pricePeriods = calculatePricePeriods(checkInDate, checkOutDate, req.body.preferredType || 'daily'); // Added preferredType handling
         const totalAmount = pricePeriods.reduce((sum, period) => sum + period.amount, 0);
 
         // Create booking
