@@ -149,7 +149,7 @@ export default function GuestRegistration() {
       console.log('Registration successful:', data);
       queryClient.invalidateQueries({ queryKey: ["/api/guests"] });
 
-      // Reset form but keep dates
+      // Keep the dates but reset other form fields
       const currentDates = {
         from: selectedDates.from,
         to: selectedDates.to
@@ -157,16 +157,20 @@ export default function GuestRegistration() {
       form.reset();
       setSelectedDates(currentDates);
 
-      // Show detailed success message
+      // Show success message with booking reference
       toast({
         title: "Guest Registration Successful",
-        description: `Guest ${data.guest.firstName} ${data.guest.lastName} has been registered successfully. 
-                     Booking reference: ${data.booking.bookingReference}`,
-        duration: 5000,
+        description: `Guest ${data.firstName} ${data.lastName} has been registered successfully.
+                     Booking reference: ${data.bookingReference}
+                     Please proceed to make payment using the calculator below.`,
+        duration: 7000,
       });
 
-      // Scroll to the payment estimator section
-      document.querySelector('.payment-estimator')?.scrollIntoView({ behavior: 'smooth' });
+      // Scroll to payment estimator
+      const paymentEstimator = document.querySelector('.payment-estimator');
+      if (paymentEstimator) {
+        paymentEstimator.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
     },
     onError: (error) => {
       console.error('Registration error:', error);
