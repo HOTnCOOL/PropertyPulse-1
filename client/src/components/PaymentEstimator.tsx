@@ -336,8 +336,18 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                     whileTap={eligibility.monthly ? { scale: 0.98 } : {}}
                   >
                     <div className="text-sm font-medium">Monthly Plan</div>
-                    <div className="text-2xl font-bold">${MONTHLY_RATE * 30}</div>
-                    <div className="text-xs text-muted-foreground">per month</div>
+                    <div className="text-2xl font-bold">${MONTHLY_RATE}</div>
+                    <div className="text-xs text-muted-foreground">per night</div>
+                    {checkIn && checkOut && (
+                      <div className="mt-2 space-y-1 border-t pt-2">
+                        <div className="text-sm">
+                          Total: ${(MONTHLY_RATE * differenceInDays(checkOut, checkIn)).toLocaleString()}
+                        </div>
+                        <div className="text-xs text-green-600">
+                          Save {((DAILY_RATE - MONTHLY_RATE) / DAILY_RATE * 100).toFixed(1)}% vs daily rate
+                        </div>
+                      </div>
+                    )}
                     {!eligibility.monthly && (
                       <div className="text-xs text-red-500 mt-1">
                         Requires full month stay
@@ -357,8 +367,18 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                     whileTap={eligibility.weekly ? { scale: 0.98 } : {}}
                   >
                     <div className="text-sm font-medium">Weekly Plan</div>
-                    <div className="text-2xl font-bold">${WEEKLY_RATE * 7}</div>
-                    <div className="text-xs text-muted-foreground">per week</div>
+                    <div className="text-2xl font-bold">${WEEKLY_RATE}</div>
+                    <div className="text-xs text-muted-foreground">per night</div>
+                    {checkIn && checkOut && (
+                      <div className="mt-2 space-y-1 border-t pt-2">
+                        <div className="text-sm">
+                          Total: ${(WEEKLY_RATE * differenceInDays(checkOut, checkIn)).toLocaleString()}
+                        </div>
+                        <div className="text-xs text-green-600">
+                          Save {((DAILY_RATE - WEEKLY_RATE) / DAILY_RATE * 100).toFixed(1)}% vs daily rate
+                        </div>
+                      </div>
+                    )}
                     {!eligibility.weekly && (
                       <div className="text-xs text-red-500 mt-1">
                         Minimum 7 days required
@@ -378,7 +398,17 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                   >
                     <div className="text-sm font-medium">Daily Rate</div>
                     <div className="text-2xl font-bold">${DAILY_RATE}</div>
-                    <div className="text-xs text-muted-foreground">per day</div>
+                    <div className="text-xs text-muted-foreground">per night</div>
+                    {checkIn && checkOut && (
+                      <div className="mt-2 space-y-1 border-t pt-2">
+                        <div className="text-sm">
+                          Total: ${(DAILY_RATE * differenceInDays(checkOut, checkIn)).toLocaleString()}
+                        </div>
+                        <div className="text-xs">
+                          Standard rate
+                        </div>
+                      </div>
+                    )}
                     <div className="text-xs text-green-500 mt-1">
                       Always available
                     </div>
