@@ -53,24 +53,16 @@ interface PaymentBreakdown {
 }
 
 const DAILY_RATE = 70;
-const WEEKLY_RATE = 60;
-const MONTHLY_RATE = 50;
+const WEEKLY_RATE = 420;
+const MONTHLY_RATE = 1500;
 
-const calculateDepositAmount = (plan: 'monthly' | 'weekly' | 'daily', prepaidCount: number): number => {
-  if (prepaidCount >= 3) return 0; // No deposit for 3+ prepaid periods
-  if (prepaidCount >= 2) {
-    // 50% off deposit for 2+ prepaid periods
-    switch (plan) {
-      case 'monthly': return MONTHLY_RATE * 15; // Half month deposit
-      case 'weekly': return WEEKLY_RATE * 3.5; // Half week deposit
-      case 'daily': return DAILY_RATE * 0.5; // Half day deposit
-    }
-  }
-  // Full deposit
-  switch (plan) {
-    case 'monthly': return MONTHLY_RATE * 30; // One month deposit
-    case 'weekly': return WEEKLY_RATE * 7; // One week deposit
-    case 'daily': return DAILY_RATE; // One day deposit
+const calculateDepositAmount = (stayDurationDays: number): number => {
+  if (stayDurationDays > 60) {
+    return 1500; // 1500 BGN for stays longer than 60 days
+  } else if (stayDurationDays > 14) {
+    return 420; // 420 BGN for stays between 15-60 days
+  } else {
+    return 70; // 70 BGN for stays up to 14 days
   }
 };
 
@@ -86,6 +78,12 @@ const calculateOptimalPaymentBreakdown = (
   const endDate = startOfDay(new Date(checkOut));
   const totalDays = differenceInDays(endDate, currentDate);
 
+  const standardPeriodAmount = {
+    monthly: MONTHLY_RATE, // 1500 BGN
+    weekly: WEEKLY_RATE,    // 420 BGN
+    daily: DAILY_RATE           // 70 BGN
+  };
+
   // Calculate number of complete months
   const completeMonths = differenceInCalendarMonths(endDate, currentDate);
   let periodIndex = 0;
@@ -94,13 +92,12 @@ const calculateOptimalPaymentBreakdown = (
     // Add monthly periods
     for (let i = 0; i < completeMonths; i++) {
       const monthEnd = addMonths(currentDate, 1);
-      const daysInPeriod = differenceInDays(monthEnd, currentDate);
       periods.push({
         type: 'monthly',
         startDate: currentDate,
         endDate: monthEnd,
-        baseAmount: MONTHLY_RATE * daysInPeriod,
-        amount: MONTHLY_RATE * daysInPeriod,
+        baseAmount: standardPeriodAmount.monthly,
+        amount: standardPeriodAmount.monthly,
         label: `Month ${i + 1}`,
         index: periodIndex++
       });
@@ -114,8 +111,8 @@ const calculateOptimalPaymentBreakdown = (
         type: 'weekly',
         startDate: currentDate,
         endDate: weekEnd,
-        baseAmount: WEEKLY_RATE * 7,
-        amount: WEEKLY_RATE * 7,
+        baseAmount: standardPeriodAmount.weekly,
+        amount: standardPeriodAmount.weekly,
         label: `Week ${periodIndex + 1}`,
         index: periodIndex++
       });
@@ -154,10 +151,9 @@ const calculateOptimalPaymentBreakdown = (
   });
 
   const totalAmount = periods.reduce((sum, period) => sum + period.amount, 0);
-  const depositAmount = calculateDepositAmount(preferredType, prepaidPeriodsCount);
-
-  const initialPayment = periods.reduce((sum, period, index) =>
-    sum + ((prepayAll || selectedPeriods.includes(index)) ? period.amount : 0), 0) + depositAmount;
+  const depositAmount = calculateDepositAmount(totalDays);
+  const firstPeriod = periods[0];
+  const initialPayment = (firstPeriod ? firstPeriod.amount : 0) + depositAmount;
 
   const totalSavings = periods.reduce((sum, period) =>
     sum + (period.baseAmount - period.amount), 0);
@@ -213,6 +209,59 @@ const isEligibleForMonthlyPlan = (checkIn: Date, checkOut: Date): boolean => {
 const isEligibleForWeeklyPlan = (checkIn: Date, checkOut: Date): boolean => {
   return differenceInDays(checkOut, checkIn) >= 7;
 };
+
+const PlanCard = ({ 
+  type, 
+  rate, 
+  standardAmount,
+  isSelected, 
+  isEligible, 
+  totalDays, 
+  onSelect 
+}: {
+  type: 'monthly' | 'weekly' | 'daily';
+  rate: number;
+  standardAmount: number;
+  isSelected: boolean;
+  isEligible: boolean;
+  totalDays: number;
+  onSelect: () => void;
+}) => (
+  <motion.div
+    className={`p-3 bg-white rounded border cursor-pointer transition-colors ${
+      !isEligible ? 'opacity-50 cursor-not-allowed' :
+        isSelected ? 'border-primary' : ''
+    }`}
+    onClick={onSelect}
+    whileHover={isEligible ? { scale: 1.02 } : {}}
+    whileTap={isEligible ? { scale: 0.98 } : {}}
+  >
+    <div className="text-sm font-medium">{type.charAt(0).toUpperCase() + type.slice(1)} Plan</div>
+    <div className="text-2xl font-bold">${rate}</div>
+    <div className="text-xs text-muted-foreground">per {type === 'monthly' ? 'month' : type === 'weekly' ? 'week' : 'day'}</div>
+    <div className="mt-2 space-y-1 border-t pt-2">
+      <div className="text-sm font-medium">
+        Regular Payment: ${standardAmount}
+        <span className="text-xs text-muted-foreground ml-1">
+          per {type === 'monthly' ? 'month' : type === 'weekly' ? 'week' : 'day'}
+        </span>
+      </div>
+      {/*Added percentage calculation for comparison*/}
+      <div className="text-xs text-green-600">
+        Save {((DAILY_RATE - rate) / DAILY_RATE * 100).toFixed(1)}% vs daily rate
+      </div>
+    </div>
+    {!isEligible && (
+      <div className="text-xs text-red-500 mt-1">
+        {type === 'monthly' 
+          ? 'Requires full month stay'
+          : type === 'weekly' 
+            ? 'Minimum 7 days required' 
+            : ''}
+      </div>
+    )}
+  </motion.div>
+);
 
 export default function PaymentEstimator({ property, checkIn, checkOut }: PaymentEstimatorProps) {
   const [, setLocation] = useLocation();
@@ -326,93 +375,39 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
 
               <div className="grid gap-4 sm:grid-cols-3">
                 <motion.div className="space-y-2" variants={itemVariants}>
-                  <motion.div
-                    className={`p-3 bg-white rounded border cursor-pointer transition-colors ${
-                      !eligibility.monthly ? 'opacity-50 cursor-not-allowed' :
-                        preferredPackageType === 'monthly' ? 'border-primary' : ''
-                    }`}
-                    onClick={() => handlePackageTypeChange('monthly')}
-                    whileHover={eligibility.monthly ? { scale: 1.02 } : {}}
-                    whileTap={eligibility.monthly ? { scale: 0.98 } : {}}
-                  >
-                    <div className="text-sm font-medium">Monthly Plan</div>
-                    <div className="text-2xl font-bold">${MONTHLY_RATE}</div>
-                    <div className="text-xs text-muted-foreground">per night</div>
-                    {checkIn && checkOut && (
-                      <div className="mt-2 space-y-1 border-t pt-2">
-                        <div className="text-sm">
-                          Total: ${(MONTHLY_RATE * differenceInDays(checkOut, checkIn)).toLocaleString()}
-                        </div>
-                        <div className="text-xs text-green-600">
-                          Save {((DAILY_RATE - MONTHLY_RATE) / DAILY_RATE * 100).toFixed(1)}% vs daily rate
-                        </div>
-                      </div>
-                    )}
-                    {!eligibility.monthly && (
-                      <div className="text-xs text-red-500 mt-1">
-                        Requires full month stay
-                      </div>
-                    )}
-                  </motion.div>
+                  <PlanCard
+                    type="monthly"
+                    rate={MONTHLY_RATE}
+                    standardAmount={1500}
+                    isSelected={preferredPackageType === 'monthly'}
+                    isEligible={eligibility.monthly}
+                    totalDays={checkIn && checkOut ? differenceInDays(checkOut, checkIn) : 0}
+                    onSelect={() => handlePackageTypeChange('monthly')}
+                  />
                 </motion.div>
 
                 <motion.div className="space-y-2" variants={itemVariants}>
-                  <motion.div
-                    className={`p-3 bg-white rounded border cursor-pointer transition-colors ${
-                      !eligibility.weekly ? 'opacity-50 cursor-not-allowed' :
-                        preferredPackageType === 'weekly' ? 'border-primary' : ''
-                    }`}
-                    onClick={() => handlePackageTypeChange('weekly')}
-                    whileHover={eligibility.weekly ? { scale: 1.02 } : {}}
-                    whileTap={eligibility.weekly ? { scale: 0.98 } : {}}
-                  >
-                    <div className="text-sm font-medium">Weekly Plan</div>
-                    <div className="text-2xl font-bold">${WEEKLY_RATE}</div>
-                    <div className="text-xs text-muted-foreground">per night</div>
-                    {checkIn && checkOut && (
-                      <div className="mt-2 space-y-1 border-t pt-2">
-                        <div className="text-sm">
-                          Total: ${(WEEKLY_RATE * differenceInDays(checkOut, checkIn)).toLocaleString()}
-                        </div>
-                        <div className="text-xs text-green-600">
-                          Save {((DAILY_RATE - WEEKLY_RATE) / DAILY_RATE * 100).toFixed(1)}% vs daily rate
-                        </div>
-                      </div>
-                    )}
-                    {!eligibility.weekly && (
-                      <div className="text-xs text-red-500 mt-1">
-                        Minimum 7 days required
-                      </div>
-                    )}
-                  </motion.div>
+                  <PlanCard
+                    type="weekly"
+                    rate={WEEKLY_RATE}
+                    standardAmount={420}
+                    isSelected={preferredPackageType === 'weekly'}
+                    isEligible={eligibility.weekly}
+                    totalDays={checkIn && checkOut ? differenceInDays(checkOut, checkIn) : 0}
+                    onSelect={() => handlePackageTypeChange('weekly')}
+                  />
                 </motion.div>
 
                 <motion.div className="space-y-2" variants={itemVariants}>
-                  <motion.div
-                    className={`p-3 bg-white rounded border cursor-pointer transition-colors ${
-                      preferredPackageType === 'daily' ? 'border-primary' : ''
-                    }`}
-                    onClick={() => handlePackageTypeChange('daily')}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    <div className="text-sm font-medium">Daily Rate</div>
-                    <div className="text-2xl font-bold">${DAILY_RATE}</div>
-                    <div className="text-xs text-muted-foreground">per night</div>
-                    {checkIn && checkOut && (
-                      <div className="mt-2 space-y-1 border-t pt-2">
-                        <div className="text-sm">
-                          Total: ${(DAILY_RATE * differenceInDays(checkOut, checkIn)).toLocaleString()}
-                        </div>
-                        <div className="text-xs">
-                          Standard rate
-                        </div>
-                      </div>
-                    )}
-                    <div className="text-xs text-green-500 mt-1">
-                      Always available
-                    </div>
-                  </motion.div>
+                  <PlanCard
+                    type="daily"
+                    rate={DAILY_RATE}
+                    standardAmount={70}
+                    isSelected={preferredPackageType === 'daily'}
+                    isEligible={true}
+                    totalDays={checkIn && checkOut ? differenceInDays(checkOut, checkIn) : 0}
+                    onSelect={() => handlePackageTypeChange('daily')}
+                  />
                 </motion.div>
               </div>
             </motion.div>
@@ -620,7 +615,7 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
             >
               <Button
                 className="w-full"
-                onClick={() => setLocation(`/payment?propertyId=${property.id}&packageType=${paymentBreakdown.primaryType}`)}
+                onClick={() => setLocation(`/payment?propertyId=${property?.id}&packageType=${paymentBreakdown.primaryType}`)}
               >
                 Proceed to Payment
               </Button>
