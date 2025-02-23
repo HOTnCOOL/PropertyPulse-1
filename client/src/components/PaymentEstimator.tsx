@@ -80,8 +80,8 @@ const calculateOptimalPaymentBreakdown = (
 
   const standardPeriodAmount = {
     monthly: MONTHLY_RATE, // 1500 BGN
-    weekly: WEEKLY_RATE,    // 420 BGN
-    daily: DAILY_RATE           // 70 BGN
+    weekly: WEEKLY_RATE,   // 420 BGN
+    daily: DAILY_RATE      // 70 BGN
   };
 
   // Calculate number of complete months
@@ -151,9 +151,15 @@ const calculateOptimalPaymentBreakdown = (
   });
 
   const totalAmount = periods.reduce((sum, period) => sum + period.amount, 0);
-  const depositAmount = calculateDepositAmount(totalDays);
+  const depositAmount = preferredType === 'daily' ? 
+    DAILY_RATE : 
+    calculateDepositAmount(totalDays);
+
+  // Calculate initial payment
   const firstPeriod = periods[0];
-  const initialPayment = (firstPeriod ? firstPeriod.amount : 0) + depositAmount;
+  const initialPayment = preferredType === 'daily' ?
+    DAILY_RATE * 2 : 
+    (firstPeriod ? firstPeriod.amount : 0) + depositAmount;
 
   const totalSavings = periods.reduce((sum, period) =>
     sum + (period.baseAmount - period.amount), 0);
