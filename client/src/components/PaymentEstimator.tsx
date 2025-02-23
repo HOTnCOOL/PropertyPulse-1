@@ -226,42 +226,45 @@ const PlanCard = ({
   isEligible: boolean;
   totalDays: number;
   onSelect: () => void;
-}) => (
-  <motion.div
-    className={`p-3 bg-white rounded border cursor-pointer transition-colors ${
-      !isEligible ? 'opacity-50 cursor-not-allowed' :
-        isSelected ? 'border-primary' : ''
-    }`}
-    onClick={onSelect}
-    whileHover={isEligible ? { scale: 1.02 } : {}}
-    whileTap={isEligible ? { scale: 0.98 } : {}}
-  >
-    <div className="text-sm font-medium">{type.charAt(0).toUpperCase() + type.slice(1)} Plan</div>
-    <div className="text-2xl font-bold">${rate}</div>
-    <div className="text-xs text-muted-foreground">per {type === 'monthly' ? 'month' : type === 'weekly' ? 'week' : 'day'}</div>
-    <div className="mt-2 space-y-1 border-t pt-2">
-      <div className="text-sm font-medium">
-        Regular Payment: ${standardAmount}
-        <span className="text-xs text-muted-foreground ml-1">
-          per {type === 'monthly' ? 'month' : type === 'weekly' ? 'week' : 'day'}
-        </span>
+}) => {
+  // Calculate per night rate
+  const perNightRate = type === 'monthly' ? 
+    (rate / 30) : type === 'weekly' ? 
+    (rate / 7) : rate;
+
+  return (
+    <motion.div
+      className={`p-3 bg-white rounded border cursor-pointer transition-colors ${
+        !isEligible ? 'opacity-50 cursor-not-allowed' :
+          isSelected ? 'border-primary' : ''
+      }`}
+      onClick={onSelect}
+      whileHover={isEligible ? { scale: 1.02 } : {}}
+      whileTap={isEligible ? { scale: 0.98 } : {}}
+    >
+      <div className="text-sm font-medium">{type.charAt(0).toUpperCase() + type.slice(1)} Plan</div>
+      <div className="text-2xl font-bold">${perNightRate.toFixed(2)}</div>
+      <div className="text-xs text-muted-foreground">per night</div>
+      <div className="mt-2 space-y-1 border-t pt-2">
+        <div className="text-sm text-muted-foreground">
+          ${standardAmount} per {type === 'monthly' ? 'month' : type === 'weekly' ? 'week' : 'day'}
+        </div>
+        <div className="text-xs text-green-600">
+          Save {((DAILY_RATE - perNightRate) / DAILY_RATE * 100).toFixed(1)}% vs daily rate
+        </div>
       </div>
-      {/*Added percentage calculation for comparison*/}
-      <div className="text-xs text-green-600">
-        Save {((DAILY_RATE - rate) / DAILY_RATE * 100).toFixed(1)}% vs daily rate
-      </div>
-    </div>
-    {!isEligible && (
-      <div className="text-xs text-red-500 mt-1">
-        {type === 'monthly' 
-          ? 'Requires full month stay'
-          : type === 'weekly' 
-            ? 'Minimum 7 days required' 
-            : ''}
-      </div>
-    )}
-  </motion.div>
-);
+      {!isEligible && (
+        <div className="text-xs text-red-500 mt-1">
+          {type === 'monthly' 
+            ? 'Requires full month stay'
+            : type === 'weekly' 
+              ? 'Minimum 7 days required' 
+              : ''}
+        </div>
+      )}
+    </motion.div>
+  );
+};
 
 export default function PaymentEstimator({ property, checkIn, checkOut }: PaymentEstimatorProps) {
   const [, setLocation] = useLocation();
