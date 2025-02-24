@@ -56,23 +56,56 @@ const DAILY_RATE = 70;
 const WEEKLY_RATE = 420;
 const MONTHLY_RATE = 1500;
 
-const calculateDepositAmount = (stayDurationDays: number): number => {
+const calculateDepositAmount = (plan: 'monthly' | 'weekly' | 'daily', stayDurationDays: number): number => {
+  // Daily plan always has fixed deposit of one daily rate
+  if (plan === 'daily') {
+    return DAILY_RATE;
+  }
+
+  // For weekly and monthly plans, use duration-based deposit
   if (stayDurationDays > 60) {
-    return 1500; // 1500 BGN for stays longer than 60 days
+    return MONTHLY_RATE; // One month deposit for long stays
   } else if (stayDurationDays > 14) {
-    return 420; // 420 BGN for stays between 15-60 days
+    return WEEKLY_RATE; // One week deposit for medium stays
   } else {
-    return 70; // 70 BGN for stays up to 14 days
+    return DAILY_RATE; // One day deposit for short stays
   }
 };
 
-const calculateOptimalPaymentBreakdown = (
+const calculateInitialPayment = (
+  plan: 'monthly' | 'weekly' | 'daily',
+  stayDurationDays: number
+): { payment: number; deposit: number } => {
+  const deposit = calculateDepositAmount(plan, stayDurationDays);
+  let periodPayment: number;
+
+  // One full period payment based on plan type
+  switch (plan) {
+    case 'monthly':
+      periodPayment = MONTHLY_RATE; // One month
+      break;
+    case 'weekly':
+      periodPayment = WEEKLY_RATE; // One week
+      break;
+    case 'daily':
+      periodPayment = DAILY_RATE; // One day
+      break;
+  }
+
+  return {
+    payment: periodPayment,
+    deposit: deposit
+  };
+};
+
+// Update the calculateOptimalPaymentBreakdown function to use the new calculation
+function calculateOptimalPaymentBreakdown(
   checkIn: Date,
   checkOut: Date,
   preferredType: 'monthly' | 'weekly' | 'daily',
   selectedPeriods: number[],
   prepayAll: boolean
-): PaymentBreakdown => {
+): PaymentBreakdown {
   const periods: PaymentPeriod[] = [];
   let currentDate = startOfDay(new Date(checkIn));
   const endDate = startOfDay(new Date(checkOut));
@@ -134,10 +167,8 @@ const calculateOptimalPaymentBreakdown = (
     });
   }
 
-  // Apply prepayment benefits
-  const prepaidPeriodsCount = prepayAll ? periods.length : selectedPeriods.length;
-
   // Calculate sixth period discount if applicable
+  const prepaidPeriodsCount = prepayAll ? periods.length : selectedPeriods.length;
   if (prepaidPeriodsCount >= 5 && periods.length >= 6) {
     const sixthPeriod = periods[5];
     if (sixthPeriod) {
@@ -151,15 +182,8 @@ const calculateOptimalPaymentBreakdown = (
   });
 
   const totalAmount = periods.reduce((sum, period) => sum + period.amount, 0);
-  const depositAmount = preferredType === 'daily' ? 
-    DAILY_RATE : 
-    calculateDepositAmount(totalDays);
-
-  // Calculate initial payment
-  const firstPeriod = periods[0];
-  const initialPayment = preferredType === 'daily' ?
-    DAILY_RATE * 2 : 
-    (firstPeriod ? firstPeriod.amount : 0) + depositAmount;
+  const { payment: firstPeriodPayment, deposit: depositAmount } = calculateInitialPayment(preferredType, totalDays);
+  const initialPayment = firstPeriodPayment + depositAmount;
 
   const totalSavings = periods.reduce((sum, period) =>
     sum + (period.baseAmount - period.amount), 0);
@@ -173,7 +197,7 @@ const calculateOptimalPaymentBreakdown = (
     totalSavings,
     effectiveRate: totalAmount / totalDays
   };
-};
+}
 
 const containerVariants = {
   hidden: { opacity: 0, y: 20 },
@@ -216,14 +240,14 @@ const isEligibleForWeeklyPlan = (checkIn: Date, checkOut: Date): boolean => {
   return differenceInDays(checkOut, checkIn) >= 7;
 };
 
-const PlanCard = ({ 
-  type, 
-  rate, 
+const PlanCard = ({
+  type,
+  rate,
   standardAmount,
-  isSelected, 
-  isEligible, 
-  totalDays, 
-  onSelect 
+  isSelected,
+  isEligible,
+  totalDays,
+  onSelect
 }: {
   type: 'monthly' | 'weekly' | 'daily';
   rate: number;
@@ -234,9 +258,9 @@ const PlanCard = ({
   onSelect: () => void;
 }) => {
   // Calculate per night rate
-  const perNightRate = type === 'monthly' ? 
-    (rate / 30) : type === 'weekly' ? 
-    (rate / 7) : rate;
+  const perNightRate = type === 'monthly' ?
+    (rate / 30) : type === 'weekly' ?
+      (rate / 7) : rate;
 
   return (
     <motion.div
@@ -261,10 +285,10 @@ const PlanCard = ({
       </div>
       {!isEligible && (
         <div className="text-xs text-red-500 mt-1">
-          {type === 'monthly' 
+          {type === 'monthly'
             ? 'Requires full month stay'
-            : type === 'weekly' 
-              ? 'Minimum 7 days required' 
+            : type === 'weekly'
+              ? 'Minimum 7 days required'
               : ''}
         </div>
       )}
