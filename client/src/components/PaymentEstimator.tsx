@@ -58,8 +58,11 @@ const WEEKLY_RATE = 420;
 const MONTHLY_RATE = 1500;
 
 const calculateProgressiveDiscount = (prepaidPeriodsCount: number): number => {
-  // 10% discount per prepaid period, up to 50%
-  return Math.min(prepaidPeriodsCount * 0.1, 0.5);
+  // Start applying discount from the second prepaid period
+  // So if prepaidPeriodsCount is 1, no discount is applied
+  const discountablePeriods = Math.max(0, prepaidPeriodsCount - 1);
+  // 10% discount per prepaid period after the first, up to 50%
+  return Math.min(discountablePeriods * 0.1, 0.5);
 };
 
 const calculateDepositAmount = (plan: 'monthly' | 'weekly' | 'daily', prepaidPeriodsCount: number, stayDurationDays: number): number => {
@@ -589,10 +592,16 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
               <div className="divide-y">
                 {paymentBreakdown.periods.map((period, index) => {
                   const isSelected = selectedPeriods.includes(index) || prepayAll;
-                  const discount = calculateProgressiveDiscount(
-                    paymentBreakdown.periods.filter(p => p.isPrepaid && p.type === period.type).length
+                  // Calculate potential discount based on currently selected periods plus this one
+                  const selectedPeriodsOfSameType = paymentBreakdown.periods.filter(
+                    p => (p.isPrepaid || selectedPeriods.includes(p.index!)) && p.type === period.type
+                  ).length;
+
+                  // Calculate what the discount would be if this period was selected
+                  const potentialDiscount = calculateProgressiveDiscount(
+                    index === 0 ? 1 : selectedPeriodsOfSameType + (isSelected ? 0 : 1)
                   );
-                  const discountedAmount = period.baseAmount * (1 - discount);
+                  const discountedAmount = period.baseAmount * (1 - potentialDiscount);
 
                   return (
                     <motion.div
@@ -620,14 +629,14 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                               layout
                             >
                               {period.label}
-                              {isSelected && discount > 0 && (
+                              {potentialDiscount > 0 && index > 0 && (
                                 <motion.span
-                                  className="ml-2 text-sm text-green-600"
+                                  className={`ml-2 text-sm ${isSelected ? 'text-green-600' : 'text-muted-foreground'}`}
                                   initial={{ opacity: 0, x: -10 }}
                                   animate={{ opacity: 1, x: 0 }}
                                   exit={{ opacity: 0, x: 10 }}
                                 >
-                                  ({(discount * 100).toFixed(0)}% off)
+                                  ({(potentialDiscount * 100).toFixed(0)}% off if prepaid)
                                 </motion.span>
                               )}
                             </motion.div>
@@ -644,17 +653,20 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                             className="font-medium"
                             layout
                           >
-                            {isSelected ? (
+                            {index === 0 ? (
+                              // First period is always at base price
+                              `$${period.baseAmount.toLocaleString()}`
+                            ) : (
                               <>
-                                <span className="text-muted-foreground line-through mr-2">
+                                <span className={`${isSelected ? 'text-muted-foreground line-through' : ''} mr-2`}>
                                   ${period.baseAmount.toLocaleString()}
                                 </span>
-                                <span className="text-green-600">
-                                  ${discountedAmount.toLocaleString()}
-                                </span>
+                                {potentialDiscount > 0 && (
+                                  <span className={isSelected ? 'text-green-600' : 'text-muted-foreground'}>
+                                    ${discountedAmount.toLocaleString()}
+                                  </span>
+                                )}
                               </>
-                            ) : (
-                              `$${period.amount.toLocaleString()}`
                             )}
                           </motion.div>
                           <motion.div
