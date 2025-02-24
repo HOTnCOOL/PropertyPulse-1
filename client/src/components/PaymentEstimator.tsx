@@ -57,46 +57,33 @@ const DAILY_RATE = 70;
 const WEEKLY_RATE = 420;
 const MONTHLY_RATE = 1500;
 
-const calculateDepositAmount = (plan: 'monthly' | 'weekly' | 'daily', stayDurationDays: number): number => {
-  // Daily plan always has fixed deposit of one daily rate
-  if (plan === 'daily') {
-    return DAILY_RATE;
-  }
-
-  // For weekly and monthly plans, use duration-based deposit
-  if (stayDurationDays > 60) {
-    return MONTHLY_RATE; // One month deposit for long stays
-  } else if (stayDurationDays > 14) {
-    return WEEKLY_RATE; // One week deposit for medium stays
-  } else {
-    return DAILY_RATE; // One day deposit for short stays
-  }
+const calculateProgressiveDiscount = (prepaidPeriodsCount: number): number => {
+  // 10% discount per prepaid period, up to 50%
+  return Math.min(prepaidPeriodsCount * 0.1, 0.5);
 };
 
-const calculateInitialPayment = (
-  plan: 'monthly' | 'weekly' | 'daily',
-  stayDurationDays: number
-): { payment: number; deposit: number } => {
-  const deposit = calculateDepositAmount(plan, stayDurationDays);
-  let periodPayment: number;
+const calculateDepositAmount = (plan: 'monthly' | 'weekly' | 'daily', prepaidPeriodsCount: number, stayDurationDays: number): number => {
+  let baseDeposit;
 
-  // One full period payment based on plan type
-  switch (plan) {
-    case 'monthly':
-      periodPayment = MONTHLY_RATE; // One month
-      break;
-    case 'weekly':
-      periodPayment = WEEKLY_RATE; // One week
-      break;
-    case 'daily':
-      periodPayment = DAILY_RATE; // Just one day for daily plan
-      break;
+  // Calculate base deposit
+  if (plan === 'daily') {
+    baseDeposit = DAILY_RATE; // Always one daily rate for daily plans
+  } else if (stayDurationDays > 60) {
+    baseDeposit = MONTHLY_RATE;
+  } else if (stayDurationDays > 14) {
+    baseDeposit = WEEKLY_RATE;
+  } else {
+    baseDeposit = DAILY_RATE;
   }
 
-  return {
-    payment: periodPayment,
-    deposit: deposit
-  };
+  // Apply deposit reductions based on prepaid periods
+  if (prepaidPeriodsCount >= 3) {
+    return 0; // No deposit required for 3+ prepaid periods
+  } else if (prepaidPeriodsCount >= 2) {
+    return baseDeposit * 0.5; // 50% deposit reduction for 2 prepaid periods
+  }
+
+  return baseDeposit;
 };
 
 function calculateOptimalPaymentBreakdown(
@@ -191,25 +178,30 @@ function calculateOptimalPaymentBreakdown(
     });
   }
 
-  // Apply prepayment selections and discounts
+  // Apply prepayment selections and progressive discounts
   periods.forEach((period, index) => {
     if (!period.isPrepaid) { // Skip already prepaid periods (first period)
       period.isPrepaid = prepayAll || selectedPeriods.includes(index);
     }
   });
 
-  // Calculate sixth period discount if applicable
-  const prepaidPeriodsCount = periods.filter(p => p.isPrepaid).length;
-  if (prepaidPeriodsCount >= 5 && periods.length >= 6) {
-    const sixthPeriod = periods[5];
-    if (sixthPeriod) {
-      sixthPeriod.amount = sixthPeriod.baseAmount * 0.5; // 50% off 6th period
+  // Count prepaid periods of the same type
+  const prepaidPeriodsCount = periods.filter(p => p.isPrepaid && p.type === preferredType).length;
+
+  // Apply progressive discounts to prepaid periods
+  periods.forEach(period => {
+    if (period.isPrepaid) {
+      const discount = calculateProgressiveDiscount(prepaidPeriodsCount);
+      period.amount = period.baseAmount * (1 - discount);
     }
-  }
+  });
 
   const totalAmount = periods.reduce((sum, period) => sum + period.amount, 0);
-  const { payment: firstPeriodPayment, deposit: depositAmount } = calculateInitialPayment(preferredType, totalDays);
-  const initialPayment = firstPeriodPayment + depositAmount;
+  const depositAmount = calculateDepositAmount(preferredType, prepaidPeriodsCount, totalDays);
+
+  // Calculate initial payment (first period + selected prepaid periods + deposit)
+  const initialPayment = periods.reduce((sum, period) =>
+    sum + (period.isPrepaid ? period.amount : 0), 0) + depositAmount;
 
   const totalSavings = periods.reduce((sum, period) =>
     sum + (period.baseAmount - period.amount), 0);
@@ -580,10 +572,28 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
             </AnimatePresence>
 
             <motion.div className="space-y-4" variants={itemVariants}>
-              <h3 className="text-sm font-semibold">Payment Schedule</h3>
+              <div className="flex justify-between items-center">
+                <h3 className="text-sm font-semibold">Payment Schedule</h3>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-4 w-4 text-muted-foreground" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="max-w-xs">
+                      Select additional periods to prepay and get progressive discounts.
+                      Prepay 2+ periods for 50% off deposit, 3+ periods for no deposit!
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
               <div className="divide-y">
                 {paymentBreakdown.periods.map((period, index) => {
                   const isSelected = selectedPeriods.includes(index) || prepayAll;
+                  const discount = calculateProgressiveDiscount(
+                    paymentBreakdown.periods.filter(p => p.isPrepaid && p.type === period.type).length
+                  );
+                  const discountedAmount = period.baseAmount * (1 - discount);
+
                   return (
                     <motion.div
                       key={index}
@@ -610,13 +620,14 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                               layout
                             >
                               {period.label}
-                              {isSelected && (
+                              {isSelected && discount > 0 && (
                                 <motion.span
                                   className="ml-2 text-sm text-green-600"
                                   initial={{ opacity: 0, x: -10 }}
                                   animate={{ opacity: 1, x: 0 }}
                                   exit={{ opacity: 0, x: 10 }}
                                 >
+                                  ({(discount * 100).toFixed(0)}% off)
                                 </motion.span>
                               )}
                             </motion.div>
@@ -633,7 +644,18 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                             className="font-medium"
                             layout
                           >
-                            ${period.amount.toLocaleString()}
+                            {isSelected ? (
+                              <>
+                                <span className="text-muted-foreground line-through mr-2">
+                                  ${period.baseAmount.toLocaleString()}
+                                </span>
+                                <span className="text-green-600">
+                                  ${discountedAmount.toLocaleString()}
+                                </span>
+                              </>
+                            ) : (
+                              `$${period.amount.toLocaleString()}`
+                            )}
                           </motion.div>
                           <motion.div
                             className="text-xs text-muted-foreground"
@@ -646,6 +668,27 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                     </motion.div>
                   );
                 })}
+
+                {/* Deposit information */}
+                <motion.div className="py-4 bg-primary/5 rounded-lg mt-4">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <span className="font-medium">Security Deposit</span>
+                      {paymentBreakdown.depositAmount === 0 ? (
+                        <span className="text-green-600 text-sm ml-2">
+                          (Waived - 3+ periods prepaid)
+                        </span>
+                      ) : paymentBreakdown.depositAmount < calculateDepositAmount(preferredPackageType, 0, differenceInDays(checkOut!, checkIn!)) ? (
+                        <span className="text-green-600 text-sm ml-2">
+                          (50% off - 2 periods prepaid)
+                        </span>
+                      ) : null}
+                    </div>
+                    <span className="font-medium">
+                      ${paymentBreakdown.depositAmount.toLocaleString()}
+                    </span>
+                  </div>
+                </motion.div>
               </div>
             </motion.div>
 
