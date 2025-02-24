@@ -9,6 +9,7 @@ import {
   startOfDay,
   isSameDay,
   getDate,
+  addDays
 } from "date-fns";
 import { AlertTriangle, Info, TrendingDown, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -88,7 +89,7 @@ const calculateInitialPayment = (
       periodPayment = WEEKLY_RATE; // One week
       break;
     case 'daily':
-      periodPayment = DAILY_RATE; // One day
+      periodPayment = DAILY_RATE; // Just one day for daily plan
       break;
   }
 
@@ -98,7 +99,6 @@ const calculateInitialPayment = (
   };
 };
 
-// Update the calculateOptimalPaymentBreakdown function to use the new calculation
 function calculateOptimalPaymentBreakdown(
   checkIn: Date,
   checkOut: Date,
@@ -111,49 +111,72 @@ function calculateOptimalPaymentBreakdown(
   const endDate = startOfDay(new Date(checkOut));
   const totalDays = differenceInDays(endDate, currentDate);
 
-  const standardPeriodAmount = {
-    monthly: MONTHLY_RATE, // 1500 BGN
-    weekly: WEEKLY_RATE,   // 420 BGN
-    daily: DAILY_RATE      // 70 BGN
-  };
+  if (preferredType === 'daily') {
+    // First day as a separate period (required)
+    periods.push({
+      type: 'daily',
+      startDate: currentDate,
+      endDate: addDays(currentDate, 1),
+      baseAmount: DAILY_RATE,
+      amount: DAILY_RATE,
+      label: 'Day 1 (Required)',
+      index: 0,
+      isPrepaid: true // Always prepaid as it's required
+    });
 
-  // Calculate number of complete months
-  const completeMonths = differenceInCalendarMonths(endDate, currentDate);
-  let periodIndex = 0;
-
-  if (preferredType === 'monthly' && completeMonths >= 1) {
-    // Add monthly periods
-    for (let i = 0; i < completeMonths; i++) {
-      const monthEnd = addMonths(currentDate, 1);
+    // Remaining days as separate periods
+    for (let i = 1; i < totalDays; i++) {
+      const dayStart = addDays(checkIn, i);
       periods.push({
-        type: 'monthly',
-        startDate: currentDate,
-        endDate: monthEnd,
-        baseAmount: standardPeriodAmount.monthly,
-        amount: standardPeriodAmount.monthly,
-        label: `Month ${i + 1}`,
-        index: periodIndex++
+        type: 'daily',
+        startDate: dayStart,
+        endDate: addDays(dayStart, 1),
+        baseAmount: DAILY_RATE,
+        amount: DAILY_RATE,
+        label: `Day ${i + 1}`,
+        index: i,
+        isPrepaid: false // Optional prepayment
       });
-      currentDate = monthEnd;
     }
   } else if (preferredType === 'weekly' && totalDays >= 7) {
-    // Add weekly periods
+    // Handle weekly periods
+    let weekIndex = 0;
     while (differenceInDays(endDate, currentDate) >= 7) {
       const weekEnd = addWeeks(currentDate, 1);
       periods.push({
         type: 'weekly',
         startDate: currentDate,
         endDate: weekEnd,
-        baseAmount: standardPeriodAmount.weekly,
-        amount: standardPeriodAmount.weekly,
-        label: `Week ${periodIndex + 1}`,
-        index: periodIndex++
+        baseAmount: WEEKLY_RATE,
+        amount: WEEKLY_RATE,
+        label: weekIndex === 0 ? 'Week 1 (Required)' : `Week ${weekIndex + 1}`,
+        index: weekIndex,
+        isPrepaid: weekIndex === 0 // First week always prepaid
       });
       currentDate = weekEnd;
+      weekIndex++;
+    }
+  } else if (preferredType === 'monthly' && differenceInCalendarMonths(endDate, currentDate) >= 1) {
+    // Handle monthly periods
+    let monthIndex = 0;
+    while (differenceInCalendarMonths(endDate, currentDate) >= 1) {
+      const monthEnd = addMonths(currentDate, 1);
+      periods.push({
+        type: 'monthly',
+        startDate: currentDate,
+        endDate: monthEnd,
+        baseAmount: MONTHLY_RATE,
+        amount: MONTHLY_RATE,
+        label: monthIndex === 0 ? 'Month 1 (Required)' : `Month ${monthIndex + 1}`,
+        index: monthIndex,
+        isPrepaid: monthIndex === 0 // First month always prepaid
+      });
+      currentDate = monthEnd;
+      monthIndex++;
     }
   }
 
-  // Add remaining days as daily periods
+  // Handle remaining days if any
   const remainingDays = differenceInDays(endDate, currentDate);
   if (remainingDays > 0) {
     periods.push({
@@ -162,24 +185,27 @@ function calculateOptimalPaymentBreakdown(
       endDate: endDate,
       baseAmount: DAILY_RATE * remainingDays,
       amount: DAILY_RATE * remainingDays,
-      label: `${remainingDays} Day${remainingDays > 1 ? 's' : ''}`,
-      index: periodIndex++
+      label: `${remainingDays} Remaining Day${remainingDays > 1 ? 's' : ''}`,
+      index: periods.length,
+      isPrepaid: false
     });
   }
 
+  // Apply prepayment selections and discounts
+  periods.forEach((period, index) => {
+    if (!period.isPrepaid) { // Skip already prepaid periods (first period)
+      period.isPrepaid = prepayAll || selectedPeriods.includes(index);
+    }
+  });
+
   // Calculate sixth period discount if applicable
-  const prepaidPeriodsCount = prepayAll ? periods.length : selectedPeriods.length;
+  const prepaidPeriodsCount = periods.filter(p => p.isPrepaid).length;
   if (prepaidPeriodsCount >= 5 && periods.length >= 6) {
     const sixthPeriod = periods[5];
     if (sixthPeriod) {
       sixthPeriod.amount = sixthPeriod.baseAmount * 0.5; // 50% off 6th period
     }
   }
-
-  // Mark prepaid periods
-  periods.forEach((period, index) => {
-    period.isPrepaid = prepayAll || selectedPeriods.includes(index);
-  });
 
   const totalAmount = periods.reduce((sum, period) => sum + period.amount, 0);
   const { payment: firstPeriodPayment, deposit: depositAmount } = calculateInitialPayment(preferredType, totalDays);
