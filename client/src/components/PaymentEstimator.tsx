@@ -289,6 +289,9 @@ const PlanCard = ({
     (rate / 30) : type === 'weekly' ?
       (rate / 7) : rate;
 
+  // Calculate total stay cost without any discounts
+  const totalStayCost = perNightRate * totalDays;
+
   return (
     <motion.div
       className={`p-3 bg-white rounded border cursor-pointer transition-colors ${
@@ -308,6 +311,9 @@ const PlanCard = ({
         </div>
         <div className="text-xs text-green-600">
           Save {((DAILY_RATE - perNightRate) / DAILY_RATE * 100).toFixed(1)}% vs daily rate
+        </div>
+        <div className="text-sm font-medium mt-2 text-muted-foreground">
+          Total for {totalDays} nights: ${totalStayCost.toLocaleString()}
         </div>
       </div>
       {!isEligible && (
@@ -608,8 +614,8 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
               <div className="divide-y">
                 {paymentBreakdown.periods.map((period, index) => {
                   const isSelected = selectedPeriods.includes(index) || prepayAll;
-                  const canSelect = index === 0 || 
-                    selectedPeriods.includes(index - 1) || 
+                  const canSelect = index === 0 ||
+                    selectedPeriods.includes(index - 1) ||
                     (index === 1 && period.type === preferredType);
 
                   // Calculate the discount that would apply to this period
