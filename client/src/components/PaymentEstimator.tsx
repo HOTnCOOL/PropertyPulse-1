@@ -136,7 +136,7 @@ function calculateOptimalPaymentBreakdown(
       });
     }
   } else if (preferredType === 'weekly' && totalDays >= 7) {
-    // Handle weekly periods
+    // Handle complete weeks
     let weekIndex = 0;
     while (differenceInDays(endDate, currentDate) >= 7) {
       const weekEnd = addWeeks(currentDate, 1);
@@ -154,39 +154,34 @@ function calculateOptimalPaymentBreakdown(
       weekIndex++;
     }
 
-    // Handle remaining days with daily rate for weekly plans
+    // Handle remaining days for weekly plan
     const remainingDays = differenceInDays(endDate, currentDate);
     if (remainingDays > 0) {
+      const weeklyPerNightRate = WEEKLY_RATE / 7; // 60 BGN per night
+      const remainingAmount = weeklyPerNightRate * remainingDays;
+
       periods.push({
-        type: 'daily',
+        type: 'weekly',
         startDate: currentDate,
         endDate: endDate,
-        baseAmount: DAILY_RATE * remainingDays,
-        amount: DAILY_RATE * remainingDays,
-        label: `${remainingDays} Remaining Day${remainingDays > 1 ? 's' : ''}`,
+        baseAmount: remainingAmount,
+        amount: remainingAmount,
+        label: `${remainingDays} night${remainingDays > 1 ? 's' : ''} at weekly rate`,
         index: periods.length,
         isPrepaid: false
       });
     }
   } else if (preferredType === 'monthly' && differenceInCalendarMonths(endDate, currentDate) >= 1) {
-    // For monthly plans, calculate the total cost based on the monthly per-night rate
-    const monthlyPerNightRate = MONTHLY_RATE / 30; // 50 BGN per night
-    const fullStayCost = monthlyPerNightRate * totalDays;
-
-    // Split into monthly periods for display purposes
+    // Handle complete months
     let monthIndex = 0;
-    const monthlyPayment = fullStayCost / Math.ceil(totalDays / 30);
-
     while (differenceInCalendarMonths(endDate, currentDate) >= 1) {
       const monthEnd = addMonths(currentDate, 1);
-      const daysInPeriod = differenceInDays(monthEnd, currentDate);
-
       periods.push({
         type: 'monthly',
         startDate: currentDate,
         endDate: monthEnd,
-        baseAmount: monthlyPayment,
-        amount: monthlyPayment,
+        baseAmount: MONTHLY_RATE,
+        amount: MONTHLY_RATE,
         label: monthIndex === 0 ? 'Month 1 (Required)' : `Month ${monthIndex + 1}`,
         index: monthIndex,
         isPrepaid: monthIndex === 0 // First month always prepaid
@@ -195,18 +190,19 @@ function calculateOptimalPaymentBreakdown(
       monthIndex++;
     }
 
-    // Handle any remaining days in the last period
-    if (!isSameDay(currentDate, endDate)) {
-      const remainingDays = differenceInDays(endDate, currentDate);
-      const remainingCost = monthlyPerNightRate * remainingDays;
+    // Handle remaining days for monthly plan
+    const remainingDays = differenceInDays(endDate, currentDate);
+    if (remainingDays > 0) {
+      const monthlyPerNightRate = MONTHLY_RATE / 30; // 50 BGN per night
+      const remainingAmount = monthlyPerNightRate * remainingDays;
 
       periods.push({
-        type: 'monthly', // Keep it as monthly type for consistent pricing
+        type: 'monthly',
         startDate: currentDate,
         endDate: endDate,
-        baseAmount: remainingCost,
-        amount: remainingCost,
-        label: `Remaining ${remainingDays} Day${remainingDays > 1 ? 's' : ''}`,
+        baseAmount: remainingAmount,
+        amount: remainingAmount,
+        label: `${remainingDays} night${remainingDays > 1 ? 's' : ''} at monthly rate`,
         index: periods.length,
         isPrepaid: false
       });
