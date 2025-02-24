@@ -407,7 +407,13 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
               variants={itemVariants}
             >
               <div className="flex justify-between items-center">
-                <h3 className="font-semibold">Available Payment Plans</h3>
+                <h3 className="font-semibold">
+                  {checkIn && checkOut ? (
+                    `Select a Payment Plan for your ${differenceInDays(checkOut, checkIn)}-days booking`
+                  ) : (
+                    'Select a Payment Plan'
+                  )}
+                </h3>
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="prepayAll"
