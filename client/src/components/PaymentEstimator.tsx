@@ -153,17 +153,40 @@ function calculateOptimalPaymentBreakdown(
       currentDate = weekEnd;
       weekIndex++;
     }
+
+    // Handle remaining days with daily rate for weekly plans
+    const remainingDays = differenceInDays(endDate, currentDate);
+    if (remainingDays > 0) {
+      periods.push({
+        type: 'daily',
+        startDate: currentDate,
+        endDate: endDate,
+        baseAmount: DAILY_RATE * remainingDays,
+        amount: DAILY_RATE * remainingDays,
+        label: `${remainingDays} Remaining Day${remainingDays > 1 ? 's' : ''}`,
+        index: periods.length,
+        isPrepaid: false
+      });
+    }
   } else if (preferredType === 'monthly' && differenceInCalendarMonths(endDate, currentDate) >= 1) {
-    // Handle monthly periods
+    // For monthly plans, calculate the total cost based on the monthly per-night rate
+    const monthlyPerNightRate = MONTHLY_RATE / 30; // 50 BGN per night
+    const fullStayCost = monthlyPerNightRate * totalDays;
+
+    // Split into monthly periods for display purposes
     let monthIndex = 0;
+    const monthlyPayment = fullStayCost / Math.ceil(totalDays / 30);
+
     while (differenceInCalendarMonths(endDate, currentDate) >= 1) {
       const monthEnd = addMonths(currentDate, 1);
+      const daysInPeriod = differenceInDays(monthEnd, currentDate);
+
       periods.push({
         type: 'monthly',
         startDate: currentDate,
         endDate: monthEnd,
-        baseAmount: MONTHLY_RATE,
-        amount: MONTHLY_RATE,
+        baseAmount: monthlyPayment,
+        amount: monthlyPayment,
         label: monthIndex === 0 ? 'Month 1 (Required)' : `Month ${monthIndex + 1}`,
         index: monthIndex,
         isPrepaid: monthIndex === 0 // First month always prepaid
@@ -171,21 +194,23 @@ function calculateOptimalPaymentBreakdown(
       currentDate = monthEnd;
       monthIndex++;
     }
-  }
 
-  // Handle remaining days if any
-  const remainingDays = differenceInDays(endDate, currentDate);
-  if (remainingDays > 0) {
-    periods.push({
-      type: 'daily',
-      startDate: currentDate,
-      endDate: endDate,
-      baseAmount: DAILY_RATE * remainingDays,
-      amount: DAILY_RATE * remainingDays,
-      label: `${remainingDays} Remaining Day${remainingDays > 1 ? 's' : ''}`,
-      index: periods.length,
-      isPrepaid: false
-    });
+    // Handle any remaining days in the last period
+    if (!isSameDay(currentDate, endDate)) {
+      const remainingDays = differenceInDays(endDate, currentDate);
+      const remainingCost = monthlyPerNightRate * remainingDays;
+
+      periods.push({
+        type: 'monthly', // Keep it as monthly type for consistent pricing
+        startDate: currentDate,
+        endDate: endDate,
+        baseAmount: remainingCost,
+        amount: remainingCost,
+        label: `Remaining ${remainingDays} Day${remainingDays > 1 ? 's' : ''}`,
+        index: periods.length,
+        isPrepaid: false
+      });
+    }
   }
 
   // Apply prepayment selections and progressive discounts
@@ -205,16 +230,9 @@ function calculateOptimalPaymentBreakdown(
 
   const totalAmount = periods.reduce((sum, period) => sum + period.amount, 0);
 
-  // Calculate deposit reduction based on number of prepaid periods
+  // Count prepaid periods of the same type for deposit calculation
   const prepaidPeriodsCount = periods.filter(p => p.isPrepaid && p.type === preferredType).length;
-  let depositAmount = calculateDepositAmount(preferredType, prepaidPeriodsCount, totalDays);
-
-  // Apply deposit reductions
-  if (prepaidPeriodsCount >= 3) {
-    depositAmount = 0; // No deposit for 3+ prepaid periods
-  } else if (prepaidPeriodsCount >= 2) {
-    depositAmount *= 0.5; // 50% deposit reduction for 2 prepaid periods
-  }
+  const depositAmount = calculateDepositAmount(preferredType, prepaidPeriodsCount, totalDays);
 
   // Calculate initial payment (prepaid periods + deposit)
   const initialPayment = periods.reduce((sum, period) =>
