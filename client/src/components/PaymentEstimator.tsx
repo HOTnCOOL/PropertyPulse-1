@@ -57,13 +57,12 @@ const DAILY_RATE = 70;
 const WEEKLY_RATE = 420;
 const MONTHLY_RATE = 1500;
 
-const calculateProgressiveDiscount = (prepaidPeriodsCount: number): number => {
-  // Start applying discount from the second prepaid period
-  // So if prepaidPeriodsCount is 1, no discount is applied
-  const discountablePeriods = Math.max(0, prepaidPeriodsCount - 1);
-  // 10% discount per prepaid period after the first, up to 50%
-  return Math.min(discountablePeriods * 0.1, 0.5);
-};
+function calculateDiscountForPeriod(periodIndex: number): number {
+  // First period has no discount
+  if (periodIndex <= 0) return 0;
+  // Calculate progressive discount (10% increase per period, max 50%)
+  return Math.min((periodIndex) * 0.1, 0.5);
+}
 
 const calculateDepositAmount = (plan: 'monthly' | 'weekly' | 'daily', prepaidPeriodsCount: number, stayDurationDays: number): number => {
   let baseDeposit;
@@ -188,21 +187,28 @@ function calculateOptimalPaymentBreakdown(
     }
   });
 
-  // Count prepaid periods of the same type
-  const prepaidPeriodsCount = periods.filter(p => p.isPrepaid && p.type === preferredType).length;
-
   // Apply progressive discounts to prepaid periods
-  periods.forEach(period => {
-    if (period.isPrepaid) {
-      const discount = calculateProgressiveDiscount(prepaidPeriodsCount);
+  periods.forEach((period, index) => {
+    if (period.isPrepaid && index > 0) { // Skip first period
+      const discount = calculateDiscountForPeriod(index);
       period.amount = period.baseAmount * (1 - discount);
     }
   });
 
   const totalAmount = periods.reduce((sum, period) => sum + period.amount, 0);
-  const depositAmount = calculateDepositAmount(preferredType, prepaidPeriodsCount, totalDays);
 
-  // Calculate initial payment (first period + selected prepaid periods + deposit)
+  // Calculate deposit reduction based on number of prepaid periods
+  const prepaidPeriodsCount = periods.filter(p => p.isPrepaid && p.type === preferredType).length;
+  let depositAmount = calculateDepositAmount(preferredType, prepaidPeriodsCount, totalDays);
+
+  // Apply deposit reductions
+  if (prepaidPeriodsCount >= 3) {
+    depositAmount = 0; // No deposit for 3+ prepaid periods
+  } else if (prepaidPeriodsCount >= 2) {
+    depositAmount *= 0.5; // 50% deposit reduction for 2 prepaid periods
+  }
+
+  // Calculate initial payment (prepaid periods + deposit)
   const initialPayment = periods.reduce((sum, period) =>
     sum + (period.isPrepaid ? period.amount : 0), 0) + depositAmount;
 
@@ -362,10 +368,21 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
   }, [checkIn, checkOut, preferredPackageType, selectedPeriods, prepayAll]);
 
   const handlePeriodSelect = (index: number) => {
-    if (index === 0) return;
+    if (index === 0) return; // Can't toggle first period
+
     setSelectedPeriods(prev => {
+      // Check if all previous periods are selected
+      const allPreviousSelected = Array.from({ length: index })
+        .every((_, i) => i === 0 || prev.includes(i));
+
+      if (!allPreviousSelected) {
+        // Can't select this period if previous ones aren't selected
+        return prev;
+      }
+
       if (prev.includes(index)) {
-        return prev.filter(i => i !== index);
+        // When deselecting, remove this and all subsequent periods
+        return prev.filter(i => i < index);
       } else {
         return [...prev, index].sort();
       }
@@ -490,11 +507,10 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                 </Tooltip>
               </div>
               <div className="space-y-2">
-                {selectedPeriods.map(index => {
-                  const period = paymentBreakdown.periods[index];
+                {paymentBreakdown.periods.map(period => {
                   if (!period) return null;
                   return (
-                    <motion.div key={index} className="flex justify-between text-sm" variants={itemVariants}>
+                    <motion.div key={period.index} className="flex justify-between text-sm" variants={itemVariants}>
                       <span>{period.label} </span>
                       <span>${period.amount.toLocaleString()}</span>
                     </motion.div>
@@ -592,16 +608,13 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
               <div className="divide-y">
                 {paymentBreakdown.periods.map((period, index) => {
                   const isSelected = selectedPeriods.includes(index) || prepayAll;
-                  // Calculate potential discount based on currently selected periods plus this one
-                  const selectedPeriodsOfSameType = paymentBreakdown.periods.filter(
-                    p => (p.isPrepaid || selectedPeriods.includes(p.index!)) && p.type === period.type
-                  ).length;
+                  const canSelect = index === 0 || 
+                    selectedPeriods.includes(index - 1) || 
+                    (index === 1 && period.type === preferredType);
 
-                  // Calculate what the discount would be if this period was selected
-                  const potentialDiscount = calculateProgressiveDiscount(
-                    index === 0 ? 1 : selectedPeriodsOfSameType + (isSelected ? 0 : 1)
-                  );
-                  const discountedAmount = period.baseAmount * (1 - potentialDiscount);
+                  // Calculate the discount that would apply to this period
+                  const discount = calculateDiscountForPeriod(index);
+                  const discountedAmount = period.baseAmount * (1 - discount);
 
                   return (
                     <motion.div
@@ -615,41 +628,36 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                       <div className="flex justify-between items-start">
                         <div className="flex items-start space-x-3">
                           {index > 0 && (
-                            <motion.div whileHover={{ scale: 1.1 }}>
-                              <Checkbox
-                                checked={isSelected}
-                                onCheckedChange={() => handlePeriodSelect(index)}
-                                disabled={prepayAll}
-                              />
-                            </motion.div>
+                            <Checkbox
+                              checked={isSelected}
+                              onCheckedChange={() => handlePeriodSelect(index)}
+                              disabled={!canSelect || prepayAll}
+                            />
                           )}
                           <div className="space-y-1">
-                            <motion.div
+                            <div
                               className="font-medium"
                               layout
                             >
                               {period.label}
-                              {potentialDiscount > 0 && index > 0 && (
-                                <motion.span
+                              {discount > 0 && index > 0 && (
+                                <span
                                   className={`ml-2 text-sm ${isSelected ? 'text-green-600' : 'text-muted-foreground'}`}
-                                  initial={{ opacity: 0, x: -10 }}
-                                  animate={{ opacity: 1, x: 0 }}
-                                  exit={{ opacity: 0, x: 10 }}
                                 >
-                                  ({(potentialDiscount * 100).toFixed(0)}% off if prepaid)
-                                </motion.span>
+                                  ({(discount * 100).toFixed(0)}% off if prepaid)
+                                </span>
                               )}
-                            </motion.div>
+                            </div>
                             <div className="text-sm text-muted-foreground">
                               {format(period.startDate, "MMM d")} - {format(period.endDate, "MMM d")}
                             </div>
                           </div>
                         </div>
-                        <motion.div
+                        <div
                           className="text-right"
                           layout
                         >
-                          <motion.div
+                          <div
                             className="font-medium"
                             layout
                           >
@@ -661,21 +669,19 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                                 <span className={`${isSelected ? 'text-muted-foreground line-through' : ''} mr-2`}>
                                   ${period.baseAmount.toLocaleString()}
                                 </span>
-                                {potentialDiscount > 0 && (
-                                  <span className={isSelected ? 'text-green-600' : 'text-muted-foreground'}>
-                                    ${discountedAmount.toLocaleString()}
-                                  </span>
-                                )}
+                                <span className={isSelected ? 'text-green-600' : 'text-muted-foreground'}>
+                                  ${discountedAmount.toLocaleString()}
+                                </span>
                               </>
                             )}
-                          </motion.div>
-                          <motion.div
+                          </div>
+                          <div
                             className="text-xs text-muted-foreground"
                             layout
                           >
                             {isSelected ? 'Prepaid' : `Due by ${format(period.startDate, "MMM d")}`}
-                          </motion.div>
-                        </motion.div>
+                          </div>
+                        </div>
                       </div>
                     </motion.div>
                   );
