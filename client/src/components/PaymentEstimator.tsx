@@ -82,10 +82,18 @@ const calculateDepositAmount = (plan: 'monthly' | 'weekly' | 'daily', prepaidPer
   if (prepaidPeriodsCount >= 3) {
     return 0; // No deposit required for 3+ prepaid periods
   } else if (prepaidPeriodsCount >= 2) {
-    return baseDeposit * 0.5; // 50% deposit reduction for 2 prepaid periods
+    baseDeposit *= 0.5; // 50% deposit reduction for 2 prepaid periods
   }
 
-  return baseDeposit;
+  // Apply plan-specific maximum deposit limits
+  switch (plan) {
+    case 'daily':
+      return Math.min(baseDeposit, DAILY_RATE);
+    case 'weekly':
+      return Math.min(baseDeposit, WEEKLY_RATE);
+    case 'monthly':
+      return Math.min(baseDeposit, MONTHLY_RATE);
+  }
 };
 
 function calculateOptimalPaymentBreakdown(
