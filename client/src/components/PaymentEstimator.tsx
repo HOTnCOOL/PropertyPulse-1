@@ -33,8 +33,26 @@ interface PaymentEstimatorProps {
 }
 
 // Calculate discount based on property configuration
-function calculateDiscount(periodIndex: number, discountConfig: any, prepaidPeriodsCount: number): number {
+const calculateDiscountForPeriod = (periodIndex: number, preferredType: 'monthly' | 'weekly' | 'daily', selectedPeriods: number[], periods: PaymentPeriod[]): number => {
+  if (periodIndex <= 0) return 0;
+  const selectedPeriodsOfType = periods.filter(p => 
+    p.type === preferredType && 
+    (selectedPeriods.includes(p.index!) || p.isPrepaid)
+  ).length;
+  return Math.min((selectedPeriodsOfType) * 0.1, 0.5);
+};
+
+function calculateDiscount(
+  periodIndex: number, 
+  discountConfig: any, 
+  prepaidPeriodsCount: number,
+  preferredType: 'monthly' | 'weekly' | 'daily',
+  period: PaymentPeriod
+): number {
   if (!discountConfig) return 0;
+
+  // Only apply discounts to periods matching the preferred type
+  if (period.type !== preferredType) return 0;
 
   if (discountConfig.type === 'progressive') {
     // First period has no discount
@@ -241,7 +259,7 @@ function calculateOptimalPaymentBreakdown(
   // Apply discounts to prepaid periods
   periods.forEach((period, index) => {
     if (period.isPrepaid && index > 0) { // Skip first period
-      const discount = calculateDiscount(index, discountConfig, prepaidPeriodsCount);
+      const discount = calculateDiscount(index, discountConfig, prepaidPeriodsCount, preferredType, period);
       period.amount = period.baseAmount * (1 - discount);
     }
   });
@@ -685,7 +703,13 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                     (index === 1 && period.type === preferredType);
 
                   // Calculate the discount that would apply to this period
-                  const discount = calculateDiscount(index, property?.discountConfig, paymentBreakdown.periods.filter(p => p.isPrepaid && p.type === preferredType).length);
+                  const discount = calculateDiscount(
+                    index,
+                    property?.discountConfig,
+                    paymentBreakdown.periods.filter(p => p.isPrepaid && p.type === period.type).length,
+                    preferredPackageType,
+                    period
+                  );
                   const discountedAmount = period.baseAmount * (1 - discount);
 
                   return (
@@ -783,7 +807,6 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
             </motion.div>
 
             <motion.div
-              className="space-y-4 pt-4 border-t"
               variants={itemVariants}
             >
               <div>
