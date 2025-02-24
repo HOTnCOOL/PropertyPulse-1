@@ -3,6 +3,17 @@ import { relations } from "drizzle-orm";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// Add discount configuration schema
+const discountConfigSchema = z.object({
+  type: z.enum(['progressive', 'bulkPrepay']),
+  // For progressive discount
+  progressiveRate: z.number().optional(), // Percentage increase per period
+  progressiveMax: z.number().optional(), // Maximum discount percentage
+  // For bulk prepay discount
+  periodsRequired: z.number().optional(), // Number of periods to prepay
+  nextPeriodDiscount: z.number().optional(), // Discount percentage on next period
+});
+
 export const properties = pgTable("properties", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -18,6 +29,7 @@ export const properties = pgTable("properties", {
   amenities: jsonb("amenities").default('{}').notNull(),
   bedType: text("bed_type"),
   bathrooms: integer("bathrooms").default(1),
+  discountConfig: jsonb("discount_config").default('{"type":"progressive","progressiveRate":10,"progressiveMax":50}').notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -153,6 +165,7 @@ export const insertPropertySchema = createInsertSchema(properties).extend({
   rate: z.number(),
   weeklyRate: z.number().nullable(),
   monthlyRate: z.number().nullable(),
+  discountConfig: discountConfigSchema,
 });
 
 export const insertGuestSchema = z.object({
@@ -174,7 +187,9 @@ export const insertGuestSchema = z.object({
   idImageUrl: z.string().optional(),
 });
 
-export const selectPropertySchema = createSelectSchema(properties);
+export const selectPropertySchema = createSelectSchema(properties).extend({
+  discountConfig: discountConfigSchema,
+});
 export const selectGuestSchema = createSelectSchema(guests);
 export const insertPaymentSchema = createInsertSchema(payments);
 export const selectPaymentSchema = createSelectSchema(payments);
