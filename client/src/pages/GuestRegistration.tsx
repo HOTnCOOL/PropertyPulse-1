@@ -51,7 +51,10 @@ export default function GuestRegistration() {
     to: undefined
   });
 
-  // Get propertyId from URL if it exists
+  // Add state to control which section is visible
+  const [showStayDates, setShowStayDates] = useState(false);
+  const [registeredGuest, setRegisteredGuest] = useState<any>(null);
+
   const params = new URLSearchParams(window.location.search);
   const preSelectedPropertyId = params.get('propertyId');
 
@@ -63,7 +66,7 @@ export default function GuestRegistration() {
       email: "",
       phone: "",
       propertyId: preSelectedPropertyId ? Number(preSelectedPropertyId) : undefined,
-      address: "", // Add default value for required address field
+      address: "",
       checkIn: undefined,
       checkOut: undefined,
       dateOfBirth: undefined,
@@ -114,14 +117,8 @@ export default function GuestRegistration() {
     mutationFn: async (values: FormData) => {
       console.log('Starting guest registration with values:', values);
 
-      if (!selectedDates.from || !selectedDates.to) {
-        throw new Error("Please select your stay dates");
-      }
-
       const formattedValues = {
         ...values,
-        checkIn: selectedDates.from.toISOString(),
-        checkOut: selectedDates.to.toISOString(),
         dateOfBirth: values.dateOfBirth ? new Date(values.dateOfBirth).toISOString() : null,
       };
 
@@ -149,28 +146,28 @@ export default function GuestRegistration() {
       console.log('Registration successful:', data);
       queryClient.invalidateQueries({ queryKey: ["/api/guests"] });
 
-      // Keep the dates but reset other form fields
-      const currentDates = {
-        from: selectedDates.from,
-        to: selectedDates.to
-      };
-      form.reset();
-      setSelectedDates(currentDates);
+      // Store the registered guest data
+      setRegisteredGuest(data);
 
-      // Show success message with booking reference
+      // Show success message
       toast({
         title: "Guest Registration Successful",
         description: `Guest ${data.firstName} ${data.lastName} has been registered successfully.
                      Booking reference: ${data.bookingReference}
-                     Please proceed to make payment using the calculator below.`,
+                     Please proceed to select stay dates below.`,
         duration: 7000,
       });
 
-      // Scroll to payment estimator
-      const paymentEstimator = document.querySelector('.payment-estimator');
-      if (paymentEstimator) {
-        paymentEstimator.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
+      // Show the stay dates section
+      setShowStayDates(true);
+
+      // Scroll to the stay dates section
+      setTimeout(() => {
+        const stayDatesSection = document.querySelector('#stay-dates-section');
+        if (stayDatesSection) {
+          stayDatesSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 100);
     },
     onError: (error) => {
       console.error('Registration error:', error);
@@ -261,15 +258,12 @@ export default function GuestRegistration() {
   }) => {
     console.log('Received extracted data:', data);
 
-    // Helper function to safely set form values
     const setFormValue = (key: keyof FormData, value: any) => {
       if (value) {
         console.log(`Setting ${key}:`, value);
         if (key === 'dateOfBirth' && typeof value === 'string') {
-          // Parse the date string to a Date object
           try {
             const [day, month, year] = value.split(/[-./]/).map(Number);
-            // Assume 20xx for two-digit years, 19xx for others
             const fullYear = year < 100 ? (year < 50 ? 2000 + year : 1900 + year) : year;
             const date = new Date(fullYear, month - 1, day);
             if (!isNaN(date.getTime())) {
@@ -284,7 +278,6 @@ export default function GuestRegistration() {
       }
     };
 
-    // Set each field individually
     setFormValue('firstName', data.firstName);
     setFormValue('lastName', data.lastName);
     setFormValue('dateOfBirth', data.dateOfBirth);
@@ -293,7 +286,6 @@ export default function GuestRegistration() {
     setFormValue('homeAddress', data.homeAddress);
     setFormValue('idType', data.idType);
 
-    // Force form validation after setting values
     form.trigger();
   };
 
@@ -313,39 +305,84 @@ export default function GuestRegistration() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Guest Registration</h1>
+      {/* Registration Section */}
+      <div className={`transition-opacity duration-300 ${showStayDates ? 'opacity-50' : 'opacity-100'}`}>
+        <h1 className="text-3xl font-bold">Guest Registration</h1>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Register New Guest</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              {/* Personal Information */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium">Personal Information</h3>
+        <Card>
+          <CardHeader>
+            <CardTitle>Register New Guest</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <div className="space-y-4">
+                  <h3 className="text-lg font-medium">Personal Information</h3>
 
-                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="firstName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>First Name</FormLabel>
+                          <FormControl>
+                            <Input {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="lastName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Last Name</FormLabel>
+                          <FormControl>
+                            <Input {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="email"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Email</FormLabel>
+                          <FormControl>
+                            <Input type="email" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="phone"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Phone</FormLabel>
+                          <FormControl>
+                            <Input {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
                   <FormField
                     control={form.control}
-                    name="firstName"
+                    name="address"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>First Name</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="lastName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Last Name</FormLabel>
+                        <FormLabel>Current Address</FormLabel>
                         <FormControl>
                           <Input {...field} />
                         </FormControl>
@@ -355,26 +392,87 @@ export default function GuestRegistration() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-4">
+                  <h3 className="text-lg font-medium">ID/Passport Information</h3>
+
                   <FormField
                     control={form.control}
-                    name="email"
+                    name="idType"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Email</FormLabel>
+                        <FormLabel>ID Type</FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select ID type" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="passport">Passport</SelectItem>
+                            <SelectItem value="national_id">National ID</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="idNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>ID/Passport Number</FormLabel>
                         <FormControl>
-                          <Input type="email" {...field} />
+                          <Input {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="dateOfBirth"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Date of Birth</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="date"
+                              value={field.value ? format(new Date(field.value), 'yyyy-MM-dd') : ''}
+                              onChange={e => field.onChange(e.target.value ? new Date(e.target.value) : null)}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="placeOfBirth"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Place of Birth</FormLabel>
+                          <FormControl>
+                            <Input {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
                   <FormField
                     control={form.control}
-                    name="phone"
+                    name="homeAddress"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Phone</FormLabel>
+                        <FormLabel>Home Address</FormLabel>
                         <FormControl>
                           <Input {...field} />
                         </FormControl>
@@ -386,41 +484,28 @@ export default function GuestRegistration() {
 
                 <FormField
                   control={form.control}
-                  name="address"
+                  name="propertyId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Current Address</FormLabel>
-                      <FormControl>
-                        <Input {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              {/* ID/Passport Information Section */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium">ID/Passport Information</h3>
-
-                <FormField
-                  control={form.control}
-                  name="idType"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>ID Type</FormLabel>
+                      <FormLabel>Property</FormLabel>
                       <Select
-                        onValueChange={field.onChange}
-                        value={field.value}
+                        onValueChange={(value) => field.onChange(Number(value))}
+                        value={field.value?.toString()}
                       >
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder="Select ID type" />
+                            <SelectValue placeholder="Select a property" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="passport">Passport</SelectItem>
-                          <SelectItem value="national_id">National ID</SelectItem>
+                          {properties?.map((property) => (
+                            <SelectItem
+                              key={property.id}
+                              value={property.id.toString()}
+                            >
+                              {property.name}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -428,250 +513,162 @@ export default function GuestRegistration() {
                   )}
                 />
 
-                <FormField
-                  control={form.control}
-                  name="idNumber"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>ID/Passport Number</FormLabel>
-                      <FormControl>
-                        <Input {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="dateOfBirth"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Date of Birth</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="date"
-                            value={field.value ? format(new Date(field.value), 'yyyy-MM-dd') : ''}
-                            onChange={e => field.onChange(e.target.value ? new Date(e.target.value) : null)}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="placeOfBirth"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Place of Birth</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+                <div className="mb-6">
+                  <IdScanner
+                    onDataExtracted={handleExtractedData}
+                    onImageCaptured={handleIdImageCaptured}
                   />
                 </div>
 
-                <FormField
-                  control={form.control}
-                  name="homeAddress"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Home Address</FormLabel>
-                      <FormControl>
-                        <Input {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              {/* Property Selection */}
-              <FormField
-                control={form.control}
-                name="propertyId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Property</FormLabel>
-                    <Select
-                      onValueChange={(value) => field.onChange(Number(value))}
-                      value={field.value?.toString()}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a property" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {properties?.map((property) => (
-                          <SelectItem
-                            key={property.id}
-                            value={property.id.toString()}
-                          >
-                            {property.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {/* Add ID Scanner */}
-              <div className="mb-6">
-                <IdScanner
-                  onDataExtracted={handleExtractedData}
-                  onImageCaptured={handleIdImageCaptured}
-                />
-              </div>
-
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={registerGuest.isPending}
-              >
-                {registerGuest.isPending ? "Registering..." : "Register Guest"}
-              </Button>
-            </form>
-          </Form>
-        </CardContent>
-      </Card>
-
-      {/* Stay Dates Section - Moved here */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Stay Dates</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Form {...form}>
-            <form className="space-y-4">
-              <FormField
-                control={form.control}
-                name="checkIn"
-                render={() => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel>Select Your Stay Dates</FormLabel>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant={"outline"}
-                            className={`w-full pl-3 text-left font-normal ${
-                              !selectedDates.from && "text-muted-foreground"
-                            }`}
-                          >
-                            {selectedDates.from ? (
-                              selectedDates.to ? (
-                                <>
-                                  {format(selectedDates.from, "LLL dd, y")} -{" "}
-                                  {format(selectedDates.to, "LLL dd, y")}
-                                </>
-                              ) : (
-                                format(selectedDates.from, "LLL dd, y")
-                              )
-                            ) : (
-                              <span>Pick a date</span>
-                            )}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="range"
-                          selected={{
-                            from: selectedDates.from,
-                            to: selectedDates.to
-                          }}
-                          onSelect={handleDateSelect}
-                          disabled={(date) => date < new Date()}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </form>
-          </Form>
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-6 md:grid-cols-2">
-
-        {selectedProperty && (
-          <div className="payment-estimator">
-            <PaymentEstimator
-              property={selectedProperty}
-              checkIn={selectedDates.from}
-              checkOut={selectedDates.to}
-            />
-          </div>
-        )}
-
-        <Card className="md:col-span-2">
-          <CardHeader>
-            <CardTitle>Recent Registrations & Payments</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-lg font-medium mb-4">Recent Guests</h3>
-                <GuestList
-                  guests={guests}
-                  onSelectGuest={setActiveGuest}
-                  selectedGuestId={activeGuest?.id}
-                />
-              </div>
-
-              {activeGuest && selectedProperty && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-medium">
-                      Payments for {activeGuest.firstName} {activeGuest.lastName}
-                    </h3>
-                    <Button
-                      variant="outline"
-                      onClick={() => setActiveGuest(null)}
-                    >
-                      Clear Selection
-                    </Button>
-                  </div>
-
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Payment History</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        <div>
-                          <h4 className="font-medium mb-2">Pending Payments</h4>
-                          <PaymentHistory
-                            payments={payments.filter(p => p.status === 'pending')}
-                            showActions
-                          />
-                        </div>
-
-                        <div>
-                          <h4 className="font-medium mb-2">Payment History</h4>
-                          <PaymentHistory
-                            payments={payments.filter(p => p.status !== 'pending')}
-                          />
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-              )}
-            </div>
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={registerGuest.isPending}
+                >
+                  {registerGuest.isPending ? "Registering..." : "Register Guest"}
+                </Button>
+              </form>
+            </Form>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Stay Dates Section */}
+      <div
+        id="stay-dates-section"
+        className={`transition-all duration-300 ${
+          showStayDates ? 'opacity-100 transform translate-y-0' : 'opacity-0 transform -translate-y-4 pointer-events-none'
+        }`}
+      >
+        <Card>
+          <CardHeader>
+            <CardTitle>Stay Dates</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Form {...form}>
+              <form className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="checkIn"
+                  render={() => (
+                    <FormItem className="flex flex-col">
+                      <FormLabel>Select Your Stay Dates</FormLabel>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant={"outline"}
+                              className={`w-full pl-3 text-left font-normal ${
+                                !selectedDates.from && "text-muted-foreground"
+                              }`}
+                            >
+                              {selectedDates.from ? (
+                                selectedDates.to ? (
+                                  <>
+                                    {format(selectedDates.from, "LLL dd, y")} -{" "}
+                                    {format(selectedDates.to, "LLL dd, y")}
+                                  </>
+                                ) : (
+                                  format(selectedDates.from, "LLL dd, y")
+                                )
+                              ) : (
+                                <span>Pick a date</span>
+                              )}
+                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="range"
+                            selected={{
+                              from: selectedDates.from,
+                              to: selectedDates.to
+                            }}
+                            onSelect={handleDateSelect}
+                            disabled={(date) => date < new Date()}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </form>
+            </Form>
+          </CardContent>
+        </Card>
+
+        <div className="grid gap-6 md:grid-cols-2 mt-6">
+          {selectedProperty && (
+            <div className="payment-estimator">
+              <PaymentEstimator
+                property={selectedProperty}
+                checkIn={selectedDates.from}
+                checkOut={selectedDates.to}
+              />
+            </div>
+          )}
+
+          <Card className="md:col-span-2">
+            <CardHeader>
+              <CardTitle>Recent Registrations & Payments</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-lg font-medium mb-4">Recent Guests</h3>
+                  <GuestList
+                    guests={guests}
+                    onSelectGuest={setActiveGuest}
+                    selectedGuestId={activeGuest?.id}
+                  />
+                </div>
+
+                {activeGuest && selectedProperty && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-medium">
+                        Payments for {activeGuest.firstName} {activeGuest.lastName}
+                      </h3>
+                      <Button
+                        variant="outline"
+                        onClick={() => setActiveGuest(null)}
+                      >
+                        Clear Selection
+                      </Button>
+                    </div>
+
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Payment History</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-4">
+                          <div>
+                            <h4 className="font-medium mb-2">Pending Payments</h4>
+                            <PaymentHistory
+                              payments={payments.filter(p => p.status === 'pending')}
+                              showActions
+                            />
+                          </div>
+
+                          <div>
+                            <h4 className="font-medium mb-2">Payment History</h4>
+                            <PaymentHistory
+                              payments={payments.filter(p => p.status !== 'pending')}
+                            />
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );
