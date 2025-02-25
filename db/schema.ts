@@ -3,15 +3,31 @@ import { relations } from "drizzle-orm";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// Add discount configuration schema
+// Add discount configuration schema for each payment plan
 const discountConfigSchema = z.object({
-  type: z.enum(['progressive', 'bulkPrepay']),
-  // For progressive discount
-  progressiveRate: z.number().optional(), // Percentage increase per period
-  progressiveMax: z.number().optional(), // Maximum discount percentage
-  // For bulk prepay discount
-  periodsRequired: z.number().optional(), // Number of periods to prepay
-  nextPeriodDiscount: z.number().optional(), // Discount percentage on next period
+  daily: z.object({
+    type: z.enum(['progressive', 'bulkPrepay']),
+    // For progressive discount
+    progressiveRate: z.number().optional(), // Percentage increase per period
+    progressiveMax: z.number().optional(), // Maximum discount percentage
+    // For bulk prepay discount
+    periodsRequired: z.number().optional(), // Number of consecutive periods required at full price
+    nextPeriodDiscount: z.number().optional(), // Discount percentage on next period
+  }),
+  weekly: z.object({
+    type: z.enum(['progressive', 'bulkPrepay']),
+    progressiveRate: z.number().optional(),
+    progressiveMax: z.number().optional(),
+    periodsRequired: z.number().optional(),
+    nextPeriodDiscount: z.number().optional(),
+  }),
+  monthly: z.object({
+    type: z.enum(['progressive', 'bulkPrepay']),
+    progressiveRate: z.number().optional(),
+    progressiveMax: z.number().optional(),
+    periodsRequired: z.number().optional(),
+    nextPeriodDiscount: z.number().optional(),
+  })
 });
 
 export const properties = pgTable("properties", {
@@ -29,7 +45,23 @@ export const properties = pgTable("properties", {
   amenities: jsonb("amenities").default('{}').notNull(),
   bedType: text("bed_type"),
   bathrooms: integer("bathrooms").default(1),
-  discountConfig: jsonb("discount_config").default('{"type":"progressive","progressiveRate":10,"progressiveMax":50}').notNull(),
+  discountConfig: jsonb("discount_config").default({
+    daily: {
+      type: 'progressive',
+      progressiveRate: 10,
+      progressiveMax: 50
+    },
+    weekly: {
+      type: 'progressive',
+      progressiveRate: 10,
+      progressiveMax: 50
+    },
+    monthly: {
+      type: 'progressive',
+      progressiveRate: 10,
+      progressiveMax: 50
+    }
+  }).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
