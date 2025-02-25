@@ -322,56 +322,6 @@ export default function GuestRegistration() {
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              {/* Date Selection */}
-              <FormField
-                control={form.control}
-                name="checkIn"
-                render={() => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel>Stay Dates</FormLabel>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant={"outline"}
-                            className={`w-full pl-3 text-left font-normal ${
-                              !selectedDates.from && "text-muted-foreground"
-                            }`}
-                          >
-                            {selectedDates.from ? (
-                              selectedDates.to ? (
-                                <>
-                                  {format(selectedDates.from, "LLL dd, y")} -{" "}
-                                  {format(selectedDates.to, "LLL dd, y")}
-                                </>
-                              ) : (
-                                format(selectedDates.from, "LLL dd, y")
-                              )
-                            ) : (
-                              <span>Pick a date</span>
-                            )}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="range"
-                          selected={{
-                            from: selectedDates.from,
-                            to: selectedDates.to
-                          }}
-                          onSelect={handleDateSelect}
-                          disabled={(date) => date < new Date()}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
               {/* Personal Information */}
               <div className="space-y-4">
                 <h3 className="text-lg font-medium">Personal Information</h3>
@@ -580,7 +530,6 @@ export default function GuestRegistration() {
                 />
               </div>
 
-
               <Button
                 type="submit"
                 className="w-full"
@@ -592,6 +541,68 @@ export default function GuestRegistration() {
           </Form>
         </CardContent>
       </Card>
+
+      {/* Stay Dates Section - Moved here */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Stay Dates</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Form {...form}>
+            <form className="space-y-4">
+              <FormField
+                control={form.control}
+                name="checkIn"
+                render={() => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Select Your Stay Dates</FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant={"outline"}
+                            className={`w-full pl-3 text-left font-normal ${
+                              !selectedDates.from && "text-muted-foreground"
+                            }`}
+                          >
+                            {selectedDates.from ? (
+                              selectedDates.to ? (
+                                <>
+                                  {format(selectedDates.from, "LLL dd, y")} -{" "}
+                                  {format(selectedDates.to, "LLL dd, y")}
+                                </>
+                              ) : (
+                                format(selectedDates.from, "LLL dd, y")
+                              )
+                            ) : (
+                              <span>Pick a date</span>
+                            )}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="range"
+                          selected={{
+                            from: selectedDates.from,
+                            to: selectedDates.to
+                          }}
+                          onSelect={handleDateSelect}
+                          disabled={(date) => date < new Date()}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </form>
+          </Form>
+        </CardContent>
+      </Card>
+
       <div className="grid gap-6 md:grid-cols-2">
 
         {selectedProperty && (
