@@ -72,8 +72,8 @@ export const guests = pgTable("guests", {
   email: text("email").notNull(),
   phone: text("phone").notNull(),
   propertyId: integer("property_id").references(() => properties.id),
-  checkIn: timestamp("check_in").notNull(),
-  checkOut: timestamp("check_out").notNull(),
+  checkIn: timestamp("check_in"), // Made nullable
+  checkOut: timestamp("check_out"), // Made nullable
   accessCode: varchar("access_code", { length: 6 }),
   bookingReference: varchar("booking_reference", { length: 10 }),
   dateOfBirth: timestamp("date_of_birth"),
@@ -206,8 +206,8 @@ export const insertGuestSchema = z.object({
   email: z.string().email("Invalid email address"),
   phone: z.string().min(1, "Phone number is required"),
   propertyId: z.number(),
-  checkIn: z.string().or(z.date()).optional(), // Made optional
-  checkOut: z.string().or(z.date()).optional(), // Made optional
+  checkIn: z.string().or(z.date()).nullish(), // Made optional and nullish
+  checkOut: z.string().or(z.date()).nullish(), // Made optional and nullish
   accessCode: z.string().length(6).optional(),
   bookingReference: z.string().length(10).optional(),
   dateOfBirth: z.string().or(z.date()).optional().nullable(),

@@ -189,7 +189,7 @@ export default function GuestRegistration() {
         return;
       }
 
-      // Create the guest registration payload
+      // Create the guest registration payload without dates
       const guestData = {
         firstName: values.firstName,
         lastName: values.lastName,
