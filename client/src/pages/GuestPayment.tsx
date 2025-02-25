@@ -28,11 +28,19 @@ export default function GuestPayment() {
     queryFn: async () => {
       const response = await fetch(`/api/bookings/guest?ref=${bookingRef}&email=${email}`);
       if (!response.ok) {
-        throw new Error('Failed to fetch booking details');
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to fetch booking details');
       }
       return response.json();
     },
     enabled: !!bookingRef && !!email,
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to load booking details",
+        variant: "destructive",
+      });
+    },
   });
 
   if (isLoading) {

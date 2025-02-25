@@ -97,8 +97,6 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
             email: values.email,
             phone: values.phone,
             propertyId: property.id,
-            checkIn: dateRange.from,
-            checkOut: dateRange.to,
             bookingReference // Add booking reference to guest
           }),
         });
@@ -109,29 +107,35 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
 
         const guest = await guestResponse.json();
 
-        // Then create the booking with the guest ID
+        // Then create/update the booking with dates and amount
+        const totalAmount = calculateTotalAmount(dateRange.from, dateRange.to);
         const bookingData = {
           propertyId: property.id,
-          guestId: guest.id,
+          guestId: guest.guest.id, // Access guest ID from the nested structure
           checkIn: dateRange.from,
           checkOut: dateRange.to,
           status: values.status,
-          totalAmount: calculateTotalAmount(dateRange.from, dateRange.to),
+          totalAmount: totalAmount,
           notes: values.notes || "",
           bookingReference // Add same booking reference to booking
         };
 
-        const bookingResponse = await fetch("/api/bookings", {
-          method: "POST",
+        const bookingResponse = await fetch(`/api/bookings/${guest.booking.id}`, {
+          method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(bookingData),
         });
 
         if (!bookingResponse.ok) {
-          throw new Error("Failed to create booking");
+          throw new Error("Failed to update booking");
         }
 
-        return bookingResponse.json();
+        const booking = await bookingResponse.json();
+
+        // Redirect to payment page
+        window.location.href = `/guest-payment?ref=${booking.bookingReference}&email=${values.email}`;
+
+        return booking;
       } catch (error) {
         console.error('Form submission error:', error);
         throw error;
@@ -172,9 +176,6 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
         return;
       }
 
-      // Update form values with selected dates (this part is now handled in handleDateSelect)
-      // form.setValue("checkIn", dateRange.from);
-      // form.setValue("checkOut", dateRange.to);
 
       await createBookingAndGuest.mutateAsync({
         ...values,
