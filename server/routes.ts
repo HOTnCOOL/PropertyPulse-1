@@ -546,6 +546,36 @@ export function registerRoutes(app: Express): Server {
     res.json(guest);
   });
 
+  // Add this new endpoint after the existing guest endpoints
+  app.get("/api/guests/search", async (req: Request, res: Response) => {
+    try {
+      const { query } = req.query;
+      if (!query) {
+        return res.status(400).json({ message: "Search query is required" });
+      }
+
+      const searchResult = await db.query.guests.findMany({
+        where: or(
+          sql`LOWER(${guests.firstName}) LIKE ${`%${query.toString().toLowerCase()}%`}`,
+          sql`LOWER(${guests.lastName}) LIKE ${`%${query.toString().toLowerCase()}%`}`,
+          sql`LOWER(${guests.email}) LIKE ${`%${query.toString().toLowerCase()}%`}`,
+          sql`${guests.phone} LIKE ${`%${query.toString()}%`}`,
+          sql`${guests.idNumber} LIKE ${`%${query.toString()}%`}`
+        ),
+        limit: 5,
+        with: {
+          property: true
+        }
+      });
+
+      res.json(searchResult);
+    } catch (error) {
+      console.error('Error searching guests:', error);
+      res.status(500).json({ message: "Failed to search guests" });
+    }
+  });
+
+
   // Payments endpoints
   app.get("/api/payments", async (req: Request, res: Response) => {
     try {

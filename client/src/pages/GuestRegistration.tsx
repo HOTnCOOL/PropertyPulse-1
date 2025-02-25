@@ -36,6 +36,7 @@ import GuestList from "../components/GuestList";
 import PaymentEstimator from "../components/PaymentEstimator";
 import PaymentHistory from "../components/PaymentHistory";
 import IdScanner from "../components/IdScanner";
+import { GuestSearch } from "../components/GuestSearch";
 
 // Modify the form data type to not require check-in/check-out
 type FormData = Omit<z.infer<typeof insertGuestSchema>, 'checkIn' | 'checkOut'>;
@@ -75,6 +76,30 @@ export default function GuestRegistration() {
       idImageUrl: "",
     },
   });
+
+  // Handle selecting an existing guest
+  const handleGuestSelect = (guest: any) => {
+    // Populate the form with the selected guest's information
+    form.setValue("firstName", guest.firstName);
+    form.setValue("lastName", guest.lastName);
+    form.setValue("email", guest.email);
+    form.setValue("phone", guest.phone);
+    form.setValue("address", guest.address);
+    form.setValue("dateOfBirth", guest.dateOfBirth ? new Date(guest.dateOfBirth) : undefined);
+    form.setValue("placeOfBirth", guest.placeOfBirth || "");
+    form.setValue("homeAddress", guest.homeAddress || "");
+    form.setValue("idNumber", guest.idNumber || "");
+    form.setValue("idType", guest.idType);
+    form.setValue("idImageUrl", guest.idImageUrl || "");
+
+    // Trigger form validation
+    form.trigger();
+
+    toast({
+      title: "Guest Information Loaded",
+      description: `Loaded information for ${guest.firstName} ${guest.lastName}`,
+    });
+  };
 
   const { data: properties } = useQuery<Property[]>({
     queryKey: ["/api/properties"],
@@ -312,6 +337,9 @@ export default function GuestRegistration() {
             <CardTitle>Register New Guest</CardTitle>
           </CardHeader>
           <CardContent>
+            <div className="mb-6">
+              <GuestSearch onGuestSelect={handleGuestSelect} />
+            </div>
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                 <div className="space-y-4">
