@@ -96,6 +96,8 @@ export const bookings = pgTable("bookings", {
   totalAmount: numeric("total_amount", { precision: 10, scale: 2 }).notNull(),
   notes: text("notes"),
   bookingReference: varchar("booking_reference", { length: 10 }).notNull().unique(),
+  prepaidPeriods: jsonb("prepaid_periods").default('[]').notNull(),
+  preferredPackageType: text("preferred_package_type").default('daily').notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -185,6 +187,8 @@ export const insertBookingSchema = z.object({
   totalAmount: z.number(),
   notes: z.string().optional(),
   bookingReference: z.string().length(10),
+  prepaidPeriods: z.array(z.number()).default([]),
+  preferredPackageType: z.enum(['daily', 'weekly', 'monthly']).default('daily'),
 });
 
 export const insertPropertySchema = createInsertSchema(properties).extend({
