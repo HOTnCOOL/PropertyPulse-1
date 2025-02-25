@@ -203,26 +203,38 @@ export default function GuestRegistration() {
   async function onSubmit(values: FormData) {
     try {
       console.log('Form submission started with values:', values);
+      console.log('Form errors:', form.formState.errors);
+      console.log('Form is valid:', form.formState.isValid);
 
-      if (!selectedDates.from || !selectedDates.to) {
+      // Validate required fields
+      if (!values.firstName || !values.lastName || !values.email || !values.phone || !values.address || !values.propertyId) {
         toast({
-          title: "Error",
-          description: "Please select your stay dates",
+          title: "Validation Error",
+          description: "Please fill in all required fields",
           variant: "destructive",
         });
         return;
       }
 
-      if (!values.propertyId) {
-        toast({
-          title: "Error",
-          description: "Please select a property",
-          variant: "destructive",
-        });
-        return;
-      }
+      // Create the guest registration payload
+      const guestData = {
+        firstName: values.firstName,
+        lastName: values.lastName,
+        email: values.email,
+        phone: values.phone,
+        address: values.address,
+        propertyId: values.propertyId,
+        dateOfBirth: values.dateOfBirth ? new Date(values.dateOfBirth).toISOString() : null,
+        placeOfBirth: values.placeOfBirth || "",
+        homeAddress: values.homeAddress || "",
+        idNumber: values.idNumber || "",
+        idType: values.idType || undefined,
+        idImageUrl: values.idImageUrl || "",
+      };
 
-      await registerGuest.mutateAsync(values);
+      console.log('Submitting guest data:', guestData);
+
+      await registerGuest.mutateAsync(guestData);
     } catch (error) {
       console.error('Form submission error:', error);
       toast({
