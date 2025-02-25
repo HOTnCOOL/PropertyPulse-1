@@ -25,8 +25,6 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
-import { useMutation } from "@tanstack/react-query";
-import { toast } from "@/components/ui/use-toast";
 
 interface PaymentEstimatorProps {
   property?: Property;
@@ -36,8 +34,8 @@ interface PaymentEstimatorProps {
 
 // Update the discount calculation function
 function calculateDiscount(
-  periodIndex: number,
-  discountConfig: any,
+  periodIndex: number, 
+  discountConfig: any, 
   selectedPeriods: number[],
   preferredType: 'monthly' | 'weekly' | 'daily',
   period: PaymentPeriod
@@ -64,7 +62,7 @@ function calculateDiscount(
       .sort((a, b) => a - b)
       .reduce((count, current, i, arr) => {
         // Reset count if there's a gap in consecutive numbers
-        if (i > 0 && current !== arr[i - 1] + 1) return 0;
+        if (i > 0 && current !== arr[i-1] + 1) return 0;
         return count + 1;
       }, 0);
 
@@ -465,48 +463,6 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
   const formatPercent = (value: number) => `${value.toFixed(0)}%`;
   const formatCurrency = (value: number) => `$${value.toLocaleString()}`;
 
-  const createBooking = useMutation({
-    mutationFn: async () => {
-      if (!paymentBreakdown || !property) return null;
-
-      const bookingData = {
-        propertyId: property.id,
-        checkIn: checkIn,
-        checkOut: checkOut,
-        status: "pending",
-        totalAmount: paymentBreakdown.totalAmount,
-        prepaidPeriods: selectedPeriods,
-        preferredPackageType: preferredPackageType,
-        notes: `Booking with ${preferredPackageType} plan`,
-      };
-
-      const response = await fetch("/api/bookings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(bookingData),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to create booking");
-      }
-
-      return response.json();
-    },
-    onSuccess: (data) => {
-      if (data?.bookingReference) {
-        setLocation(`/payment?bookingReference=${data.bookingReference}`);
-      }
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-
   if (!paymentBreakdown || !property) return null;
 
   return (
@@ -721,7 +677,135 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
               )}
             </AnimatePresence>
 
-            <motion.div variants={itemVariants}>
+            <motion.div className="space-y-4" variants={itemVariants}>
+              <div className="flex justify-between items-center">
+                <h3 className="text-sm font-semibold">Payment Schedule</h3>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-4 w-4 text-muted-foreground" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="max-w-xs">
+                      Select additional periods to prepay and get progressive discounts.
+                      Prepay 2+ periods for 50% off deposit, 3+ periods for no deposit!
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+              <div className="divide-y">
+                {paymentBreakdown.periods.map((period, index) => {
+                  const isSelected = selectedPeriods.includes(index) || prepayAll;
+                  const canSelect = index === 0 ||
+                    selectedPeriods.includes(index - 1) ||
+                    (index === 1 && period.type === preferredPackageType);
+
+                  // Calculate the discount that would apply to this period
+                  const discount = calculateDiscount(
+                    index,
+                    property?.discountConfig,
+                    selectedPeriods,
+                    preferredPackageType,
+                    period
+                  );
+                  const discountedAmount = period.baseAmount * (1 - discount);
+
+                  return (
+                    <motion.div
+                      key={index}
+                      className="py-4"
+                      variants={itemVariants}
+                      initial="hidden"
+                      animate="visible"
+                      layout
+                    >
+                      <div className="flex justify-between items-start">
+                        <div className="flex items-start space-x-3">
+                          {index > 0 && (
+                            <Checkbox
+                              checked={isSelected}
+                              onCheckedChange={() => handlePeriodSelect(index)}
+                              disabled={!canSelect || prepayAll}
+                            />
+                          )}
+                          <div className="space-y-1">
+                            <div
+                              className="font-medium"
+                              layout
+                            >
+                              {period.label}
+                              {discount > 0 && index > 0 && (
+                                <span
+                                  className={`ml-2 text-sm ${isSelected ? 'text-green-600' : 'text-muted-foreground'}`}
+                                >
+                                  ({(discount * 100).toFixed(0)}% off if prepaid)
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-sm text-muted-foreground">
+                              {format(period.startDate, "MMM d")} - {format(period.endDate, "MMM d")}
+                            </div>
+                          </div>
+                        </div>
+                        <div
+                          className="text-right"
+                          layout
+                        >
+                          <div
+                            className="font-medium"
+                            layout
+                          >
+                            {index === 0 ? (
+                              // First period is always at base price
+                              `$${period.baseAmount.toLocaleString()}`
+                            ) : (
+                              <>
+                                <span className={`${isSelected ? 'text-muted-foreground line-through' : ''} mr-2`}>
+                                  ${period.baseAmount.toLocaleString()}
+                                </span>
+                                <span className={isSelected ? 'text-green-600' : 'text-muted-foreground'}>
+                                  ${discountedAmount.toLocaleString()}
+                                </span>
+                              </>
+                            )}
+                          </div>
+                          <div
+                            className="text-xs text-muted-foreground"
+                            layout
+                          >
+                            {isSelected ? 'Prepaid' : `Due by ${format(period.startDate, "MMM d")}`}
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+
+                {/* Deposit information */}
+                <motion.div className="py-4 bg-primary/5 rounded-lg mt-4">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <span className="font-medium">Security Deposit</span>
+                      {paymentBreakdown.depositAmount === 0 ? (
+                        <span className="text-green-600 text-sm ml-2">
+                          (Waived - 3+ periods prepaid)
+                        </span>
+                      ) : paymentBreakdown.depositAmount < calculateDepositAmount(preferredPackageType, 0, differenceInDays(checkOut!, checkIn!)) ? (
+                        <span className="text-green-600 text-sm ml-2">
+                          (50% off - 2 periods prepaid)
+                        </span>
+                      ) : null}
+                    </div>
+                    <span className="font-medium">
+                      ${paymentBreakdown.depositAmount.toLocaleString()}
+                    </span>
+                  </div>
+                </motion.div>
+              </div>
+            </motion.div>
+
+            <motion.div
+              variants={itemVariants}
+            >
               <div>
                 <h3 className="text-sm font-semibold mb-2">Total Stay Cost</h3>
                 <motion.div className="p-4 bg-primary/5 rounded-lg" variants={itemVariants}>
@@ -749,10 +833,9 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
             >
               <Button
                 className="w-full"
-                onClick={() => createBooking.mutate()}
-                disabled={createBooking.isPending}
+                onClick={() => setLocation(`/payment?propertyId=${property?.id}&packageType=${paymentBreakdown.primaryType}`)}
               >
-                {createBooking.isPending ? "Creating booking..." : "Proceed to Payment"}
+                Proceed to Payment
               </Button>
             </motion.div>
           </motion.div>

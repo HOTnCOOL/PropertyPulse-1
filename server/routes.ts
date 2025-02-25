@@ -773,26 +773,47 @@ export function registerRoutes(app: Express): Server {
     try {
       console.log('Received booking request:', req.body);
 
-      // Generate a unique booking reference
-      const bookingReference = 'BOOK' + Math.random().toString(36).substring(2, 8).toUpperCase();
+      const result = insertBookingSchema.safeParse(req.body);
+      if (!result.success) {
+        console.error('Validation error:', result.error);
+        return res.status(400).json({
+          message: "Invalid booking data",
+          details: result.error.errors,
+        });
+      }
 
-      // Create the booking with the generated reference
+      // Ensure dates are properly converted to Date objects
+      const checkInDate = new Date(result.data.checkIn);
+      const checkOutDate = new Date(result.data.checkOut);
+
+      // Validate dates
+      if (isNaN(checkInDate.getTime()) || isNaN(checkOutDate.getTime())) {
+        return res.status(400).json({
+          message: "Invalid date format",
+        });
+      }
+
+      if (checkInDate >= checkOutDate) {
+        return res.status(400).json({
+          message: "Check-out date must be after check-in date",
+        });
+      }
+
+      // Create the booking
       const [booking] = await db.insert(bookings)
         .values({
-          propertyId: req.body.propertyId,
-          status: req.body.status || 'pending',
-          totalAmount: req.body.totalAmount,
-          notes: req.body.notes,
-          checkIn: new Date(req.body.checkIn),
-          checkOut: new Date(req.body.checkOut),
-          bookingReference,
-          prepaidPeriods: req.body.prepaidPeriods || [],
-          preferredPackageType: req.body.preferredPackageType || 'daily'
+          propertyId: result.data.propertyId,
+          guestId: result.data.guestId,
+          status: result.data.status,
+          totalAmount: result.data.totalAmount,
+          notes: result.data.notes,
+          checkIn: checkInDate,
+          checkOut: checkOutDate,
         })
         .returning();
 
       console.log('Created booking:', booking);
-      res.json({ ...booking, bookingReference });
+      res.json(booking);
     } catch (error) {
       console.error('Error creating booking:', error);
       res.status(500).json({
