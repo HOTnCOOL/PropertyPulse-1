@@ -471,20 +471,10 @@ export function registerRoutes(app: Express): Server {
     try {
       console.log('Received guest registration request:', req.body);
 
-      // Parse and validate dates
-      const checkInDate = new Date(req.body.checkIn);
-      const checkOutDate = new Date(req.body.checkOut);
+      // Parse date of birth if provided
       const dateOfBirth = req.body.dateOfBirth ? new Date(req.body.dateOfBirth) : null;
 
-      // Validate dates
-      if (isNaN(checkInDate.getTime()) || isNaN(checkOutDate.getTime())) {
-        console.error('Invalid date format:', { checkIn: req.body.checkIn, checkOut: req.body.checkOut });
-        return res.status(400).json({
-          message: "Invalid date format for check-in or check-out dates",
-          details: { checkIn: req.body.checkIn, checkOut: req.body.checkOut }
-        });
-      }
-
+      // Validate date of birth if provided
       if (dateOfBirth && isNaN(dateOfBirth.getTime())) {
         console.error('Invalid date of birth format:', req.body.dateOfBirth);
         return res.status(400).json({
@@ -504,8 +494,6 @@ export function registerRoutes(app: Express): Server {
           .values({
             ...req.body,
             address: req.body.homeAddress || 'Not provided', // Map homeAddress to address
-            checkIn: checkInDate,
-            checkOut: checkOutDate,
             dateOfBirth: dateOfBirth,
             bookingReference,
           })
@@ -522,20 +510,14 @@ export function registerRoutes(app: Express): Server {
           throw new Error("Property not found");
         }
 
-        // Calculate total amount using the price calculation
-        const pricePeriods = calculatePricePeriods(checkInDate, checkOutDate, req.body.preferredType || 'daily'); // Added preferredType handling
-        const totalAmount = pricePeriods.reduce((sum, period) => sum + period.amount, 0);
-
-        // Create booking
+        // Create initial booking without dates
         const [booking] = await tx
           .insert(bookings)
           .values({
             propertyId: guest.propertyId,
             guestId: guest.id,
-            checkIn: checkInDate,
-            checkOut: checkOutDate,
             status: 'pending',
-            totalAmount,
+            totalAmount: 0, // Will be updated when dates are selected
             bookingReference,
             notes: `Booking for ${guest.firstName} ${guest.lastName}`,
           })
@@ -965,7 +947,7 @@ export function registerRoutes(app: Express): Server {
       res.json(fullBookingData);
     } catch (error) {
       console.error('Error fetching guest booking:', error);
-      res.status(500).json({ message: "Failed to fetch booking details" });
+      res.status(500).json({ message: "Failedto fetch booking details" });
     }
   });
 
