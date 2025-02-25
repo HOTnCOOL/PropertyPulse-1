@@ -537,13 +537,30 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Update the guest endpoint to properly handle parameter validation
   app.get("/api/guests/:id", async (req: Request, res: Response) => {
-    const guest = await db.query.guests.findFirst({
-      where: eq(guests.id, parseInt(req.params.id)),
-      with: { property: true },
-    });
-    if (!guest) return res.status(404).send("Guest not found");
-    res.json(guest);
+    try {
+      const guestId = parseInt(req.params.id);
+
+      // Validate the ID is a proper number
+      if (isNaN(guestId)) {
+        return res.status(400).json({ message: "Invalid guest ID format" });
+      }
+
+      const guest = await db.query.guests.findFirst({
+        where: eq(guests.id, guestId),
+        with: { property: true },
+      });
+
+      if (!guest) {
+        return res.status(404).json({ message: "Guest not found" });
+      }
+
+      res.json(guest);
+    } catch (error) {
+      console.error('Error fetching guest:', error);
+      res.status(500).json({ message: "Internal server error" });
+    }
   });
 
   // Add this new endpoint after the existing guest endpoints
@@ -991,22 +1008,28 @@ export function registerRoutes(app: Express): Server {
     res.json({ url: imageUrl });
   });
 
-  // Update the property query with proper types
+  // Update property route to handle validation
   app.get("/api/properties/:id", async (req: Request, res: Response) => {
     try {
       const propertyId = parseInt(req.params.id);
-      const result = await db.query.properties.findFirst({
-        where: sql`${properties.id} = ${propertyId}`,
-      });
 
-      if (!result) {
-        return res.status(404).json({ message: 'Property not found' });
+      // Validate the ID is a proper number
+      if (isNaN(propertyId)) {
+        return res.status(400).json({ message: "Invalid property ID format" });
       }
 
-      res.json(result);
+      const property = await db.query.properties.findFirst({
+        where: eq(properties.id, propertyId),
+      });
+
+      if (!property) {
+        return res.status(404).json({ message: "Property not found" });
+      }
+
+      res.json(property);
     } catch (error) {
       console.error('Error fetching property:', error);
-      res.status(500).json({ message: 'Failed to fetch property' });
+      res.status(500).json({ message: "Internal server error" });
     }
   });
 
