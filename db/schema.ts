@@ -90,8 +90,8 @@ export const bookings = pgTable("bookings", {
   id: serial("id").primaryKey(),
   propertyId: integer("property_id").references(() => properties.id),
   guestId: integer("guest_id").references(() => guests.id),
-  checkIn: timestamp("check_in").notNull(),
-  checkOut: timestamp("check_out").notNull(),
+  checkIn: timestamp("check_in"), // Made nullable
+  checkOut: timestamp("check_out"), // Made nullable
   status: text("status").notNull(),
   totalAmount: numeric("total_amount", { precision: 10, scale: 2 }).notNull(),
   notes: text("notes"),
