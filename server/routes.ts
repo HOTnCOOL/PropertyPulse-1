@@ -567,17 +567,17 @@ export function registerRoutes(app: Express): Server {
   app.get("/api/guests/search", async (req: Request, res: Response) => {
     try {
       const { query } = req.query;
-      if (!query) {
+      if (!query || typeof query !== 'string') {
         return res.status(400).json({ message: "Search query is required" });
       }
 
       const searchResult = await db.query.guests.findMany({
         where: or(
-          sql`LOWER(${guests.firstName}) LIKE ${`%${query.toString().toLowerCase()}%`}`,
-          sql`LOWER(${guests.lastName}) LIKE ${`%${query.toString().toLowerCase()}%`}`,
-          sql`LOWER(${guests.email}) LIKE ${`%${query.toString().toLowerCase()}%`}`,
-          sql`${guests.phone} LIKE ${`%${query.toString()}%`}`,
-          sql`${guests.idNumber} LIKE ${`%${query.toString()}%`}`
+          sql`LOWER(${guests.firstName}) LIKE ${`%${query.toLowerCase()}%`}`,
+          sql`LOWER(${guests.lastName}) LIKE ${`%${query.toLowerCase()}%`}`,
+          sql`LOWER(${guests.email}) LIKE ${`%${query.toLowerCase()}%`}`,
+          sql`${guests.phone} LIKE ${`%${query}%`}`,
+          sql`${guests.idNumber} LIKE ${`%${query}%`}`
         ),
         limit: 5,
         with: {

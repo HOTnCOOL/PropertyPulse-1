@@ -1,0 +1,199 @@
+GuestSearch.tsx:31 
+            
+            
+           GET https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/api/guests/search?query=st 400 (Bad Request)
+queryFn @ GuestSearch.tsx:31
+fetchFn @ @tanstack_react-query.js?v=4659a69f:839
+run @ @tanstack_react-query.js?v=4659a69f:493
+start @ @tanstack_react-query.js?v=4659a69f:535
+fetch @ @tanstack_react-query.js?v=4659a69f:925
+executeFetch_fn @ @tanstack_react-query.js?v=4659a69f:2237
+setOptions @ @tanstack_react-query.js?v=4659a69f:1981
+(anonymous) @ @tanstack_react-query.js?v=4659a69f:3057
+commitHookEffectListMount @ chunk-XQLYTHWV.js?v=4659a69f:16915
+commitPassiveMountOnFiber @ chunk-XQLYTHWV.js?v=4659a69f:18156
+commitPassiveMountEffects_complete @ chunk-XQLYTHWV.js?v=4659a69f:18129
+commitPassiveMountEffects_begin @ chunk-XQLYTHWV.js?v=4659a69f:18119
+commitPassiveMountEffects @ chunk-XQLYTHWV.js?v=4659a69f:18109
+flushPassiveEffectsImpl @ chunk-XQLYTHWV.js?v=4659a69f:19490
+flushPassiveEffects @ chunk-XQLYTHWV.js?v=4659a69f:19447
+commitRootImpl @ chunk-XQLYTHWV.js?v=4659a69f:19416
+commitRoot @ chunk-XQLYTHWV.js?v=4659a69f:19277
+performSyncWorkOnRoot @ chunk-XQLYTHWV.js?v=4659a69f:18895
+flushSyncCallbacks @ chunk-XQLYTHWV.js?v=4659a69f:9119
+flushSync @ chunk-XQLYTHWV.js?v=4659a69f:18959
+finishEventHandler @ chunk-XQLYTHWV.js?v=4659a69f:3569
+batchedUpdates @ chunk-XQLYTHWV.js?v=4659a69f:3582
+dispatchEventForPluginEventSystem @ chunk-XQLYTHWV.js?v=4659a69f:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-XQLYTHWV.js?v=4659a69f:5478
+dispatchEvent @ chunk-XQLYTHWV.js?v=4659a69f:5472
+dispatchDiscreteEvent @ chunk-XQLYTHWV.js?v=4659a69f:5449
+GuestSearch.tsx:31 
+            
+            
+           GET https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/api/guests/search?query=sta 400 (Bad Request)
+queryFn @ GuestSearch.tsx:31
+fetchFn @ @tanstack_react-query.js?v=4659a69f:839
+run @ @tanstack_react-query.js?v=4659a69f:493
+start @ @tanstack_react-query.js?v=4659a69f:535
+fetch @ @tanstack_react-query.js?v=4659a69f:925
+executeFetch_fn @ @tanstack_react-query.js?v=4659a69f:2237
+setOptions @ @tanstack_react-query.js?v=4659a69f:1981
+(anonymous) @ @tanstack_react-query.js?v=4659a69f:3057
+commitHookEffectListMount @ chunk-XQLYTHWV.js?v=4659a69f:16915
+commitPassiveMountOnFiber @ chunk-XQLYTHWV.js?v=4659a69f:18156
+commitPassiveMountEffects_complete @ chunk-XQLYTHWV.js?v=4659a69f:18129
+commitPassiveMountEffects_begin @ chunk-XQLYTHWV.js?v=4659a69f:18119
+commitPassiveMountEffects @ chunk-XQLYTHWV.js?v=4659a69f:18109
+flushPassiveEffectsImpl @ chunk-XQLYTHWV.js?v=4659a69f:19490
+flushPassiveEffects @ chunk-XQLYTHWV.js?v=4659a69f:19447
+commitRootImpl @ chunk-XQLYTHWV.js?v=4659a69f:19416
+commitRoot @ chunk-XQLYTHWV.js?v=4659a69f:19277
+performSyncWorkOnRoot @ chunk-XQLYTHWV.js?v=4659a69f:18895
+flushSyncCallbacks @ chunk-XQLYTHWV.js?v=4659a69f:9119
+flushSync @ chunk-XQLYTHWV.js?v=4659a69f:18959
+finishEventHandler @ chunk-XQLYTHWV.js?v=4659a69f:3569
+batchedUpdates @ chunk-XQLYTHWV.js?v=4659a69f:3582
+dispatchEventForPluginEventSystem @ chunk-XQLYTHWV.js?v=4659a69f:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-XQLYTHWV.js?v=4659a69f:5478
+dispatchEvent @ chunk-XQLYTHWV.js?v=4659a69f:5472
+dispatchDiscreteEvent @ chunk-XQLYTHWV.js?v=4659a69f:5449
+GuestSearch.tsx:31 
+            
+            
+           GET https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/api/guests/search?query=stai 400 (Bad Request)
+queryFn @ GuestSearch.tsx:31
+fetchFn @ @tanstack_react-query.js?v=4659a69f:839
+run @ @tanstack_react-query.js?v=4659a69f:493
+start @ @tanstack_react-query.js?v=4659a69f:535
+fetch @ @tanstack_react-query.js?v=4659a69f:925
+executeFetch_fn @ @tanstack_react-query.js?v=4659a69f:2237
+setOptions @ @tanstack_react-query.js?v=4659a69f:1981
+(anonymous) @ @tanstack_react-query.js?v=4659a69f:3057
+commitHookEffectListMount @ chunk-XQLYTHWV.js?v=4659a69f:16915
+commitPassiveMountOnFiber @ chunk-XQLYTHWV.js?v=4659a69f:18156
+commitPassiveMountEffects_complete @ chunk-XQLYTHWV.js?v=4659a69f:18129
+commitPassiveMountEffects_begin @ chunk-XQLYTHWV.js?v=4659a69f:18119
+commitPassiveMountEffects @ chunk-XQLYTHWV.js?v=4659a69f:18109
+flushPassiveEffectsImpl @ chunk-XQLYTHWV.js?v=4659a69f:19490
+flushPassiveEffects @ chunk-XQLYTHWV.js?v=4659a69f:19447
+commitRootImpl @ chunk-XQLYTHWV.js?v=4659a69f:19416
+commitRoot @ chunk-XQLYTHWV.js?v=4659a69f:19277
+performSyncWorkOnRoot @ chunk-XQLYTHWV.js?v=4659a69f:18895
+flushSyncCallbacks @ chunk-XQLYTHWV.js?v=4659a69f:9119
+flushSync @ chunk-XQLYTHWV.js?v=4659a69f:18959
+finishEventHandler @ chunk-XQLYTHWV.js?v=4659a69f:3569
+batchedUpdates @ chunk-XQLYTHWV.js?v=4659a69f:3582
+dispatchEventForPluginEventSystem @ chunk-XQLYTHWV.js?v=4659a69f:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-XQLYTHWV.js?v=4659a69f:5478
+dispatchEvent @ chunk-XQLYTHWV.js?v=4659a69f:5472
+dispatchDiscreteEvent @ chunk-XQLYTHWV.js?v=4659a69f:5449
+GuestSearch.tsx:31 
+            
+            
+           GET https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/api/guests/search?query=sta 400 (Bad Request)
+queryFn @ GuestSearch.tsx:31
+fetchFn @ @tanstack_react-query.js?v=4659a69f:839
+run @ @tanstack_react-query.js?v=4659a69f:493
+start @ @tanstack_react-query.js?v=4659a69f:535
+fetch @ @tanstack_react-query.js?v=4659a69f:925
+executeFetch_fn @ @tanstack_react-query.js?v=4659a69f:2237
+setOptions @ @tanstack_react-query.js?v=4659a69f:1981
+(anonymous) @ @tanstack_react-query.js?v=4659a69f:3057
+commitHookEffectListMount @ chunk-XQLYTHWV.js?v=4659a69f:16915
+commitPassiveMountOnFiber @ chunk-XQLYTHWV.js?v=4659a69f:18156
+commitPassiveMountEffects_complete @ chunk-XQLYTHWV.js?v=4659a69f:18129
+commitPassiveMountEffects_begin @ chunk-XQLYTHWV.js?v=4659a69f:18119
+commitPassiveMountEffects @ chunk-XQLYTHWV.js?v=4659a69f:18109
+flushPassiveEffectsImpl @ chunk-XQLYTHWV.js?v=4659a69f:19490
+flushPassiveEffects @ chunk-XQLYTHWV.js?v=4659a69f:19447
+commitRootImpl @ chunk-XQLYTHWV.js?v=4659a69f:19416
+commitRoot @ chunk-XQLYTHWV.js?v=4659a69f:19277
+performSyncWorkOnRoot @ chunk-XQLYTHWV.js?v=4659a69f:18895
+flushSyncCallbacks @ chunk-XQLYTHWV.js?v=4659a69f:9119
+flushSync @ chunk-XQLYTHWV.js?v=4659a69f:18959
+finishEventHandler @ chunk-XQLYTHWV.js?v=4659a69f:3569
+batchedUpdates @ chunk-XQLYTHWV.js?v=4659a69f:3582
+dispatchEventForPluginEventSystem @ chunk-XQLYTHWV.js?v=4659a69f:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-XQLYTHWV.js?v=4659a69f:5478
+dispatchEvent @ chunk-XQLYTHWV.js?v=4659a69f:5472
+dispatchDiscreteEvent @ chunk-XQLYTHWV.js?v=4659a69f:5449
+GuestSearch.tsx:31 
+            
+            
+           GET https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/api/guests/search?query=st 400 (Bad Request)
+queryFn @ GuestSearch.tsx:31
+fetchFn @ @tanstack_react-query.js?v=4659a69f:839
+run @ @tanstack_react-query.js?v=4659a69f:493
+start @ @tanstack_react-query.js?v=4659a69f:535
+fetch @ @tanstack_react-query.js?v=4659a69f:925
+executeFetch_fn @ @tanstack_react-query.js?v=4659a69f:2237
+setOptions @ @tanstack_react-query.js?v=4659a69f:1981
+(anonymous) @ @tanstack_react-query.js?v=4659a69f:3057
+commitHookEffectListMount @ chunk-XQLYTHWV.js?v=4659a69f:16915
+commitPassiveMountOnFiber @ chunk-XQLYTHWV.js?v=4659a69f:18156
+commitPassiveMountEffects_complete @ chunk-XQLYTHWV.js?v=4659a69f:18129
+commitPassiveMountEffects_begin @ chunk-XQLYTHWV.js?v=4659a69f:18119
+commitPassiveMountEffects @ chunk-XQLYTHWV.js?v=4659a69f:18109
+flushPassiveEffectsImpl @ chunk-XQLYTHWV.js?v=4659a69f:19490
+flushPassiveEffects @ chunk-XQLYTHWV.js?v=4659a69f:19447
+commitRootImpl @ chunk-XQLYTHWV.js?v=4659a69f:19416
+commitRoot @ chunk-XQLYTHWV.js?v=4659a69f:19277
+performSyncWorkOnRoot @ chunk-XQLYTHWV.js?v=4659a69f:18895
+flushSyncCallbacks @ chunk-XQLYTHWV.js?v=4659a69f:9119
+flushSync @ chunk-XQLYTHWV.js?v=4659a69f:18959
+finishEventHandler @ chunk-XQLYTHWV.js?v=4659a69f:3569
+batchedUpdates @ chunk-XQLYTHWV.js?v=4659a69f:3582
+dispatchEventForPluginEventSystem @ chunk-XQLYTHWV.js?v=4659a69f:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-XQLYTHWV.js?v=4659a69f:5478
+dispatchEvent @ chunk-XQLYTHWV.js?v=4659a69f:5472
+dispatchDiscreteEvent @ chunk-XQLYTHWV.js?v=4659a69f:5449
+chunk-XQLYTHWV.js?v=4659a69f:521 Warning: Received `true` for a non-boolean attribute `layout`.
+
+If you want to write it to the DOM, pass a string instead: layout="true" or layout={value.toString()}.
+    at div
+    at div
+    at div
+    at div
+    at div
+    at MotionComponent (https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/framer-motion.js?v=4659a69f:6536:40)
+    at div
+    at div
+    at MotionComponent (https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/framer-motion.js?v=4659a69f:6536:40)
+    at div
+    at MotionComponent (https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/framer-motion.js?v=4659a69f:6536:40)
+    at div
+    at _c9 (https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/src/components/ui/card.tsx:106:12)
+    at div
+    at _c (https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/src/components/ui/card.tsx:20:11)
+    at Provider (https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-WIV7GI2Q.js?v=4659a69f:48:15)
+    at TooltipProvider (https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=4659a69f:59:5)
+    at PaymentEstimator (https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/src/components/PaymentEstimator.tsx:342:44)
+    at div
+    at div
+    at div
+    at div
+    at GuestRegistration (https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/src/pages/GuestRegistration.tsx:58:21)
+    at main
+    at div
+    at PublicLayout (https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/src/App.tsx:49:25)
+    at Route (https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=4659a69f:191:16)
+    at Switch (https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=4659a69f:247:17)
+    at App
+    at QueryClientProvider (https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=4659a69f:2829:3)
+printWarning @ chunk-XQLYTHWV.js?v=4659a69f:521
+error @ chunk-XQLYTHWV.js?v=4659a69f:505
+validateProperty$1 @ chunk-XQLYTHWV.js?v=4659a69f:3433
+warnUnknownProperties @ chunk-XQLYTHWV.js?v=4659a69f:3459
+validateProperties$2 @ chunk-XQLYTHWV.js?v=4659a69f:3478
+validatePropertiesInDevelopment @ chunk-XQLYTHWV.js?v=4659a69f:7346
+setInitialProperties @ chunk-XQLYTHWV.js?v=4659a69f:7535
+finalizeInitialChildren @ chunk-XQLYTHWV.js?v=4659a69f:8345
+completeWork @ chunk-XQLYTHWV.js?v=4659a69f:16293
+completeUnitOfWork @ chunk-XQLYTHWV.js?v=4659a69f:19224
+performUnitOfWork @ chunk-XQLYTHWV.js?v=4659a69f:19206
+workLoopSync @ chunk-XQLYTHWV.js?v=4659a69f:19137
+renderRootSync @ chunk-XQLYTHWV.js?v=4659a69f:19116
+performSyncWorkOnRoot @ chunk-XQLYTHWV.js?v=4659a69f:18874
+flushSyncCallbacks @ chunk-XQLYTHWV.js?v=4659a69f:9119
+(anonymous) @ chunk-XQLYTHWV.js?v=4659a69f:18627

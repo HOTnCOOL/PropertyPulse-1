@@ -15,29 +15,34 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { useQuery } from "@tanstack/react-query";
+import type { Guest } from "@db/schema";
 
 interface GuestSearchProps {
-  onGuestSelect: (guest: any) => void;
+  onGuestSelect: (guest: Guest) => void;
 }
 
 export function GuestSearch({ onGuestSelect }: GuestSearchProps) {
   const [open, setOpen] = useState(false);
   const [searchValue, setSearchValue] = useState("");
 
-  const { data: searchResults } = useQuery({
+  const { data: searchResults, error } = useQuery({
     queryKey: ['/api/guests/search', searchValue],
     queryFn: async () => {
       if (!searchValue || searchValue.length < 2) return [];
       const response = await fetch(`/api/guests/search?query=${encodeURIComponent(searchValue)}`);
-      if (!response.ok) throw new Error('Failed to search guests');
-      return response.json();
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to search guests');
+      }
+      return response.json() as Promise<Guest[]>;
     },
-    enabled: searchValue.length >= 2
+    enabled: searchValue.length >= 2,
+    retry: false
   });
 
   const formattedResults = useMemo(() => {
     if (!searchResults) return [];
-    return searchResults.map((guest: any) => ({
+    return searchResults.map((guest: Guest) => ({
       value: guest.id.toString(),
       label: `${guest.firstName} ${guest.lastName}`,
       details: `${guest.email} | ${guest.phone} ${guest.idNumber ? `| ID: ${guest.idNumber}` : ''}`,
@@ -65,33 +70,39 @@ export function GuestSearch({ onGuestSelect }: GuestSearchProps) {
             value={searchValue}
             onValueChange={setSearchValue}
           />
-          <CommandEmpty>No guest found.</CommandEmpty>
-          <CommandGroup>
-            {formattedResults.map((result) => (
-              <CommandItem
-                key={result.value}
-                value={result.value}
-                onSelect={() => {
-                  onGuestSelect(result.guest);
-                  setOpen(false);
-                  setSearchValue(result.label);
-                }}
-              >
-                <Check
-                  className={cn(
-                    "mr-2 h-4 w-4",
-                    searchValue === result.value ? "opacity-100" : "opacity-0"
-                  )}
-                />
-                <div className="flex flex-col">
-                  <span>{result.label}</span>
-                  <span className="text-sm text-muted-foreground">
-                    {result.details}
-                  </span>
-                </div>
-              </CommandItem>
-            ))}
-          </CommandGroup>
+          {error ? (
+            <CommandEmpty>Error: {error instanceof Error ? error.message : 'Failed to search'}</CommandEmpty>
+          ) : (
+            <>
+              <CommandEmpty>No guest found.</CommandEmpty>
+              <CommandGroup>
+                {formattedResults.map((result) => (
+                  <CommandItem
+                    key={result.value}
+                    value={result.value}
+                    onSelect={() => {
+                      onGuestSelect(result.guest);
+                      setOpen(false);
+                      setSearchValue(result.label);
+                    }}
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 h-4 w-4",
+                        searchValue === result.value ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                    <div className="flex flex-col">
+                      <span>{result.label}</span>
+                      <span className="text-sm text-muted-foreground">
+                        {result.details}
+                      </span>
+                    </div>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </>
+          )}
         </Command>
       </PopoverContent>
     </Popover>

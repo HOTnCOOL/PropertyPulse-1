@@ -28,14 +28,18 @@ export default function GuestList({ guests, onSelectGuest, selectedGuestId }: Gu
             className={selectedGuestId === guest.id ? "bg-accent" : undefined}
           >
             <TableCell>{guest.firstName} {guest.lastName}</TableCell>
-            <TableCell>{format(new Date(guest.checkIn), 'MMM dd, yyyy')}</TableCell>
-            <TableCell>{format(new Date(guest.checkOut), 'MMM dd, yyyy')}</TableCell>
             <TableCell>
-              {new Date(guest.checkOut) > new Date() ? (
+              {guest.checkIn && format(new Date(guest.checkIn), 'MMM dd, yyyy')}
+            </TableCell>
+            <TableCell>
+              {guest.checkOut && format(new Date(guest.checkOut), 'MMM dd, yyyy')}
+            </TableCell>
+            <TableCell>
+              {guest.checkOut && (new Date(guest.checkOut) > new Date() ? (
                 <span className="text-green-600">Active</span>
               ) : (
                 <span className="text-gray-500">Completed</span>
-              )}
+              ))}
             </TableCell>
             {onSelectGuest && (
               <TableCell>
