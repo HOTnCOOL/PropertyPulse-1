@@ -442,29 +442,65 @@ export function registerRoutes(app: Express): Server {
     res.json(allGuests);
   });
 
-  app.get("/api/guests/today", async (_req: Request, res: Response) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+  // Add search endpoint BEFORE the :id endpoint to prevent conflicts
+  app.get("/api/guests/search", async (req: Request, res: Response) => {
+    try {
+      const { query } = req.query;
 
-    const checkIns = await db.query.guests.findMany({
-      where: and(
-        gte(guests.checkIn, today),
-        lte(guests.checkIn, tomorrow)
-      ),
-      with: { property: true },
-    });
+      if (!query || typeof query !== 'string' || query.length < 2) {
+        return res.status(400).json({ 
+          message: "Search query must be at least 2 characters long" 
+        });
+      }
 
-    const checkOuts = await db.query.guests.findMany({
-      where: and(
-        gte(guests.checkOut, today),
-        lte(guests.checkOut, tomorrow)
-      ),
-      with: { property: true },
-    });
+      console.log('Searching guests with query:', query);
 
-    res.json({ checkIns, checkOuts });
+      const searchResult = await db.query.guests.findMany({
+        where: or(
+          sql`LOWER(${guests.firstName}) LIKE ${`%${query.toLowerCase()}%`}`,
+          sql`LOWER(${guests.lastName}) LIKE ${`%${query.toLowerCase()}%`}`,
+          sql`LOWER(${guests.email}) LIKE ${`%${query.toLowerCase()}%`}`,
+          sql`${guests.phone} LIKE ${`%${query}%`}`,
+          sql`${guests.idNumber} LIKE ${`%${query}%`}`
+        ),
+        limit: 5,
+        with: {
+          property: true
+        }
+      });
+
+      console.log('Search results:', searchResult);
+      res.json(searchResult);
+    } catch (error) {
+      console.error('Error searching guests:', error);
+      res.status(500).json({ message: "Failed to search guests" });
+    }
+  });
+
+  // Then add the specific guest endpoint
+  app.get("/api/guests/:id", async (req: Request, res: Response) => {
+    try {
+      const guestId = parseInt(req.params.id);
+
+      // Validate the ID is a proper number
+      if (isNaN(guestId)) {
+        return res.status(400).json({ message: "Invalid guest ID format" });
+      }
+
+      const guest = await db.query.guests.findFirst({
+        where: eq(guests.id, guestId),
+        with: { property: true },
+      });
+
+      if (!guest) {
+        return res.status(404).json({ message: "Guest not found" });
+      }
+
+      res.json(guest);
+    } catch (error) {
+      console.error('Error fetching guest:', error);
+      res.status(500).json({ message: "Internal server error" });
+    }
   });
 
   app.post("/api/guests", async (req: Request, res: Response) => {
@@ -537,59 +573,29 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Update the guest endpoint to properly handle parameter validation
-  app.get("/api/guests/:id", async (req: Request, res: Response) => {
-    try {
-      const guestId = parseInt(req.params.id);
+  app.get("/api/guests/today", async (_req: Request, res: Response) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
 
-      // Validate the ID is a proper number
-      if (isNaN(guestId)) {
-        return res.status(400).json({ message: "Invalid guest ID format" });
-      }
+    const checkIns = await db.query.guests.findMany({
+      where: and(
+        gte(guests.checkIn, today),
+        lte(guests.checkIn, tomorrow)
+      ),
+      with: { property: true },
+    });
 
-      const guest = await db.query.guests.findFirst({
-        where: eq(guests.id, guestId),
-        with: { property: true },
-      });
+    const checkOuts = await db.query.guests.findMany({
+      where: and(
+        gte(guests.checkOut, today),
+        lte(guests.checkOut, tomorrow)
+      ),
+      with: { property: true },
+    });
 
-      if (!guest) {
-        return res.status(404).json({ message: "Guest not found" });
-      }
-
-      res.json(guest);
-    } catch (error) {
-      console.error('Error fetching guest:', error);
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  // Add this new endpoint after the existing guest endpoints
-  app.get("/api/guests/search", async (req: Request, res: Response) => {
-    try {
-      const { query } = req.query;
-      if (!query || typeof query !== 'string') {
-        return res.status(400).json({ message: "Search query is required" });
-      }
-
-      const searchResult = await db.query.guests.findMany({
-        where: or(
-          sql`LOWER(${guests.firstName}) LIKE ${`%${query.toLowerCase()}%`}`,
-          sql`LOWER(${guests.lastName}) LIKE ${`%${query.toLowerCase()}%`}`,
-          sql`LOWER(${guests.email}) LIKE ${`%${query.toLowerCase()}%`}`,
-          sql`${guests.phone} LIKE ${`%${query}%`}`,
-          sql`${guests.idNumber} LIKE ${`%${query}%`}`
-        ),
-        limit: 5,
-        with: {
-          property: true
-        }
-      });
-
-      res.json(searchResult);
-    } catch (error) {
-      console.error('Error searching guests:', error);
-      res.status(500).json({ message: "Failed to search guests" });
-    }
+    res.json({ checkIns, checkOuts });
   });
 
 
