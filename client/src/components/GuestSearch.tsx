@@ -25,19 +25,26 @@ export function GuestSearch({ onGuestSelect }: GuestSearchProps) {
   const [open, setOpen] = useState(false);
   const [searchValue, setSearchValue] = useState("");
 
-  const { data: searchResults, error } = useQuery({
+  const { data: searchResults, error, isLoading } = useQuery({
     queryKey: ['/api/guests/search', searchValue],
     queryFn: async () => {
       if (!searchValue || searchValue.length < 2) return [];
-      const response = await fetch(`/api/guests/search?query=${encodeURIComponent(searchValue)}`);
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to search guests');
+
+      try {
+        const response = await fetch(`/api/guests/search?query=${encodeURIComponent(searchValue)}`);
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to search guests');
+        }
+        return response.json() as Promise<Guest[]>;
+      } catch (error) {
+        console.error('Search error:', error);
+        throw error;
       }
-      return response.json() as Promise<Guest[]>;
     },
     enabled: searchValue.length >= 2,
-    retry: false
+    retry: false,
+    staleTime: 1000, // Cache results for 1 second
   });
 
   const formattedResults = useMemo(() => {
@@ -66,42 +73,47 @@ export function GuestSearch({ onGuestSelect }: GuestSearchProps) {
       <PopoverContent className="w-full p-0">
         <Command>
           <CommandInput 
-            placeholder="Search by name, email, phone, or ID..." 
+            placeholder="Type at least 2 characters to search..." 
             value={searchValue}
             onValueChange={setSearchValue}
           />
           {error ? (
-            <CommandEmpty>Error: {error instanceof Error ? error.message : 'Failed to search'}</CommandEmpty>
+            <CommandEmpty>
+              Error: {error instanceof Error ? error.message : 'Failed to search'}
+            </CommandEmpty>
+          ) : isLoading ? (
+            <CommandEmpty>Searching...</CommandEmpty>
+          ) : searchValue.length < 2 ? (
+            <CommandEmpty>Type at least 2 characters to start searching...</CommandEmpty>
+          ) : formattedResults.length === 0 ? (
+            <CommandEmpty>No guests found.</CommandEmpty>
           ) : (
-            <>
-              <CommandEmpty>No guest found.</CommandEmpty>
-              <CommandGroup>
-                {formattedResults.map((result) => (
-                  <CommandItem
-                    key={result.value}
-                    value={result.value}
-                    onSelect={() => {
-                      onGuestSelect(result.guest);
-                      setOpen(false);
-                      setSearchValue(result.label);
-                    }}
-                  >
-                    <Check
-                      className={cn(
-                        "mr-2 h-4 w-4",
-                        searchValue === result.value ? "opacity-100" : "opacity-0"
-                      )}
-                    />
-                    <div className="flex flex-col">
-                      <span>{result.label}</span>
-                      <span className="text-sm text-muted-foreground">
-                        {result.details}
-                      </span>
-                    </div>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            </>
+            <CommandGroup>
+              {formattedResults.map((result) => (
+                <CommandItem
+                  key={result.value}
+                  value={result.value}
+                  onSelect={() => {
+                    onGuestSelect(result.guest);
+                    setOpen(false);
+                    setSearchValue(result.label);
+                  }}
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4",
+                      searchValue === result.value ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                  <div className="flex flex-col">
+                    <span>{result.label}</span>
+                    <span className="text-sm text-muted-foreground">
+                      {result.details}
+                    </span>
+                  </div>
+                </CommandItem>
+              ))}
+            </CommandGroup>
           )}
         </Command>
       </PopoverContent>
