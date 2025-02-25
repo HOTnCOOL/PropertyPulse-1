@@ -40,21 +40,24 @@ function calculateDiscount(
   preferredType: 'monthly' | 'weekly' | 'daily',
   period: PaymentPeriod
 ): number {
-  if (!discountConfig || period.type !== preferredType) return 0;
+  // Early return if no discount config or period type doesn't match
+  if (!discountConfig || !discountConfig[preferredType] || period.type !== preferredType) return 0;
 
   const planConfig = discountConfig[preferredType];
-  if (!planConfig) return 0;
+
+  // Return 0 if plan config is invalid
+  if (!planConfig || !planConfig.type) return 0;
 
   if (planConfig.type === 'progressive') {
     // First period has no discount
     if (periodIndex <= 0) return 0;
     // Calculate progressive discount (configurable rate per period, up to max)
-    const rate = planConfig.progressiveRate / 100 || 0.1; // Default 10%
-    const max = planConfig.progressiveMax / 100 || 0.5; // Default 50%
+    const rate = (planConfig.progressiveRate ?? 10) / 100; // Default 10%
+    const max = (planConfig.progressiveMax ?? 50) / 100; // Default 50%
     return Math.min(periodIndex * rate, max);
   } else if (planConfig.type === 'bulkPrepay') {
-    const periodsRequired = planConfig.periodsRequired || 5;
-    const discount = planConfig.nextPeriodDiscount / 100 || 0.5;
+    const periodsRequired = planConfig.periodsRequired ?? 5;
+    const discount = (planConfig.nextPeriodDiscount ?? 50) / 100;
 
     // Check if we have enough consecutive prepaid periods before this one
     const consecutivePrepaidBefore = selectedPeriods
@@ -554,7 +557,7 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
             </motion.div>
 
             {/* Update discount type information */}
-            {property?.discountConfig && (
+            {property?.discountConfig && property.discountConfig[preferredPackageType] && (
               <motion.div className="p-4 bg-green-50 border border-green-200 rounded-lg" variants={itemVariants}>
                 <div className="flex items-center space-x-2 mb-2">
                   <TrendingDown className="text-green-600 h-5 w-5" />
@@ -563,14 +566,16 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                 <div className="text-sm">
                   {property.discountConfig[preferredPackageType]?.type === 'progressive' ? (
                     <p>
-                      Progressive prepayment discount: {property.discountConfig[preferredPackageType].progressiveRate}% per period,
-                      up to {property.discountConfig[preferredPackageType].progressiveMax}% maximum discount
+                      Progressive prepayment discount: {property.discountConfig[preferredPackageType]?.progressiveRate ?? 0}% per period,
+                      up to {property.discountConfig[preferredPackageType]?.progressiveMax ?? 0}% maximum discount
+                    </p>
+                  ) : property.discountConfig[preferredPackageType]?.type === 'bulkPrepay' ? (
+                    <p>
+                      Prepay {property.discountConfig[preferredPackageType]?.periodsRequired ?? 0} consecutive {preferredPackageType} periods
+                      to get {property.discountConfig[preferredPackageType]?.nextPeriodDiscount ?? 0}% off your next period!
                     </p>
                   ) : (
-                    <p>
-                      Prepay {property.discountConfig[preferredPackageType].periodsRequired} consecutive {preferredPackageType} periods
-                      to get {property.discountConfig[preferredPackageType].nextPeriodDiscount}% off your next period!
-                    </p>
+                    <p>No discount configuration available for {preferredPackageType} payments.</p>
                   )}
                 </div>
               </motion.div>
