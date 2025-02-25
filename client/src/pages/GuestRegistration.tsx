@@ -37,7 +37,8 @@ import PaymentEstimator from "../components/PaymentEstimator";
 import PaymentHistory from "../components/PaymentHistory";
 import IdScanner from "../components/IdScanner";
 
-type FormData = z.infer<typeof insertGuestSchema>;
+// Modify the form data type to not require check-in/check-out
+type FormData = Omit<z.infer<typeof insertGuestSchema>, 'checkIn' | 'checkOut'>;
 
 export default function GuestRegistration() {
   const { toast } = useToast();
@@ -51,7 +52,6 @@ export default function GuestRegistration() {
     to: undefined
   });
 
-  // Add state to control which section is visible
   const [showStayDates, setShowStayDates] = useState(false);
   const [registeredGuest, setRegisteredGuest] = useState<any>(null);
 
@@ -59,7 +59,7 @@ export default function GuestRegistration() {
   const preSelectedPropertyId = params.get('propertyId');
 
   const form = useForm<FormData>({
-    resolver: zodResolver(insertGuestSchema),
+    resolver: zodResolver(insertGuestSchema.omit({ checkIn: true, checkOut: true })),
     defaultValues: {
       firstName: "",
       lastName: "",
@@ -67,8 +67,6 @@ export default function GuestRegistration() {
       phone: "",
       propertyId: preSelectedPropertyId ? Number(preSelectedPropertyId) : undefined,
       address: "",
-      checkIn: undefined,
-      checkOut: undefined,
       dateOfBirth: undefined,
       placeOfBirth: "",
       homeAddress: "",
@@ -146,10 +144,8 @@ export default function GuestRegistration() {
       console.log('Registration successful:', data);
       queryClient.invalidateQueries({ queryKey: ["/api/guests"] });
 
-      // Store the registered guest data
       setRegisteredGuest(data);
 
-      // Show success message
       toast({
         title: "Guest Registration Successful",
         description: `Guest ${data.firstName} ${data.lastName} has been registered successfully.
@@ -158,10 +154,8 @@ export default function GuestRegistration() {
         duration: 7000,
       });
 
-      // Show the stay dates section
       setShowStayDates(true);
 
-      // Scroll to the stay dates section
       setTimeout(() => {
         const stayDatesSection = document.querySelector('#stay-dates-section');
         if (stayDatesSection) {
@@ -178,27 +172,6 @@ export default function GuestRegistration() {
       });
     },
   });
-
-  const handleDateSelect = (range: { from: Date | undefined; to: Date | undefined } | undefined) => {
-    if (!range) {
-      setSelectedDates({ from: undefined, to: undefined });
-      form.setValue("checkIn", undefined);
-      form.setValue("checkOut", undefined);
-      return;
-    }
-
-    setSelectedDates({
-      from: range.from,
-      to: range.to
-    });
-
-    if (range.from) {
-      form.setValue("checkIn", range.from);
-    }
-    if (range.to) {
-      form.setValue("checkOut", range.to);
-    }
-  };
 
   async function onSubmit(values: FormData) {
     try {
@@ -314,6 +287,19 @@ export default function GuestRegistration() {
       });
     }
   };
+
+  const handleDateSelect = (range: { from: Date | undefined; to: Date | undefined } | undefined) => {
+    if (!range) {
+      setSelectedDates({ from: undefined, to: undefined });
+      return;
+    }
+
+    setSelectedDates({
+      from: range.from,
+      to: range.to
+    });
+  };
+
 
   return (
     <div className="space-y-6">

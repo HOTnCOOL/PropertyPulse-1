@@ -206,8 +206,8 @@ export const insertGuestSchema = z.object({
   email: z.string().email("Invalid email address"),
   phone: z.string().min(1, "Phone number is required"),
   propertyId: z.number(),
-  checkIn: z.string().or(z.date()),
-  checkOut: z.string().or(z.date()),
+  checkIn: z.string().or(z.date()).optional(), // Made optional
+  checkOut: z.string().or(z.date()).optional(), // Made optional
   accessCode: z.string().length(6).optional(),
   bookingReference: z.string().length(10).optional(),
   dateOfBirth: z.string().or(z.date()).optional().nullable(),
