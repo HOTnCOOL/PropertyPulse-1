@@ -1033,34 +1033,34 @@ export function registerRoutes(app: Express): Server {
   // Updated to include unrestricted vision models that can process passport/ID data
   const ocrModels = [
     {
-      id: "meta-llama/llama-3.2-11b-vision:free",
-      name: "Llama 3.2 Vision 11B",
-      provider: "Meta"
+      id: "gpt-4-vision-preview",
+      name: "GPT-4 Vision",
+      provider: "OpenAI"
     },
     {
-      id: "deepseek-ai/deepseek-vl-7b-chat:free",
-      name: "DeepSeek-VL-7B",
-      provider: "DeepSeek AI"
+      id: "claude-3-opus-20240229",
+      name: "Claude 3 Opus",
+      provider: "Anthropic"
     },
     {
-      id: "internvl/internvl-chat-v1-5:free", 
-      name: "InternVL-Chat-V1.5",
-      provider: "OpenGVLab"
+      id: "claude-3-sonnet-20240229",
+      name: "Claude 3 Sonnet",
+      provider: "Anthropic"
     },
     {
-      id: "cognitivecomputations/dolphin-vision-72b:free",
-      name: "Dolphin-Vision-72B",
-      provider: "Cognitive Computations"
+      id: "gemini-pro-vision",
+      name: "Gemini Pro Vision",
+      provider: "Google"
     },
     {
-      id: "liuhaotian/llava-next-34b:free",
-      name: "LLaVA-NeXT-34B",
-      provider: "HuggingFace"
+      id: "claude-2.1",
+      name: "Claude 2.1",
+      provider: "Anthropic"
     },
     {
-      id: "qwen/qwen-vl-max:free", 
-      name: "Qwen-VL-Max",
-      provider: "Alibaba"
+      id: "claude-instant-1.2",
+      name: "Claude Instant",
+      provider: "Anthropic"
     }
   ];
   
