@@ -392,12 +392,14 @@ const PlanCard = ({
       whileHover={isEligible ? { scale: 1.02 } : {}}
       whileTap={isEligible ? { scale: 0.98 } : {}}
     >
-      <div className="text-sm font-medium">{type.charAt(0).toUpperCase() + type.slice(1)} Plan</div>
+      <div className="text-sm font-medium">
+        {type === 'monthly' ? '30-Day Plan' : type === 'weekly' ? '7-Day Plan' : 'Daily Plan'}
+      </div>
       <div className="text-2xl font-bold">${perNightRate.toFixed(2)}</div>
       <div className="text-xs text-muted-foreground">per night</div>
       <div className="mt-2 space-y-1 border-t pt-2">
         <div className="text-sm text-muted-foreground">
-          ${standardAmount} per {type === 'monthly' ? 'month' : type === 'weekly' ? 'week' : 'day'}
+          ${standardAmount} {type === 'monthly' ? 'every 30 days' : type === 'weekly' ? 'every 7 days' : 'every day'}
         </div>
         <div className="text-xs text-green-600">
           Save {((DAILY_RATE - perNightRate) / DAILY_RATE * 100).toFixed(1)}% vs daily rate
@@ -518,7 +520,7 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
               <div className="flex justify-between items-center">
                 <h3 className="font-semibold">
                   {checkIn && checkOut ? (
-                    `Select a Payment Plan for your ${differenceInDays(checkOut, checkIn)}-days booking`
+                    `Select a Payment Plan for your ${differenceInDays(checkOut, checkIn)}-night stay`
                   ) : (
                     'Select a Payment Plan'
                   )}
@@ -707,8 +709,8 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                   </TooltipTrigger>
                   <TooltipContent>
                     <p className="max-w-xs">
-                      Prepay multiple periods to receive a discount.
-                      Prepay 2+ periods for 50% off deposit, 3+ periods for no deposit!
+                      Prepay multiple payment periods to receive a discount.
+                      Prepay 2+ periods for 50% off security deposit, 3+ periods for no deposit!
                     </p>
                   </TooltipContent>
                 </Tooltip>
@@ -813,11 +815,11 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                         </div>
                         {paymentBreakdown.depositAmount === 0 ? (
                           <div className="text-green-600 text-sm">
-                            Deposit waived for bookings with 3+ prepaid periods
+                            Deposit waived for bookings with 3+ prepaid payment periods
                           </div>
                         ) : paymentBreakdown.depositAmount < calculateDepositAmount(preferredPackageType, 0, differenceInDays(checkOut!, checkIn!)) ? (
                           <div className="text-green-600 text-sm">
-                            50% deposit discount applied (2 periods prepaid)
+                            50% deposit discount applied (2 payment periods prepaid)
                           </div>
                         ) : null}
                       </div>
@@ -871,8 +873,8 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                     
                     <div className="text-xs text-muted-foreground pt-2 border-t">
                       <p>The initial payment required is ${formatCurrency(paymentBreakdown.initialPayment)} 
-                      for the first period based on your selected plan.</p>
-                      <p>Additional periods will be billed according to the payment schedule above.</p>
+                      for the first payment period based on your selected plan.</p>
+                      <p>Additional payment periods will be billed according to the schedule above.</p>
                     </div>
                   </div>
                 </motion.div>
