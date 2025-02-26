@@ -1033,34 +1033,34 @@ export function registerRoutes(app: Express): Server {
   // Updated to include unrestricted vision models that can process passport/ID data
   const ocrModels = [
     {
-      id: "gpt-4-vision-preview",
-      name: "GPT-4 Vision",
-      provider: "OpenAI"
-    },
-    {
-      id: "claude-3-opus-20240229",
+      id: "anthropic/claude-3-opus-20240229:free",
       name: "Claude 3 Opus",
       provider: "Anthropic"
     },
     {
-      id: "claude-3-sonnet-20240229",
+      id: "anthropic/claude-3-sonnet-20240229:free",
       name: "Claude 3 Sonnet",
       provider: "Anthropic"
     },
     {
-      id: "gemini-pro-vision",
+      id: "anthropic/claude-3-haiku-20240307:free",
+      name: "Claude 3 Haiku",
+      provider: "Anthropic"
+    },
+    {
+      id: "google/gemini-1.5-pro-latest:free",
+      name: "Gemini 1.5 Pro",
+      provider: "Google"
+    },
+    {
+      id: "google/gemini-pro-vision:free",
       name: "Gemini Pro Vision",
       provider: "Google"
     },
     {
-      id: "claude-2.1",
-      name: "Claude 2.1",
-      provider: "Anthropic"
-    },
-    {
-      id: "claude-instant-1.2",
-      name: "Claude Instant",
-      provider: "Anthropic"
+      id: "openai/gpt-4-vision-preview:free",
+      name: "GPT-4 Vision",
+      provider: "OpenAI"
     }
   ];
   
