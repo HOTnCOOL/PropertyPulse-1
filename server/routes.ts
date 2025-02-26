@@ -151,10 +151,10 @@ function calculatePricePeriods(checkIn: Date, checkOut: Date, preferredType: 'mo
 
 // Add this near the multer configuration
 const paymentDocsStorage = multer.diskStorage({
-  destination: function (_req: Express.Request, _file: Express.Multer.File, cb: multer.FileFilterCallback) {
+  destination: function (_req, _file, cb) {
     cb(null, path.join(process.cwd(), "uploads/payment-docs"));
   },
-  filename: function (_req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback) {
+  filename: function (_req, file, cb) {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     cb(null, 'payment-' + uniqueSuffix + path.extname(file.originalname));
   }
@@ -517,6 +517,15 @@ export function registerRoutes(app: Express): Server {
           message: "Invalid date format for date of birth",
           details: { dateOfBirth: req.body.dateOfBirth }
         });
+      }
+
+      // Ensure required fields are present
+      if (!req.body.address) {
+        req.body.address = "Not provided"; // Default value for address if not provided
+      }
+
+      if (!req.body.phone) {
+        req.body.phone = "Not provided"; // Default value for phone if not provided
       }
 
       // Generate a unique booking reference
@@ -921,7 +930,7 @@ export function registerRoutes(app: Express): Server {
       let currentDate = startDate;
       while (currentDate <= endDate) {
         const isBooked = existingBookings.some(booking =>
-          currentDate >= new Date(booking.checkIn) && currentDate < new Date(booking.checkOut)
+          currentDate >= booking.checkIn && currentDate < booking.checkOut
         );
 
         dates.push({
@@ -998,86 +1007,97 @@ export function registerRoutes(app: Express): Server {
 
       res.json(fullBookingData);
     } catch (error) {
-      console.error('Error fetching guest booking:', error);
-      res.status(500).json({ message: "Failedto fetch booking details" });
+      console.error('Error fetching booking data:', error);
+      res.status(500).json({ message: "Failed to fetch booking data" });
     }
   });
 
   // Add ID image upload endpoint
-  app.post("/api/upload/id-image", uploadIdImage.single("idImage"), (req: Request, res: Response) => {
-    if (!req.file) {
-      return res.status(400).json({ message: "No file uploaded" });
-    }
-
-    const imageUrl = `/uploads/id-images/${req.file.filename}`;
-    res.json({ url: imageUrl });
-  });
-
-  // Update property route to handle validation
-  app.get("/api/properties/:id", async (req: Request, res: Response) => {
+  app.post("/api/upload/id-image", uploadIdImage.single("idImage"), async (req: Request, res: Response) => {
     try {
-      const propertyId = parseInt(req.params.id);
-
-      // Validate the ID is a proper number
-      if (isNaN(propertyId)) {
-        return res.status(400).json({ message: "Invalid property ID format" });
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({ message: "No file uploaded" });
       }
 
-      const property = await db.query.properties.findFirst({
-        where: eq(properties.id, propertyId),
-      });
+      // Return the file URL
+      const fileUrl = `/uploads/id-images/${file.filename}`;
+      res.json({ url: fileUrl });
+    } catch (error) {
+      console.error('Error uploading ID image:', error);
+      res.status(500).json({ message: "Failed to upload ID image" });
+    }
+  });
 
-      if (!property) {
-        return res.status(404).json({ message: "Property not found" });
+  // Add endpoint for calendar availability
+  app.get("/api/calendar", async (req: Request, res: Response) => {
+    try {
+      const { propertyId, month, year } = req.query;
+
+      if (!propertyId || !month || !year) {
+        return res.status(400).json({ message: "Property ID, month, and year are required" });
       }
 
-      res.json(property);
-    } catch (error) {
-      console.error('Error fetching property:', error);
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
+      // Convert month and year to date range
+      const startDate = new Date(Number(year), Number(month) - 1, 1);
+      const endDate = new Date(Number(year), Number(month), 0); // Last day of the month
 
-  // Fix the next payment query
-  app.get("/api/payments/:id/next", async (req: Request, res: Response) => {
-    try {
-      const guestId = parseInt(req.params.id);
-      const nextPayment = await db.query.payments.findFirst({
+      // Get all bookings for this property within the month
+      const bookings = await db.query.bookings.findMany({
         where: and(
-          eq(payments.guestId, guestId),
-          gt(payments.dueDate, new Date()),
-          eq(payments.status, 'pending')
+          eq(bookings.propertyId, Number(propertyId)),
+          or(
+            and(
+              lte(bookings.checkIn, startDate),
+              gte(bookings.checkOut, startDate)
+            ),
+            and(
+              lte(bookings.checkIn, endDate),
+              gte(bookings.checkOut, endDate)
+            ),
+            and(
+              gte(bookings.checkIn, startDate),
+              lte(bookings.checkOut, endDate)
+            )
+          )
         ),
-        orderBy: asc(payments.dueDate),
+        with: {
+          guest: true
+        }
       });
 
-      res.json(nextPayment);
+      // Create calendar data
+      const calendar = [];
+      let currentDate = startDate;
+      while (currentDate <= endDate) {
+        const day = currentDate.getDate();
+        const bookingsForDay = bookings.filter(booking => 
+          currentDate >= booking.checkIn && currentDate < booking.checkOut
+        );
+
+        calendar.push({
+          date: currentDate.toISOString(),
+          day,
+          booked: bookingsForDay.length > 0,
+          bookings: bookingsForDay.map(booking => ({
+            id: booking.id,
+            guestName: booking.guest ? `${booking.guest.firstName} ${booking.guest.lastName}` : 'Unknown',
+            checkIn: booking.checkIn.toISOString(),
+            checkOut: booking.checkOut.toISOString()
+          }))
+        });
+
+        currentDate = addDays(currentDate, 1);
+      }
+
+      res.json(calendar);
     } catch (error) {
-      console.error('Error fetching next payment:', error);
-      res.status(500).json({ message: 'Failed to fetch next payment' });
+      console.error('Error fetching calendar data:', error);
+      res.status(500).json({ message: "Failed to fetch calendar data" });
     }
   });
 
-  // Fix the payment history query
-  app.get("/api/payments/:id/history", async (req: Request, res: Response) => {
-    try {
-      const guestId = parseInt(req.params.id);
-      const paymentHistory = await db.query.payments.findMany({
-        where: and(
-          eq(payments.guestId, guestId),
-          lt(payments.dueDate, new Date())
-        ),
-        orderBy: desc(payments.dueDate),
-        limit: 5,
-      });
+  const server = createServer(app);
 
-      res.json(paymentHistory);
-    } catch (error) {
-      console.error('Error fetching payment history:', error);
-      res.status(500).json({ message: 'Failed to fetch payment history' });
-    }
-  });
-
-  const httpServer = createServer(app);
-  return httpServer;
+  return server;
 }

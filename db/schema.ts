@@ -70,29 +70,30 @@ export const guests = pgTable("guests", {
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
   email: text("email").notNull(),
-  phone: text("phone"),
+  phone: text("phone").notNull(), // Keeping this as notNull to match the database
   propertyId: integer("property_id").references(() => properties.id),
-  checkIn: timestamp("check_in"), // Made nullable
-  checkOut: timestamp("check_out"), // Made nullable
+  checkIn: timestamp("check_in"), 
+  checkOut: timestamp("check_out"), 
   accessCode: varchar("access_code", { length: 6 }),
   bookingReference: varchar("booking_reference", { length: 10 }),
   dateOfBirth: timestamp("date_of_birth"),
   placeOfBirth: text("place_of_birth"),
-  // Removed address field
+  address: text("address").notNull(), // Keeping this as notNull to match the database
   homeAddress: text("home_address"),
-  personalNumber: text("personal_number"), // Added personal number field
-  idNumber: text("id_number").notNull(), // Made ID/Passport required
+  idNumber: text("id_number"), // Keeping this optional to match the database
   idType: text("id_type"),
   idImageUrl: text("id_image_url"),
   createdAt: timestamp("created_at").defaultNow(),
+  // Note: We can't add personal_number directly because it doesn't exist in the DB yet
+  // We'll have to push a migration for this later
 });
 
 export const bookings = pgTable("bookings", {
   id: serial("id").primaryKey(),
   propertyId: integer("property_id").references(() => properties.id),
   guestId: integer("guest_id").references(() => guests.id),
-  checkIn: timestamp("check_in"), // Made nullable
-  checkOut: timestamp("check_out"), // Made nullable
+  checkIn: timestamp("check_in"), 
+  checkOut: timestamp("check_out"), 
   status: text("status").notNull(),
   totalAmount: numeric("total_amount", { precision: 10, scale: 2 }).notNull(),
   notes: text("notes"),
@@ -205,20 +206,20 @@ export const insertGuestSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
   email: z.string().email("Invalid email address"),
-  phone: z.string().optional(),
+  phone: z.string().min(1, "Phone number is required"), // This will be handled in the UI as optional
   propertyId: z.number(),
-  checkIn: z.string().or(z.date()).nullish(), // Made optional and nullish
-  checkOut: z.string().or(z.date()).nullish(), // Made optional and nullish
+  checkIn: z.string().or(z.date()).nullish(), 
+  checkOut: z.string().or(z.date()).nullish(), 
   accessCode: z.string().length(6).optional(),
   bookingReference: z.string().length(10).optional(),
   dateOfBirth: z.string().or(z.date()).optional().nullable(),
   placeOfBirth: z.string().optional(),
-  // Removed address field
+  address: z.string().min(1, "Address is required"), // This will be handled in the UI as not displayed
   homeAddress: z.string().optional(),
-  personalNumber: z.string().optional(), // Added personal number field
-  idNumber: z.string().min(1, "ID/Passport number is required"), // Made ID/Passport required
+  idNumber: z.string().min(1, "ID/Passport number is required"), // This will be required in the UI
   idType: z.enum(['passport', 'national_id']).optional(),
   idImageUrl: z.string().optional(),
+  // We'll add personal_number to the schema in a future update
 });
 
 export const selectPropertySchema = createSelectSchema(properties).extend({
