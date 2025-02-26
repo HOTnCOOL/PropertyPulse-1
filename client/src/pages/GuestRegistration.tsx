@@ -279,60 +279,105 @@ export default function GuestRegistration() {
     idType?: 'passport' | 'national_id';
     expiryDate?: string;
   }) => {
-    console.log('Received extracted data from Gemini AI:', data);
+    console.log('Received extracted data from OCR:', data);
 
     const setFormValue = (key: keyof FormData, value: any) => {
-      if (value) {
-        console.log(`Setting ${key}:`, value);
-        if (key === 'dateOfBirth' && typeof value === 'string') {
-          try {
-            // Handle multiple date formats - try to detect and normalize
-            let date;
-            
-            // Check if date has ISO format
-            if (/^\d{4}-\d{2}-\d{2}/.test(value)) {
-              date = new Date(value);
-            } 
-            // Check for DD.MM.YYYY format
-            else if (/^\d{2}\.\d{2}\.\d{4}$/.test(value)) {
-              const [day, month, year] = value.split('.').map(Number);
-              date = new Date(year, month - 1, day);
-            }
-            // Check for DD/MM/YYYY format
-            else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(value)) {
-              const [day, month, year] = value.split('/').map(Number);
-              date = new Date(year, month - 1, day);
-            }
-            // Check for DD-MM-YYYY format
-            else if (/^\d{1,2}-\d{1,2}-\d{4}$/.test(value)) {
-              const [day, month, year] = value.split('-').map(Number);
-              date = new Date(year, month - 1, day);
-            }
-            // Other formats - try generic parsing
-            else {
-              const parts = value.split(/[-./]/).map(Number);
-              if (parts.length >= 3) {
-                const year = parts[2];
-                const month = parts[1];
-                const day = parts[0];
-                const fullYear = year < 100 ? (year < 50 ? 2000 + year : 1900 + year) : year;
-                date = new Date(fullYear, month - 1, day);
+      if (!value) return;
+      
+      console.log(`Setting ${key}:`, value);
+      
+      if (key === 'dateOfBirth' && typeof value === 'string') {
+        try {
+          // Handle multiple date formats - try to detect and normalize
+          let date;
+          
+          // Check if date has ISO format
+          if (/^\d{4}-\d{2}-\d{2}/.test(value)) {
+            date = new Date(value);
+          } 
+          // Check for DD.MM.YYYY format
+          else if (/^\d{2}\.\d{2}\.\d{4}$/.test(value)) {
+            const [day, month, year] = value.split('.').map(Number);
+            date = new Date(year, month - 1, day);
+          }
+          // Check for DD/MM/YYYY format
+          else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(value)) {
+            const [day, month, year] = value.split('/').map(Number);
+            date = new Date(year, month - 1, day);
+          }
+          // Check for DD-MM-YYYY format
+          else if (/^\d{1,2}-\d{1,2}-\d{4}$/.test(value)) {
+            const [day, month, year] = value.split('-').map(Number);
+            date = new Date(year, month - 1, day);
+          }
+          // Other formats - try generic parsing
+          else {
+            const parts = value.split(/[-./]/).map(Number);
+            if (parts.length >= 3) {
+              // Try both DMY and MDY formats
+              let dateFormats = [];
+              
+              // Try Day-Month-Year
+              const dmyDate = new Date(parts[2], parts[1] - 1, parts[0]);
+              if (!isNaN(dmyDate.getTime())) {
+                dateFormats.push(dmyDate);
+              }
+              
+              // Try Month-Day-Year
+              const mdyDate = new Date(parts[2], parts[0] - 1, parts[1]);
+              if (!isNaN(mdyDate.getTime())) {
+                dateFormats.push(mdyDate);
+              }
+              
+              // Try Year-Month-Day (if year is first)
+              if (parts[0] > 1900) {
+                const ymdDate = new Date(parts[0], parts[1] - 1, parts[2]);
+                if (!isNaN(ymdDate.getTime())) {
+                  dateFormats.push(ymdDate);
+                }
+              }
+              
+              // Use the most likely date (prefer not future dates)
+              if (dateFormats.length > 0) {
+                const now = new Date();
+                // Filter out future dates and dates more than 100 years in the past
+                const validDates = dateFormats.filter(d => 
+                  d <= now && d >= new Date(now.getFullYear() - 100, now.getMonth(), now.getDate())
+                );
+                
+                if (validDates.length > 0) {
+                  date = validDates[0]; // Use the first valid date
+                } else {
+                  date = dateFormats[0]; // Fallback to first parsed date
+                }
               }
             }
-            
-            if (date && !isNaN(date.getTime())) {
-              form.setValue(key, date);
-            } else {
-              console.error('Failed to parse date with any format:', value);
-            }
-          } catch (error) {
-            console.error('Failed to parse date:', value, error);
           }
-        } else {
-          form.setValue(key, value);
+          
+          if (date && !isNaN(date.getTime())) {
+            form.setValue(key, date);
+          } else {
+            console.error('Failed to parse date with any format:', value);
+          }
+        } catch (error) {
+          console.error('Failed to parse date:', value, error);
         }
+      } else {
+        form.setValue(key, value);
       }
     };
+
+    // Check if we have any data to set
+    const hasData = Object.values(data).some(value => value !== undefined && value !== null && value !== '');
+    
+    if (!hasData) {
+      toast({
+        title: "No Data Extracted",
+        description: "Could not extract any data from the ID document. Please try again with a clearer image or enter details manually.",
+        variant: "destructive"
+      });
+      return;
+    }
 
     // Set all the extracted data to form fields
     setFormValue('firstName', data.firstName);
@@ -341,14 +386,22 @@ export default function GuestRegistration() {
     setFormValue('placeOfBirth', data.placeOfBirth);
     setFormValue('idNumber', data.idNumber);
     setFormValue('homeAddress', data.homeAddress);
-    setFormValue('idType', data.idType);
     
-    // Update the Personal Number field (UI only for now)
+    // Set ID type with validation
+    if (data.idType) {
+      const normalizedIdType = data.idType.toLowerCase() === 'passport' ? 'passport' : 'national_id';
+      setFormValue('idType', normalizedIdType);
+    }
+    
+    // Handle Personal Number field (which might not be in the form schema but is in the UI)
     if (data.personalNumber) {
       const personalNumberField = document.querySelector('input[placeholder="Enter personal number"]') as HTMLInputElement;
       if (personalNumberField) {
         personalNumberField.value = data.personalNumber;
       }
+      
+      // Also store in a custom field or localStorage for later use if needed
+      localStorage.setItem('lastPersonalNumber', data.personalNumber);
     }
     
     // Display nationality as a notification if available
@@ -357,6 +410,8 @@ export default function GuestRegistration() {
         title: "Nationality Detected",
         description: `Detected nationality: ${data.nationality}`,
       });
+      // Store for later reference
+      localStorage.setItem('lastNationality', data.nationality);
     }
     
     // Display expiry date as a notification if available
@@ -365,9 +420,23 @@ export default function GuestRegistration() {
         title: "Document Expiry Date",
         description: `ID/Passport expires: ${data.expiryDate}`,
       });
+      
+      // Store for later reference
+      localStorage.setItem('lastExpiryDate', data.expiryDate);
     }
 
+    // Validate the form after setting values
     form.trigger();
+    
+    // Show summary of extracted data
+    toast({
+      title: "Data Extracted Successfully",
+      description: `Found data for: ${Object.entries(data)
+        .filter(([_, v]) => v)
+        .map(([k]) => k)
+        .join(', ')}`,
+      duration: 5000,
+    });
   };
 
   const handleIdImageCaptured = async (file: File) => {

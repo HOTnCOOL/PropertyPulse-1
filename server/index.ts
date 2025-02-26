@@ -43,7 +43,7 @@ app.get("/health", (_req, res) => {
 });
 
 async function startServer() {
-  const port = 5000; // Changed from 5001 to 5000
+  const port = process.env.PORT || 5001; // Use PORT environment variable or fallback to 5001
 
   try {
     log(`Starting server on port ${port}...`);

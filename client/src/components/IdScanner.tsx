@@ -76,6 +76,11 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
       // Store the session ID for future requests
       localStorage.setItem('ocr_session_id', sessionId);
       
+      toast({
+        title: "Processing Images",
+        description: "Analyzing ID document with OCR. This may take a few moments...",
+      });
+      
       // Now, send images to the document analysis endpoint with session ID for model rotation
       const response = await fetch("/api/analyze-id-documents", {
         method: "POST",
@@ -99,23 +104,32 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
         throw new Error("No data returned from analysis");
       }
       
-      // Map the returned data to our expected format
-      const processedData = processExtractedData(result.data);
+      // Direct mapping from API response to our component's expected format
+      // The API returns data in the correct structure, so we can mostly pass it directly through
+      const extractedData = result.data;
+      console.log('Processing extracted data:', extractedData);
+      
+      // Process the data to handle any variations in format
+      const processedData = processExtractedData(extractedData);
       console.log('Processed data:', processedData);
       
       if (Object.values(processedData).some(value => value)) {
+        // Pass the processed data to the parent component
         onDataExtracted(processedData);
+        
+        // Show success message with a summary of the fields found
+        const foundFields = Object.entries(processedData)
+          .filter(([_, v]) => v)
+          .map(([k]) => k);
+          
         toast({
           title: "Data Extracted Successfully",
-          description: `Found: ${Object.entries(processedData)
-            .filter(([_, v]) => v)
-            .map(([k]) => k)
-            .join(', ')}${result.modelUsed ? ` (using ${result.modelUsed})` : ''}`,
+          description: `Found: ${foundFields.join(', ')}${result.modelUsed ? ` (using ${result.modelUsed})` : ''}`,
         });
       } else {
         toast({
           title: "Extraction Warning",
-          description: "Could not extract data from the images. Please try again or enter details manually.",
+          description: "Could not extract data from the images. Please try again with clearer images or enter details manually.",
           variant: "destructive",
         });
       }
@@ -131,7 +145,7 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
     }
   };
 
-  // Process the data extracted from Gemini API
+  // Process the data extracted from OCR API
   const processExtractedData = (data: any) => {
     console.log('Processing extracted data:', data);
     
@@ -151,112 +165,159 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
     
     // Helper function to extract Latin part from dual-language fields
     const extractLatinPart = (value: string): string => {
+      if (!value) return '';
       // If the value contains a slash, take the part after the slash (Latin alphabet)
-      if (value && value.includes('/')) {
+      if (value.includes('/')) {
         const parts = value.split('/');
-        return parts[parts.length - 1]; // Return the last part (Latin)
+        return parts[parts.length - 1].trim(); // Return the last part (Latin)
       }
-      return value || ''; // Return as is if no slash or return empty string if undefined
+      return value.trim();
     };
     
-    // Extract names - handle the Gemini format with nested structures
-    if (data.names && (data.names.surname || data.names.given_names)) {
-      // Handle nested names object
-      if (data.names.given_names) {
-        // Extract first name from given_names (take the Latin part)
-        const givenNames = extractLatinPart(data.names.given_names);
-        // Split by spaces to get individual parts, then take first part
-        const nameParts = givenNames.split(' ');
-        result.firstName = nameParts[0]; // First part of given_names
-      }
-      
-      if (data.names.surname) {
-        result.lastName = extractLatinPart(data.names.surname);
-      }
-    } else if (data.surname || data.given_names) {
-      // Handle the direct format (not nested)
-      if (data.given_names) {
-        const givenNames = extractLatinPart(data.given_names);
-        const nameParts = givenNames.split(' ');
-        result.firstName = nameParts[0];
-      }
-      
-      if (data.surname) {
-        result.lastName = extractLatinPart(data.surname);
-      }
-    } else if (data.Names) {
-      const names = data.Names.split(' ');
-      if (names.length >= 2) {
-        result.firstName = names[0];
-        result.lastName = names[names.length - 1];
-      } else if (names.length === 1) {
-        result.firstName = names[0];
-      }
-    } else if (data.firstName && data.lastName) {
-      result.firstName = data.firstName;
-      result.lastName = data.lastName;
-    } else if (data.name) {
-      const names = data.name.split(' ');
-      if (names.length >= 2) {
-        result.firstName = names[0];
-        result.lastName = names[names.length - 1];
-      } else {
-        result.firstName = names[0];
-      }
+    // Direct mapping from server response
+    if (data.firstName) {
+      result.firstName = extractLatinPart(data.firstName);
     }
     
-    // Extract date of birth
-    if (data.date_of_birth) {
-      result.dateOfBirth = data.date_of_birth;
-    } else if (data.dateOfBirth || data['date of birth']) {
-      result.dateOfBirth = data.dateOfBirth || data['date of birth'];
+    if (data.lastName) {
+      result.lastName = extractLatinPart(data.lastName);
     }
     
-    // Extract place of birth
-    if (data.place_of_birth) {
-      result.placeOfBirth = extractLatinPart(data.place_of_birth);
-    } else if (data.placeOfBirth || data['place of birth']) {
-      result.placeOfBirth = data.placeOfBirth || data['place of birth'];
+    if (data.dateOfBirth) {
+      result.dateOfBirth = data.dateOfBirth;
     }
     
-    // Extract ID number
-    if (data.document_number) {
-      result.idNumber = data.document_number;
-    } else if (data.documentNumber || data['Document Number']) {
-      result.idNumber = data.documentNumber || data['Document Number'];
+    if (data.placeOfBirth) {
+      result.placeOfBirth = extractLatinPart(data.placeOfBirth);
     }
     
-    // Extract Personal Number
-    if (data.personal_number) {
-      result.personalNumber = data.personal_number;
-    } else if (data.personalNumber || data['Personal Number']) {
-      result.personalNumber = data.personalNumber || data['Personal Number'];
+    if (data.idNumber || data.documentNumber) {
+      result.idNumber = data.idNumber || data.documentNumber;
     }
     
-    // Extract address
-    if (data.home_address) {
-      result.homeAddress = data.home_address;
-    } else if (data.address) {
-      result.homeAddress = data.address;
-    } else if (data.homeAddress || data['home address']) {
-      result.homeAddress = data.homeAddress || data['home address'];
+    if (data.personalNumber) {
+      result.personalNumber = data.personalNumber;
     }
     
-    // Extract nationality
+    if (data.homeAddress) {
+      result.homeAddress = data.homeAddress;
+    }
+    
     if (data.nationality) {
       result.nationality = extractLatinPart(data.nationality);
-    } else if (data.Nationality) {
-      result.nationality = data.Nationality;
     }
     
-    // Always set ID type to national_id by default unless explicitly passport
-    result.idType = 'national_id';
+    if (data.idType) {
+      result.idType = data.idType.toLowerCase() === 'passport' ? 'passport' : 'national_id';
+    } else {
+      // Default to national_id if not specified
+      result.idType = 'national_id';
+    }
     
-    // Extract expiry date
-    if (data.date_of_expiry) {
-      result.expiryDate = data.date_of_expiry;
-    } else if (data.expiryDate || data['expiry date'] || data['Expiry Date']) {
-      result.expiryDate = data.expiryDate || data['expiry date'] || data['Expiry Date'];
+    if (data.expiryDate) {
+      result.expiryDate = data.expiryDate;
+    }
+    
+    // Fallback to nested formats that might come from the LLM
+    if (!result.firstName || !result.lastName) {
+      // Extract names - handle the Gemini format with nested structures
+      if (data.names && (data.names.surname || data.names.given_names)) {
+        // Handle nested names object
+        if (data.names.given_names && !result.firstName) {
+          const givenNames = extractLatinPart(data.names.given_names);
+          const nameParts = givenNames.split(' ');
+          result.firstName = nameParts[0]; // First part of given_names
+        }
+        
+        if (data.names.surname && !result.lastName) {
+          result.lastName = extractLatinPart(data.names.surname);
+        }
+      } else if (data.surname || data.given_names) {
+        // Handle the direct format (not nested)
+        if (data.given_names && !result.firstName) {
+          const givenNames = extractLatinPart(data.given_names);
+          const nameParts = givenNames.split(' ');
+          result.firstName = nameParts[0];
+        }
+        
+        if (data.surname && !result.lastName) {
+          result.lastName = extractLatinPart(data.surname);
+        }
+      } else if (data.Names) {
+        const names = data.Names.split(' ');
+        if (names.length >= 2) {
+          if (!result.firstName) result.firstName = names[0];
+          if (!result.lastName) result.lastName = names[names.length - 1];
+        } else if (names.length === 1 && !result.firstName) {
+          result.firstName = names[0];
+        }
+      } else if (data.name) {
+        const names = data.name.split(' ');
+        if (names.length >= 2) {
+          if (!result.firstName) result.firstName = names[0];
+          if (!result.lastName) result.lastName = names[names.length - 1];
+        } else if (!result.firstName) {
+          result.firstName = names[0];
+        }
+      }
+    }
+    
+    // Additional fallbacks for date of birth
+    if (!result.dateOfBirth) {
+      if (data.date_of_birth) {
+        result.dateOfBirth = data.date_of_birth;
+      } else if (data['date of birth']) {
+        result.dateOfBirth = data['date of birth'];
+      }
+    }
+    
+    // Additional fallbacks for place of birth
+    if (!result.placeOfBirth) {
+      if (data.place_of_birth) {
+        result.placeOfBirth = extractLatinPart(data.place_of_birth);
+      } else if (data['place of birth']) {
+        result.placeOfBirth = extractLatinPart(data['place of birth']);
+      }
+    }
+    
+    // Additional fallbacks for ID number
+    if (!result.idNumber) {
+      if (data.document_number) {
+        result.idNumber = data.document_number;
+      } else if (data['Document Number']) {
+        result.idNumber = data['Document Number'];
+      }
+    }
+    
+    // Additional fallbacks for personal number
+    if (!result.personalNumber) {
+      if (data.personal_number) {
+        result.personalNumber = data.personal_number;
+      } else if (data['Personal Number']) {
+        result.personalNumber = data['Personal Number'];
+      }
+    }
+    
+    // Additional fallbacks for address
+    if (!result.homeAddress) {
+      if (data.home_address) {
+        result.homeAddress = data.home_address;
+      } else if (data.address) {
+        result.homeAddress = data.address;
+      } else if (data['home address']) {
+        result.homeAddress = data['home address'];
+      }
+    }
+    
+    // Additional fallbacks for expiry date
+    if (!result.expiryDate) {
+      if (data.date_of_expiry) {
+        result.expiryDate = data.date_of_expiry;
+      } else if (data['expiry date']) {
+        result.expiryDate = data['expiry date'];
+      } else if (data['Expiry Date']) {
+        result.expiryDate = data['Expiry Date'];
+      }
     }
     
     console.log('Processed data for form:', result);
