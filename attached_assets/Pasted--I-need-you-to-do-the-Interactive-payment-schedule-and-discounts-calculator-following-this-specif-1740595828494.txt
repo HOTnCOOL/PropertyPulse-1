@@ -1,0 +1,51 @@
+
+
+I need you to do the Interactive payment schedule and discounts calculator following this specific prepayment discount logic:
+
+## Requirements:
+
+1. Create a function that takes these inputs:
+   - Total number of nights
+   - 1-day/7-days/30-days plans
+   - Plan rate for the plan period
+   - Standard per night cost for each plan
+   - Start date
+
+2. Calculate the initial payment schedule with:
+   - First plan period prepaid at regular plan rate
+   - Remaining full and partial periods  shown as upcoming payments
+   - "+" and "-" buttons to add/remove prepaid periods
+
+3. Progressive discount logic:
+   - First prepaid period: regular price 
+   - Second prepaid period: 5% discount 
+   - Third prepaid period: 10% discount 
+   - Fourth prepaid period: 15% discount 
+   - Fifth prepaid period and onwards: 20 % discount
+   - Any partial periods get the discount at the level they would be if it was full period
+
+4. Each time a user clicks "+":
+   - Move the next unpaid period to the prepaid section
+   - Apply the appropriate discount percentage
+   - Recalculate total prepaid amount
+   - Update the remaining payment schedule
+   - Update the discount percentage for the next potential prepayment
+
+5. Display these sections:
+   - "To be prepaid at booking" showing total prepaid amount with date ranges
+   - Button section with discount information for next potential prepayment
+   - "Upcoming future payments" showing remaining unpaid periods with amounts and dates
+
+6. The UI should update dynamically when users click "+" or "-" buttons
+
+7. Include a final state showing when all periods are prepaid
+
+## Example Flow:
+
+For a 23-night stay starting May 1st:
+- Initial state: 1 week prepaid ($420), option to prepay next week at 5% off
+- After clicking "+": 2 weeks prepaid ($819), option to prepay next week at 10% off
+- After clicking "+" again: 3 weeks prepaid ($1,197), option to prepay remaining 2 days at 15% off
+- After clicking "+" again: All prepaid ($1,299), no further payments needed
+
+Please provide working code with HTML/CSS for the interface, and JavaScript for the calculation logic and event handling.

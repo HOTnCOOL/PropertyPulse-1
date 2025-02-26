@@ -1,0 +1,49 @@
+# Prompt for AI Coder
+
+I need you to create a JavaScript-based payment calculator for a vacation rental booking system. The calculator should follow this specific prepayment discount logic:
+
+## Requirements:
+
+1. Create a function that takes these inputs:
+   - Total number of nights
+   - Weekly rate ($420)
+   - Daily rate ($60)
+   - Start date
+
+2. Calculate the initial payment schedule with:
+   - First week prepaid at regular rate
+   - Remaining weeks and days shown as upcoming payments
+   - "+" and "-" buttons to add/remove prepaid periods
+
+3. Progressive discount logic:
+   - First prepaid period: regular price ($420)
+   - Second prepaid period: 5% discount ($399)
+   - Third prepaid period: 10% discount ($378)
+   - Fourth prepaid period: 15% discount ($357)
+   - Any remaining days: 15% discount on daily rate
+
+4. Each time a user clicks "+":
+   - Move the next unpaid period to the prepaid section
+   - Apply the appropriate discount percentage
+   - Recalculate total prepaid amount
+   - Update the remaining payment schedule
+   - Update the discount percentage for the next potential prepayment
+
+5. Display these sections:
+   - "To be prepaid at booking" showing total prepaid amount with date ranges
+   - Button section with discount information for next potential prepayment
+   - "Upcoming future payments" showing remaining unpaid periods with amounts and dates
+
+6. The UI should update dynamically when users click "+" or "-" buttons
+
+7. Include a final state showing when all periods are prepaid
+
+## Example Flow:
+
+For a 23-night stay starting May 1st:
+- Initial state: 1 week prepaid ($420), option to prepay next week at 5% off
+- After clicking "+": 2 weeks prepaid ($819), option to prepay next week at 10% off
+- After clicking "+" again: 3 weeks prepaid ($1,197), option to prepay remaining 2 days at 15% off
+- After clicking "+" again: All prepaid ($1,299), no further payments needed
+
+Please provide working code with HTML/CSS for the interface, and JavaScript for the calculation logic and event handling.
