@@ -1029,27 +1029,22 @@ export function registerRoutes(app: Express): Server {
     }
   });
   
-  // Define available OCR-capable models with fallback priority
+  // Define available OCR-capable models with fallback priority - using only Google Gemini models
   const ocrModels = [
+    {
+      id: "google/gemini-flash-1.5:free",
+      name: "Gemini Flash 1.5",
+      provider: "Google"
+    },
+    {
+      id: "google/gemini-2.0-pro-exp-02-05:free",
+      name: "Gemini 2.0 Pro",
+      provider: "Google"
+    },
     {
       id: "google/gemini-2.0-flash-lite-preview-02-05:free",
       name: "Gemini 2.0 Flash Lite",
       provider: "Google"
-    },
-    {
-      id: "meta-llama/llama-3.1-8b-instruct:free",
-      name: "Llama 3.1 8B",
-      provider: "Meta"
-    },
-    {
-      id: "qwen/qwen1.5-4b-chat:free",
-      name: "Qwen1.5 4B Chat",
-      provider: "Alibaba" 
-    },
-    {
-      id: "mistralai/mistral-7b-instruct:free",
-      name: "Mistral 7B Instruct",
-      provider: "Mistral AI"
     }
   ];
   
@@ -1073,14 +1068,14 @@ export function registerRoutes(app: Express): Server {
   // New endpoint for ID document analysis with multiple LLM options and session-based rotation
   app.post("/api/analyze-id-documents", async (req: Request, res: Response) => {
     try {
-      const { imageUrls, sessionId } = req.body;
+      const { imageUrls: rawImageUrls, sessionId } = req.body;
       
-      if (!imageUrls || !Array.isArray(imageUrls) || imageUrls.length === 0) {
+      if (!rawImageUrls || !Array.isArray(rawImageUrls) || rawImageUrls.length === 0) {
         return res.status(400).json({ message: "No image URLs provided" });
       }
       
       // Additional validation - ensure all URLs are valid strings and seem to point to actual images
-      const validImageUrls = imageUrls.filter(url => 
+      const validImageUrls = rawImageUrls.filter(url => 
         typeof url === 'string' && 
         url.trim() !== '' && 
         (url.includes('uploads/id-images/') || url.startsWith('data:image/'))
@@ -1089,9 +1084,6 @@ export function registerRoutes(app: Express): Server {
       if (validImageUrls.length === 0) {
         return res.status(400).json({ message: "No valid image URLs provided" });
       }
-      
-      // Use only valid URLs for processing
-      imageUrls = validImageUrls;
       
       // Determine a unique identifier for this request - either the provided sessionId, IP, or a random value
       const requestKey = sessionId || req.ip || `session-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
@@ -1176,7 +1168,7 @@ Do not add ANY commentary, instructions, or explanations to your response - ONLY
       ];
       
       // Add each image to the message content
-      imageUrls.forEach(url => {
+      validImageUrls.forEach((url: string) => {
         messageContent.push({
           type: "image_url",
           image_url: {
