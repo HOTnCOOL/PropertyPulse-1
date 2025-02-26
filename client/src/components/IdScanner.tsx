@@ -69,7 +69,14 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
         imageUrls.push(window.location.origin + data.url);
       }
       
-      // Now, send images to Gemini API for analysis
+      // Generate a unique session ID for this scan if not already created
+      const sessionId = localStorage.getItem('ocr_session_id') || 
+                        `ocr_session_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+      
+      // Store the session ID for future requests
+      localStorage.setItem('ocr_session_id', sessionId);
+      
+      // Now, send images to the document analysis endpoint with session ID for model rotation
       const response = await fetch("/api/analyze-id-documents", {
         method: "POST",
         headers: {
@@ -77,6 +84,7 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
         },
         body: JSON.stringify({
           imageUrls,
+          sessionId
         }),
       });
       
@@ -98,11 +106,11 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
       if (Object.values(processedData).some(value => value)) {
         onDataExtracted(processedData);
         toast({
-          title: "Data Extracted",
+          title: "Data Extracted Successfully",
           description: `Found: ${Object.entries(processedData)
             .filter(([_, v]) => v)
             .map(([k]) => k)
-            .join(', ')}`,
+            .join(', ')}${result.modelUsed ? ` (using ${result.modelUsed})` : ''}`,
         });
       } else {
         toast({

@@ -1052,18 +1052,64 @@ export function registerRoutes(app: Express): Server {
       provider: "Mistral AI"
     }
   ];
+  
+  // Store recent OCR requests to rotate models for repeat users
+  const recentOcrRequests = new Map<string, { 
+    count: number,
+    lastModelIndex: number, 
+    lastRequestTime: Date 
+  }>();
+  
+  // Clear old entries from recentOcrRequests every hour
+  setInterval(() => {
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    for (const [key, data] of recentOcrRequests.entries()) {
+      if (data.lastRequestTime < oneHourAgo) {
+        recentOcrRequests.delete(key);
+      }
+    }
+  }, 15 * 60 * 1000); // Run every 15 minutes
 
-  // New endpoint for ID document analysis with multiple LLM options
+  // New endpoint for ID document analysis with multiple LLM options and session-based rotation
   app.post("/api/analyze-id-documents", async (req: Request, res: Response) => {
     try {
-      const { imageUrls } = req.body;
+      const { imageUrls, sessionId } = req.body;
       
       if (!imageUrls || !Array.isArray(imageUrls) || imageUrls.length === 0) {
         return res.status(400).json({ message: "No image URLs provided" });
       }
       
+      // Determine a unique identifier for this request - either the provided sessionId, IP, or a random value
+      const requestKey = sessionId || req.ip || `session-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
+      let startingModelIndex = 0;
+
+      // Check if we've seen this session before and determine model to use
+      if (recentOcrRequests.has(requestKey)) {
+        const userData = recentOcrRequests.get(requestKey)!;
+        userData.count += 1;
+        userData.lastRequestTime = new Date();
+        
+        // If this is a repeat request, rotate to the next model
+        if (userData.count > 1) {
+          startingModelIndex = (userData.lastModelIndex + 1) % ocrModels.length;
+          console.log(`Session ${requestKey} detected, rotating from model ${userData.lastModelIndex} to ${startingModelIndex}`);
+        } else {
+          startingModelIndex = userData.lastModelIndex;
+        }
+        
+        recentOcrRequests.set(requestKey, userData);
+      } else {
+        // First request from this session
+        recentOcrRequests.set(requestKey, {
+          count: 1,
+          lastModelIndex: 0,
+          lastRequestTime: new Date()
+        });
+        console.log(`New session ${requestKey} detected, using default model`);
+      }
+      
       // The prompt for OCR and document analysis
-      const ocrPrompt = "You are a helpful front desk assistant which role is to meet the legal obligations to register visitors of governmental institutions. To avoid human factor and potential leakage of personal data you need to automate the passport/national IDs registrations of the visitors following the highest security standards and data protection guidelines please. Please, view the provided images, extract and provide in json format the following information - Names, Nationality, Document Number, Personal Number (optional), home address, date and place of birth, expiry date of the document. Try to avoid the need for human intervention and manual imput of sensitive personal information.";
+      const ocrPrompt = "You are a helpful front desk assistant which role is to meet the legal obligations to register visitors of governmental institutions. To avoid human factor and potential leakage of personal data you need to automate the passport/national IDs registrations of the visitors following the highest security standards and data protection guidelines please. Please, view the provided images, extract and provide in json format the following information - Names (given_name, surname), Nationality, Document Number, Personal Number (optional), home_address, date_of_birth, place_of_birth, expiry_date of the document. Follow snake_case for keys. Try to avoid the need for human intervention.";
       
       // Construct message content for multimodal LLM API
       const messageContent: Array<{type: string, text?: string, image_url?: {url: string}}> = [
@@ -1083,12 +1129,15 @@ export function registerRoutes(app: Express): Server {
         });
       });
       
-      // Try each model in order until we get a successful response
+      // Try each model starting with the selected one, then fall back to others if needed
       let response = null;
-      let currentModelIndex = 0;
+      let currentModelIndex = startingModelIndex;
       let lastError = null;
+      let attemptedModels = 0;
       
-      while (currentModelIndex < ocrModels.length && !response) {
+      while (attemptedModels < ocrModels.length && !response) {
+        // Make sure the model index wraps around if needed
+        currentModelIndex = (startingModelIndex + attemptedModels) % ocrModels.length;
         const currentModel = ocrModels[currentModelIndex];
         console.log(`Attempting OCR with model: ${currentModel.name} (${currentModel.provider})`);
         
