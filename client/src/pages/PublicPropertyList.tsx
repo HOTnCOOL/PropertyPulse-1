@@ -27,10 +27,15 @@ export function PublicPropertyList() {
               Browse our selection of premium properties and book your next getaway
             </p>
           </div>
-          <Button variant="outline" onClick={() => setLocation("/auth")}>
-            <LogIn className="mr-2 h-4 w-4" />
-            Sign In
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setLocation("/payment-demo")}>
+              Payment Calculator Demo
+            </Button>
+            <Button variant="outline" onClick={() => setLocation("/auth")}>
+              <LogIn className="mr-2 h-4 w-4" />
+              Sign In
+            </Button>
+          </div>
         </div>
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {[...Array(6)].map((_, i) => (
@@ -50,10 +55,15 @@ export function PublicPropertyList() {
             Browse our selection of premium properties and book your next getaway
           </p>
         </div>
-        <Button variant="outline" onClick={() => setLocation("/auth")}>
-          <LogIn className="mr-2 h-4 w-4" />
-          Sign In
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setLocation("/payment-demo")}>
+            Payment Calculator Demo
+          </Button>
+          <Button variant="outline" onClick={() => setLocation("/auth")}>
+            <LogIn className="mr-2 h-4 w-4" />
+            Sign In
+          </Button>
+        </div>
       </div>
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {properties?.map((property) => (
