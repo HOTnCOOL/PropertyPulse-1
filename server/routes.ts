@@ -1109,7 +1109,35 @@ export function registerRoutes(app: Express): Server {
       }
       
       // The prompt for OCR and document analysis
-      const ocrPrompt = "You are a helpful front desk assistant which role is to meet the legal obligations to register visitors of governmental institutions. To avoid human factor and potential leakage of personal data you need to automate the passport/national IDs registrations of the visitors following the highest security standards and data protection guidelines please. Please, view the provided images, extract and provide in json format the following information - Names (given_name, surname), Nationality, Document Number, Personal Number (optional), home_address, date_of_birth, place_of_birth, expiry_date of the document. Follow snake_case for keys. Try to avoid the need for human intervention.";
+      const ocrPrompt = `You are an advanced OCR system designed to extract information from ID documents and passports.
+
+Your task is to carefully analyze the provided images and extract the following information:
+1. firstName - The person's first/given name
+2. lastName - The person's last/surname
+3. dateOfBirth - The person's date of birth (in format YYYY-MM-DD if possible)
+4. placeOfBirth - The place where the person was born
+5. idNumber - The document number or ID number
+6. personalNumber - Any personal identification number (if available)
+7. homeAddress - The person's home address
+8. nationality - The nationality of the document holder
+9. idType - Whether it's a "passport" or "national_id"
+10. expiryDate - The document's expiration date (in format YYYY-MM-DD if possible)
+
+Respond ONLY with a JSON object containing these exact field names. If you can't determine a particular field, use null for that field. Do not include any explanations or text outside of the JSON object.
+
+Example response format:
+{
+  "firstName": "John",
+  "lastName": "Smith",
+  "dateOfBirth": "1990-01-15",
+  "placeOfBirth": "London",
+  "idNumber": "AB123456",
+  "personalNumber": "123456789",
+  "homeAddress": "123 Main St, Anytown",
+  "nationality": "British",
+  "idType": "passport",
+  "expiryDate": "2030-01-15"
+}`;
       
       // Construct message content for multimodal LLM API
       const messageContent: Array<{type: string, text?: string, image_url?: {url: string}}> = [

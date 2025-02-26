@@ -163,6 +163,14 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
       expiryDate: undefined
     };
     
+    // Clean string values to avoid issues with "null" or "undefined" strings
+    const cleanValue = (value: any): string | undefined => {
+      if (value === null || value === undefined || value === "null" || value === "undefined") {
+        return undefined;
+      }
+      return String(value).trim();
+    };
+    
     // Helper function to extract Latin part from dual-language fields
     const extractLatinPart = (value: string): string => {
       if (!value) return '';
@@ -175,47 +183,57 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
     };
     
     // Direct mapping from server response
-    if (data.firstName) {
-      result.firstName = extractLatinPart(data.firstName);
+    const firstName = cleanValue(data.firstName);
+    if (firstName) {
+      result.firstName = extractLatinPart(firstName);
     }
     
-    if (data.lastName) {
-      result.lastName = extractLatinPart(data.lastName);
+    const lastName = cleanValue(data.lastName);
+    if (lastName) {
+      result.lastName = extractLatinPart(lastName);
     }
     
-    if (data.dateOfBirth) {
-      result.dateOfBirth = data.dateOfBirth;
+    const dateOfBirth = cleanValue(data.dateOfBirth);
+    if (dateOfBirth) {
+      result.dateOfBirth = dateOfBirth;
     }
     
-    if (data.placeOfBirth) {
-      result.placeOfBirth = extractLatinPart(data.placeOfBirth);
+    const placeOfBirth = cleanValue(data.placeOfBirth);
+    if (placeOfBirth) {
+      result.placeOfBirth = extractLatinPart(placeOfBirth);
     }
     
-    if (data.idNumber || data.documentNumber) {
-      result.idNumber = data.idNumber || data.documentNumber;
+    const idNumber = cleanValue(data.idNumber) || cleanValue(data.documentNumber);
+    if (idNumber) {
+      result.idNumber = idNumber;
     }
     
-    if (data.personalNumber) {
-      result.personalNumber = data.personalNumber;
+    const personalNumber = cleanValue(data.personalNumber);
+    if (personalNumber) {
+      result.personalNumber = personalNumber;
     }
     
-    if (data.homeAddress) {
-      result.homeAddress = data.homeAddress;
+    const homeAddress = cleanValue(data.homeAddress);
+    if (homeAddress) {
+      result.homeAddress = homeAddress;
     }
     
-    if (data.nationality) {
-      result.nationality = extractLatinPart(data.nationality);
+    const nationality = cleanValue(data.nationality);
+    if (nationality) {
+      result.nationality = extractLatinPart(nationality);
     }
     
-    if (data.idType) {
-      result.idType = data.idType.toLowerCase() === 'passport' ? 'passport' : 'national_id';
+    const idType = cleanValue(data.idType);
+    if (idType) {
+      result.idType = idType.toLowerCase() === 'passport' ? 'passport' : 'national_id';
     } else {
       // Default to national_id if not specified
       result.idType = 'national_id';
     }
     
-    if (data.expiryDate) {
-      result.expiryDate = data.expiryDate;
+    const expiryDate = cleanValue(data.expiryDate);
+    if (expiryDate) {
+      result.expiryDate = expiryDate;
     }
     
     // Fallback to nested formats that might come from the LLM
@@ -264,59 +282,94 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
     
     // Additional fallbacks for date of birth
     if (!result.dateOfBirth) {
-      if (data.date_of_birth) {
-        result.dateOfBirth = data.date_of_birth;
-      } else if (data['date of birth']) {
-        result.dateOfBirth = data['date of birth'];
+      const dobFromSnakeCase = cleanValue(data.date_of_birth);
+      const dobFromSpacedCase = cleanValue(data['date of birth']);
+      const dobFromDob = cleanValue(data.dob);
+      
+      if (dobFromSnakeCase) {
+        result.dateOfBirth = dobFromSnakeCase;
+      } else if (dobFromSpacedCase) {
+        result.dateOfBirth = dobFromSpacedCase;
+      } else if (dobFromDob) {
+        result.dateOfBirth = dobFromDob;
       }
     }
     
     // Additional fallbacks for place of birth
     if (!result.placeOfBirth) {
-      if (data.place_of_birth) {
-        result.placeOfBirth = extractLatinPart(data.place_of_birth);
-      } else if (data['place of birth']) {
-        result.placeOfBirth = extractLatinPart(data['place of birth']);
+      const pobFromSnakeCase = cleanValue(data.place_of_birth);
+      const pobFromSpacedCase = cleanValue(data['place of birth']);
+      const pobFromPob = cleanValue(data.pob);
+      
+      if (pobFromSnakeCase) {
+        result.placeOfBirth = extractLatinPart(pobFromSnakeCase);
+      } else if (pobFromSpacedCase) {
+        result.placeOfBirth = extractLatinPart(pobFromSpacedCase);
+      } else if (pobFromPob) {
+        result.placeOfBirth = extractLatinPart(pobFromPob);
       }
     }
     
     // Additional fallbacks for ID number
     if (!result.idNumber) {
-      if (data.document_number) {
-        result.idNumber = data.document_number;
-      } else if (data['Document Number']) {
-        result.idNumber = data['Document Number'];
+      const idFromDocNumber = cleanValue(data.document_number);
+      const idFromCapDocNumber = cleanValue(data['Document Number']);
+      const idFromIdNum = cleanValue(data.id_number);
+      
+      if (idFromDocNumber) {
+        result.idNumber = idFromDocNumber;
+      } else if (idFromCapDocNumber) {
+        result.idNumber = idFromCapDocNumber;
+      } else if (idFromIdNum) {
+        result.idNumber = idFromIdNum;
       }
     }
     
     // Additional fallbacks for personal number
     if (!result.personalNumber) {
-      if (data.personal_number) {
-        result.personalNumber = data.personal_number;
-      } else if (data['Personal Number']) {
-        result.personalNumber = data['Personal Number'];
+      const personalNumFromSnakeCase = cleanValue(data.personal_number);
+      const personalNumFromCapCase = cleanValue(data['Personal Number']);
+      const personalNumFromPersonalId = cleanValue(data.personal_id);
+      
+      if (personalNumFromSnakeCase) {
+        result.personalNumber = personalNumFromSnakeCase;
+      } else if (personalNumFromCapCase) {
+        result.personalNumber = personalNumFromCapCase;
+      } else if (personalNumFromPersonalId) {
+        result.personalNumber = personalNumFromPersonalId;
       }
     }
     
     // Additional fallbacks for address
     if (!result.homeAddress) {
-      if (data.home_address) {
-        result.homeAddress = data.home_address;
-      } else if (data.address) {
-        result.homeAddress = data.address;
-      } else if (data['home address']) {
-        result.homeAddress = data['home address'];
+      const addressFromHomeAddress = cleanValue(data.home_address);
+      const addressFromAddress = cleanValue(data.address);
+      const addressFromSpacedCase = cleanValue(data['home address']);
+      
+      if (addressFromHomeAddress) {
+        result.homeAddress = addressFromHomeAddress;
+      } else if (addressFromAddress) {
+        result.homeAddress = addressFromAddress;
+      } else if (addressFromSpacedCase) {
+        result.homeAddress = addressFromSpacedCase;
       }
     }
     
     // Additional fallbacks for expiry date
     if (!result.expiryDate) {
-      if (data.date_of_expiry) {
-        result.expiryDate = data.date_of_expiry;
-      } else if (data['expiry date']) {
-        result.expiryDate = data['expiry date'];
-      } else if (data['Expiry Date']) {
-        result.expiryDate = data['Expiry Date'];
+      const expiryFromDateOfExpiry = cleanValue(data.date_of_expiry);
+      const expiryFromLowerCase = cleanValue(data['expiry date']);
+      const expiryFromCapCase = cleanValue(data['Expiry Date']);
+      const expiryFromExpiration = cleanValue(data.expiration_date);
+      
+      if (expiryFromDateOfExpiry) {
+        result.expiryDate = expiryFromDateOfExpiry;
+      } else if (expiryFromLowerCase) {
+        result.expiryDate = expiryFromLowerCase;
+      } else if (expiryFromCapCase) {
+        result.expiryDate = expiryFromCapCase;
+      } else if (expiryFromExpiration) {
+        result.expiryDate = expiryFromExpiration;
       }
     }
     
