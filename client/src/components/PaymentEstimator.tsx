@@ -11,7 +11,7 @@ import {
   getDate,
   addDays
 } from "date-fns";
-import { AlertTriangle, Info, TrendingDown, AlertCircle } from "lucide-react";
+import { AlertTriangle, Info, TrendingDown, AlertCircle, Calendar as CalendarIcon, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { Property } from "@db/schema";
@@ -381,40 +381,98 @@ const PlanCard = ({
 
   // Calculate total stay cost without any discounts
   const totalStayCost = perNightRate * totalDays;
+  
+  // Calculate savings percentage
+  const savingsPercentage = ((DAILY_RATE - perNightRate) / DAILY_RATE * 100);
+  
+  // Plan title and icon based on type
+  const planTitle = type === 'monthly' ? '30-Day Plan' : type === 'weekly' ? '7-Day Plan' : 'Daily Plan';
+  const planIcon = type === 'monthly' ? 
+    <span className="bg-primary/10 p-1 rounded"><CalendarIcon className="h-4 w-4 text-primary" /></span> :
+    type === 'weekly' ? 
+    <span className="bg-green-100 p-1 rounded"><CalendarIcon className="h-4 w-4 text-green-600" /></span> :
+    <span className="bg-blue-100 p-1 rounded"><CalendarIcon className="h-4 w-4 text-blue-600" /></span>;
+  
+  // Define a different color theme based on plan type
+  const cardTheme = {
+    monthly: {
+      bg: 'bg-gradient-to-b from-white to-primary/5',
+      border: isSelected ? 'border-primary border-2' : 'border-primary/20',
+      shadow: isSelected ? 'shadow-md shadow-primary/10' : 'shadow-sm'
+    },
+    weekly: {
+      bg: 'bg-gradient-to-b from-white to-green-50',
+      border: isSelected ? 'border-green-500 border-2' : 'border-green-200',
+      shadow: isSelected ? 'shadow-md shadow-green-100/50' : 'shadow-sm'
+    },
+    daily: {
+      bg: 'bg-gradient-to-b from-white to-blue-50',
+      border: isSelected ? 'border-blue-500 border-2' : 'border-blue-200',
+      shadow: isSelected ? 'shadow-md shadow-blue-100/50' : 'shadow-sm'
+    }
+  };
 
   return (
     <motion.div
-      className={`p-3 bg-white rounded border cursor-pointer transition-colors ${
-        !isEligible ? 'opacity-50 cursor-not-allowed' :
-          isSelected ? 'border-primary' : ''
-      }`}
-      onClick={onSelect}
-      whileHover={isEligible ? { scale: 1.02 } : {}}
-      whileTap={isEligible ? { scale: 0.98 } : {}}
+      className={`rounded-lg border p-4 transition-all ${cardTheme[type].bg} ${cardTheme[type].border} ${cardTheme[type].shadow}
+        ${!isEligible ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
+      onClick={isEligible ? onSelect : undefined}
+      whileHover={isEligible ? { y: -4, scale: 1.02 } : {}}
+      whileTap={isEligible ? { y: 0, scale: 0.98 } : {}}
+      transition={{ type: "spring", stiffness: 400, damping: 15 }}
     >
-      <div className="text-sm font-medium">
-        {type === 'monthly' ? '30-Day Plan' : type === 'weekly' ? '7-Day Plan' : 'Daily Plan'}
+      <div className="flex justify-between items-start mb-3">
+        <div className="flex items-center gap-2">
+          {planIcon}
+          <div className="font-medium">
+            {planTitle}
+          </div>
+        </div>
+        {isSelected && (
+          <div className="bg-primary/80 text-primary-foreground text-xs px-2 py-0.5 rounded-full font-medium">
+            Selected
+          </div>
+        )}
       </div>
-      <div className="text-2xl font-bold">${perNightRate.toFixed(2)}</div>
-      <div className="text-xs text-muted-foreground">per night</div>
-      <div className="mt-2 space-y-1 border-t pt-2">
-        <div className="text-sm text-muted-foreground">
-          ${standardAmount} {type === 'monthly' ? 'every 30 days' : type === 'weekly' ? 'every 7 days' : 'every day'}
+      
+      <div className="flex items-baseline gap-1 mb-1">
+        <div className="text-2xl font-bold">
+          ${perNightRate.toFixed(2)}
         </div>
-        <div className="text-xs text-green-600">
-          Save {((DAILY_RATE - perNightRate) / DAILY_RATE * 100).toFixed(1)}% vs daily rate
-        </div>
-        <div className="text-sm font-medium mt-2 text-muted-foreground">
-          Total for {totalDays} nights: ${totalStayCost.toLocaleString()}
+        <div className="text-xs text-muted-foreground">
+          per night
         </div>
       </div>
+      
+      <div className="bg-white/60 rounded-md p-3 border border-border space-y-2 mb-3">
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">Standard rate</span>
+          <span>${standardAmount} {type === 'monthly' ? '/month' : type === 'weekly' ? '/week' : '/day'}</span>
+        </div>
+        
+        {savingsPercentage > 0 && (
+          <div className="flex items-center gap-1.5 text-xs text-green-600">
+            <TrendingDown className="h-3.5 w-3.5" />
+            <span>Save {savingsPercentage.toFixed(1)}% vs daily rate</span>
+          </div>
+        )}
+      </div>
+      
+      <div className="flex justify-between items-center text-sm">
+        <span className="text-muted-foreground">Total ({totalDays} nights)</span>
+        <span className="font-medium">${totalStayCost.toLocaleString()}</span>
+      </div>
+      
       {!isEligible && (
-        <div className="text-xs text-red-500 mt-1">
-          {type === 'monthly'
-            ? 'Requires full month stay'
-            : type === 'weekly'
-              ? 'Minimum 7 days required'
-              : ''}
+        <div className="mt-3 text-xs bg-red-50 text-red-600 p-2 rounded border border-red-100 flex items-center gap-1.5">
+          <AlertCircle className="h-3.5 w-3.5" />
+          <span>
+            {type === 'monthly'
+              ? 'Requires minimum 30-day stay'
+              : type === 'weekly'
+                ? 'Requires minimum 7-day stay'
+                : ''}
+          </span>
         </div>
       )}
     </motion.div>
@@ -502,11 +560,16 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
 
   return (
     <TooltipProvider>
-      <Card>
-        <CardHeader>
-          <CardTitle>Payment Plan Selection</CardTitle>
+      <Card className="border border-border shadow-sm">
+        <CardHeader className="bg-muted/30">
+          <CardTitle className="flex items-center text-xl">
+            <span className="bg-primary/10 p-1.5 rounded-md mr-2">
+              <TrendingDown className="h-5 w-5 text-primary" />
+            </span>
+            Payment Plan Selection
+          </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-5">
           <motion.div
             className="space-y-6"
             variants={containerVariants}
@@ -514,26 +577,27 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
             animate="visible"
           >
             <motion.div
-              className="p-4 bg-primary/5 rounded-lg space-y-4"
+              className="p-5 bg-card rounded-lg shadow-sm border border-border space-y-4"
               variants={itemVariants}
             >
-              <div className="flex justify-between items-center">
-                <h3 className="font-semibold">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+                <h3 className="font-semibold text-foreground">
                   {checkIn && checkOut ? (
-                    `Select a Payment Plan for your ${differenceInDays(checkOut, checkIn)}-night stay`
+                    `Select a Plan for your ${differenceInDays(checkOut, checkIn)}-night stay`
                   ) : (
                     'Select a Payment Plan'
                   )}
                 </h3>
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-2 bg-muted/20 p-2 rounded-md">
                   <Checkbox
                     id="prepayAll"
                     checked={prepayAll}
                     onCheckedChange={handlePrepayAll}
+                    className="data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
                   />
                   <motion.label
                     htmlFor="prepayAll"
-                    className="text-sm cursor-pointer"
+                    className="text-sm font-medium cursor-pointer hover:text-primary transition-colors"
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                   >
@@ -543,14 +607,19 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
               </div>
 
               {planError && (
-                <Alert variant="destructive">
+                <Alert variant="destructive" className="animate-in fade-in-50 zoom-in-95">
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>{planError}</AlertDescription>
                 </Alert>
               )}
 
-              <div className="grid gap-4 sm:grid-cols-3">
-                <motion.div className="space-y-2" variants={itemVariants}>
+              <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                <motion.div 
+                  className="space-y-2" 
+                  variants={itemVariants}
+                  whileHover={eligibility.monthly ? { scale: 1.01, y: -2 } : {}}
+                  transition={{ type: "spring", stiffness: 500, damping: 15 }}
+                >
                   <PlanCard
                     type="monthly"
                     rate={MONTHLY_RATE}
@@ -562,7 +631,12 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                   />
                 </motion.div>
 
-                <motion.div className="space-y-2" variants={itemVariants}>
+                <motion.div 
+                  className="space-y-2" 
+                  variants={itemVariants}
+                  whileHover={eligibility.weekly ? { scale: 1.01, y: -2 } : {}}
+                  transition={{ type: "spring", stiffness: 500, damping: 15 }}
+                >
                   <PlanCard
                     type="weekly"
                     rate={WEEKLY_RATE}
@@ -574,7 +648,12 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                   />
                 </motion.div>
 
-                <motion.div className="space-y-2" variants={itemVariants}>
+                <motion.div 
+                  className="space-y-2 sm:col-span-2 lg:col-span-1" 
+                  variants={itemVariants}
+                  whileHover={{ scale: 1.01, y: -2 }}
+                  transition={{ type: "spring", stiffness: 500, damping: 15 }}
+                >
                   <PlanCard
                     type="daily"
                     rate={DAILY_RATE}
@@ -588,24 +667,43 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
               </div>
             </motion.div>
 
-            {/* Update discount type information */}
+            {/* Discount information */}
             {property?.discountConfig && property.discountConfig[preferredPackageType] && (
-              <motion.div className="p-4 bg-green-50 border border-green-200 rounded-lg" variants={itemVariants}>
-                <div className="flex items-center space-x-2 mb-2">
-                  <TrendingDown className="text-green-600 h-5 w-5" />
-                  <h3 className="font-semibold text-green-700">Available Discounts</h3>
+              <motion.div 
+                className="p-4 rounded-lg border border-border shadow-sm bg-green-50/50 backdrop-blur-sm" 
+                variants={itemVariants}
+                whileHover={{ scale: 1.005 }}
+              >
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="bg-green-100 p-1.5 rounded-md">
+                    <TrendingDown className="text-green-600 h-5 w-5" />
+                  </span>
+                  <h3 className="font-medium text-green-700">Available Discounts</h3>
                 </div>
-                <div className="text-sm">
+                <div className="text-sm bg-white/40 rounded-md p-3 border border-green-100">
                   {property.discountConfig[preferredPackageType]?.type === 'progressive' ? (
-                    <p>
-                      Progressive prepayment discount: {property.discountConfig[preferredPackageType]?.progressiveRate ?? 0}% per period,
-                      up to {property.discountConfig[preferredPackageType]?.progressiveMax ?? 0}% maximum discount
-                    </p>
+                    <div className="flex flex-col gap-1.5">
+                      <p className="font-medium">
+                        Progressive Discount Plan
+                      </p>
+                      <div className="text-green-700 bg-green-50 p-2 rounded border border-green-100 inline-flex items-center gap-2">
+                        <span className="font-semibold">{property.discountConfig[preferredPackageType]?.progressiveRate ?? 0}%</span> 
+                        <span>discount per additional prepaid period</span>
+                      </div>
+                      <p className="text-green-800 text-xs">
+                        Maximum possible discount: {property.discountConfig[preferredPackageType]?.progressiveMax ?? 0}%
+                      </p>
+                    </div>
                   ) : property.discountConfig[preferredPackageType]?.type === 'bulkPrepay' ? (
-                    <p>
-                      Prepay {property.discountConfig[preferredPackageType]?.periodsRequired ?? 0} consecutive {preferredPackageType} periods
-                      to get {property.discountConfig[preferredPackageType]?.nextPeriodDiscount ?? 0}% off your next period!
-                    </p>
+                    <div className="flex flex-col gap-1.5">
+                      <p className="font-medium">
+                        Bulk Prepayment Reward
+                      </p>
+                      <div className="text-green-700 bg-green-50 p-2 rounded border border-green-100">
+                        Prepay <span className="font-semibold">{property.discountConfig[preferredPackageType]?.periodsRequired ?? 0}</span> consecutive periods to unlock 
+                        <span className="font-semibold"> {property.discountConfig[preferredPackageType]?.nextPeriodDiscount ?? 0}%</span> off your next period!
+                      </div>
+                    </div>
                   ) : (
                     <p>No discount configuration available for {preferredPackageType} payments.</p>
                   )}
@@ -613,15 +711,22 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
               </motion.div>
             )}
 
+            {/* Initial Payment Section */}
             <motion.div
-              className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg space-y-4"
+              className="p-5 rounded-lg border border-border shadow-sm bg-card"
               variants={itemVariants}
+              whileHover={{ scale: 1.005 }}
             >
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-semibold">Initial Payment Required</h3>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <span className="bg-amber-100 p-1.5 rounded-md">
+                    <AlertTriangle className="h-5 w-5 text-amber-600" />
+                  </span>
+                  <h3 className="font-medium">Initial Payment Required</h3>
+                </div>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Link href="/policies/deposit-policy" className="text-muted-foreground hover:text-primary">
+                    <Link href="/policies/deposit-policy" className="text-muted-foreground hover:text-primary bg-muted/30 p-1.5 rounded-full">
                       <Info className="h-4 w-4" />
                     </Link>
                   </TooltipTrigger>
@@ -630,82 +735,113 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                   </TooltipContent>
                 </Tooltip>
               </div>
-              <div className="space-y-2">
+              
+              <div className="bg-muted/20 rounded-lg p-4 mb-4 border border-border">
                 {/* Only show the first period as per requirements */}
                 {paymentBreakdown.periods.length > 0 && (
-                  <motion.div className="flex justify-between text-sm" variants={itemVariants}>
-                    <span>{paymentBreakdown.periods[0].label}</span>
-                    <span>${paymentBreakdown.periods[0].amount.toLocaleString()}</span>
+                  <motion.div className="flex justify-between text-sm mb-3" variants={itemVariants}>
+                    <span className="text-muted-foreground">{paymentBreakdown.periods[0].label}</span>
+                    <span className="font-medium">${paymentBreakdown.periods[0].amount.toLocaleString()}</span>
                   </motion.div>
                 )}
                 
-                <motion.div className="flex justify-between font-semibold text-base pt-2 border-t" variants={itemVariants}>
+                <motion.div 
+                  className="flex justify-between font-semibold text-base pt-3 border-t" 
+                  variants={itemVariants}
+                >
                   <span>Initial Payment Due</span>
-                  <span>${paymentBreakdown.initialPayment.toLocaleString()}</span>
+                  <span className="text-primary text-lg">${paymentBreakdown.initialPayment.toLocaleString()}</span>
                 </motion.div>
               </div>
 
-              <div className="flex items-start gap-2">
-                <AlertTriangle className="h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
-                <div className="space-y-2 text-sm text-yellow-700">
-                  <p>
-                    Initial payment must be received within 24 hours to guarantee availability.
-                    You'll only be charged for the first period of your selected plan.
-                  </p>
-                  <p>
-                    Additional periods will be billed according to the payment schedule.
-                    See the Security Deposit section for details on the fully refundable guarantee.
-                  </p>
-                </div>
+              <div className="text-sm text-muted-foreground bg-muted/10 p-3 rounded-md border border-border">
+                <p className="mb-2">
+                  <span className="font-medium text-foreground">Payment Policy:</span> Initial payment must be received within 24 hours to guarantee availability.
+                  You'll only be charged for the first period of your selected plan.
+                </p>
+                <p>
+                  Additional periods will be billed according to the payment schedule.
+                  See the Security Deposit section for details on the fully refundable guarantee.
+                </p>
               </div>
             </motion.div>
 
             <AnimatePresence>
               {paymentBreakdown.totalSavings > 0 && (
                 <motion.div
-                  className="p-4 bg-green-50 border border-green-200 rounded-lg"
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
+                  className="p-5 rounded-lg border border-border shadow-sm bg-gradient-to-br from-green-50/70 to-green-100/30"
+                  initial={{ opacity: 0, height: 0, y: -20 }}
+                  animate={{ opacity: 1, height: 'auto', y: 0 }}
+                  exit={{ opacity: 0, height: 0, y: -10 }}
                   layout
+                  transition={{ type: "spring", damping: 25, stiffness: 300 }}
                 >
-                  <motion.div className="flex items-center space-x-2 mb-2">
-                    <TrendingDown className="text-green-600 h-5 w-5" />
-                    <h3 className="font-semibold text-green-700">Your Savings</h3>
+                  <motion.div className="flex items-center gap-3 mb-3">
+                    <span className="bg-green-100 p-1.5 rounded-md">
+                      <TrendingDown className="text-green-600 h-5 w-5" />
+                    </span>
+                    <h3 className="font-medium text-green-800">Your Savings Summary</h3>
                   </motion.div>
-                  <div className="space-y-2">
+                  
+                  <div className="bg-white/60 backdrop-blur-sm rounded-lg p-4 border border-green-100 grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <motion.div
-                      className="flex justify-between"
+                      className="flex flex-col gap-2 p-3 bg-green-50 rounded-lg border border-green-100"
                       variants={discountVariants}
+                      whileHover={{ scale: 1.02 }}
+                      transition={{ type: "spring", stiffness: 300, damping: 25 }}
                     >
-                      <span>Total Savings</span>
+                      <span className="text-sm text-green-700">Total Savings</span>
                       <motion.span
-                        className="font-semibold text-green-600"
+                        className="font-semibold text-green-700 text-2xl"
                         initial={{ scale: 0.8 }}
                         animate={{ scale: 1 }}
                         transition={{ type: "spring", stiffness: 300 }}
                       >
                         ${paymentBreakdown.totalSavings.toLocaleString()}
                       </motion.span>
+                      <span className="text-xs text-green-600">
+                        {formatPercent(paymentBreakdown.savingsPercentage)} off standard pricing
+                      </span>
                     </motion.div>
+                    
                     <motion.div
-                      className="flex justify-between"
+                      className="flex flex-col gap-2 p-3 bg-green-50 rounded-lg border border-green-100"
                       variants={discountVariants}
+                      whileHover={{ scale: 1.02 }}
+                      transition={{ type: "spring", stiffness: 300, damping: 25 }}
                     >
-                      <span>Effective Daily Rate</span>
-                      <span>${paymentBreakdown.effectiveRate.toFixed(2)}</span>
+                      <span className="text-sm text-green-700">Effective Daily Rate</span>
+                      <span className="font-semibold text-green-700 text-2xl">
+                        ${paymentBreakdown.effectiveRate.toFixed(2)}
+                      </span>
+                      <span className="text-xs text-green-600">
+                        vs. ${DAILY_RATE} standard daily rate
+                      </span>
                     </motion.div>
                   </div>
                 </motion.div>
               )}
             </AnimatePresence>
 
-            <motion.div className="space-y-4" variants={itemVariants}>
-              <div className="flex justify-between items-center">
-                <h3 className="text-sm font-semibold">Payment Schedule</h3>
+            {/* Payment Schedule Section */}
+            <motion.div 
+              className="space-y-4 p-5 rounded-lg border border-border shadow-sm bg-card" 
+              variants={itemVariants}
+              whileHover={{ scale: 1.005 }}
+            >
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="bg-primary/10 p-1.5 rounded-md">
+                    <CalendarIcon className="h-5 w-5 text-primary" />
+                  </span>
+                  <h3 className="font-medium">Payment Schedule</h3>
+                </div>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Info className="h-4 w-4 text-muted-foreground" />
+                    <div className="flex items-center gap-1 bg-muted/30 px-2 py-1 rounded text-xs text-muted-foreground hover:text-primary transition-colors">
+                      <Info className="h-3.5 w-3.5" />
+                      <span>Prepaid discounts</span>
+                    </div>
                   </TooltipTrigger>
                   <TooltipContent>
                     <p className="max-w-xs">
@@ -715,7 +851,8 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                   </TooltipContent>
                 </Tooltip>
               </div>
-              <div className="divide-y">
+              
+              <div className="bg-muted/10 rounded-lg border border-border overflow-hidden">
                 {paymentBreakdown.periods.map((period, index) => {
                   const isSelected = selectedPeriods.includes(index) || prepayAll;
                   const canSelect = index === 0 ||
@@ -739,7 +876,7 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                   
                   // Define the discount text if applicable
                   const discountText = discount > 0 && index > 0 
-                    ? `Prepay this period to get ${(discount * 100).toFixed(0)}% discount.` 
+                    ? `${(discount * 100).toFixed(0)}% prepayment discount available` 
                     : '';
                   
                   // Create the payment info text
@@ -752,38 +889,56 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                   return (
                     <motion.div
                       key={index}
-                      className="py-4"
+                      className={`p-4 ${index > 0 ? 'border-t border-border' : ''} ${
+                        isSelected ? 'bg-primary/5' : ''
+                      } ${index === 0 ? 'bg-primary/5' : ''} transition-colors`}
                       variants={itemVariants}
                       initial="hidden"
                       animate="visible"
+                      whileHover={index > 0 && canSelect ? { backgroundColor: 'rgba(var(--primary), 0.03)' } : {}}
                     >
-                      <div className="flex justify-between items-start">
-                        <div className="flex items-start space-x-3">
-                          {index > 0 && (
+                      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
+                        <div className="flex items-start gap-3">
+                          {index > 0 ? (
                             <Checkbox
+                              id={`period-${index}`}
                               checked={isSelected}
                               onCheckedChange={() => handlePeriodSelect(index)}
                               disabled={!canSelect || prepayAll}
+                              className="mt-1 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
                             />
+                          ) : (
+                            <div className="w-5 h-5 flex items-center justify-center bg-primary text-primary-foreground rounded-sm mt-1">
+                              <Check className="h-3.5 w-3.5" />
+                            </div>
                           )}
                           <div className="space-y-1">
                             <div className="font-medium">
                               {period.label}
                             </div>
-                            <div className="text-sm text-muted-foreground">
-                              {dateDisplay} - {paymentInfo}
+                            <div className="text-sm text-muted-foreground flex items-center gap-1.5">
+                              <CalendarIcon className="h-3.5 w-3.5" />
+                              {dateDisplay}
+                              <span className="inline-block h-1 w-1 rounded-full bg-muted-foreground/40"></span>
+                              <span className={index === 0 ? "text-primary font-medium" : ""}>
+                                {paymentInfo}
+                              </span>
                             </div>
                             {discount > 0 && index > 0 && (
-                              <div className={`text-xs ${isSelected ? 'text-green-600' : 'text-muted-foreground'}`}>
+                              <div className={`text-xs flex items-center gap-1 ${
+                                isSelected ? 'text-green-600 font-medium' : 'text-muted-foreground'
+                              }`}>
+                                <TrendingDown className="h-3 w-3" />
                                 {discountText}
                               </div>
                             )}
                           </div>
                         </div>
+                        
                         <div className="text-right">
                           <div className="font-medium">
                             {index === 0 ? (
-                              `$${period.baseAmount.toLocaleString()}`
+                              <span className="text-primary">${period.baseAmount.toLocaleString()}</span>
                             ) : (
                               <>
                                 <span className={`${isSelected ? 'text-muted-foreground line-through' : ''} mr-2`}>
@@ -795,8 +950,15 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                               </>
                             )}
                           </div>
-                          <div className="text-xs text-muted-foreground">
-                            {isSelected ? 'Prepaid' : `Due by ${format(period.startDate, "MMM d")}`}
+                          <div className="text-xs text-muted-foreground mt-1">
+                            {isSelected ? (
+                              <span className="inline-flex items-center gap-1 text-green-600">
+                                <Check className="h-3 w-3" />
+                                Prepaid
+                              </span>
+                            ) : (
+                              `Due by ${format(period.startDate, "MMM d")}`
+                            )}
                           </div>
                         </div>
                       </div>
@@ -805,106 +967,158 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                 })}
 
                 {/* Separate Security Deposit section */}
-                <motion.div className="py-4 bg-primary/5 rounded-lg mt-4">
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-start">
+                <motion.div 
+                  className="p-5 mt-4 border-t border-border"
+                  variants={itemVariants}
+                  initial="hidden"
+                  animate="visible"
+                >
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="bg-blue-100 p-1.5 rounded-md">
+                      <Info className="text-blue-600 h-5 w-5" />
+                    </span>
+                    <h3 className="font-medium text-foreground">Security Deposit</h3>
+                  </div>
+                  
+                  <div className="bg-blue-50/30 rounded-lg p-4 border border-blue-100 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
                       <div>
-                        <div className="font-medium">Security Deposit</div>
-                        <div className="text-sm text-muted-foreground">
-                          Fully refundable after checkout
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-medium">Refundable Deposit</span>
+                          <span className="text-sm text-blue-600 bg-blue-100/50 px-2 py-0.5 rounded-full">Returns after checkout</span>
                         </div>
+                        
                         {paymentBreakdown.depositAmount === 0 ? (
-                          <div className="text-green-600 text-sm">
-                            Deposit waived for bookings with 3+ prepaid payment periods
+                          <div className="text-green-600 text-sm mt-1 flex items-center gap-1">
+                            <Check className="h-3.5 w-3.5" />
+                            <span>Deposit waived (3+ prepaid periods)</span>
                           </div>
                         ) : paymentBreakdown.depositAmount < calculateDepositAmount(preferredPackageType, 0, differenceInDays(checkOut!, checkIn!)) ? (
-                          <div className="text-green-600 text-sm">
-                            50% deposit discount applied (2 payment periods prepaid)
+                          <div className="text-green-600 text-sm mt-1 flex items-center gap-1">
+                            <TrendingDown className="h-3.5 w-3.5" />
+                            <span>50% discount applied (2 prepaid periods)</span>
                           </div>
                         ) : null}
                       </div>
-                      <span className="font-medium">
+                      <span className="font-semibold text-xl">
                         ${paymentBreakdown.depositAmount.toLocaleString()}
                       </span>
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      <p>The security deposit is a fully refundable guarantee that will be returned to you 
-                      after checkout and property inspection.</p>
-                      <p>This amount is <strong>not</strong> part of your accommodation cost and is handled separately.</p>
+                    
+                    <div className="text-xs text-muted-foreground bg-white/80 p-3 rounded border border-blue-50">
+                      <p className="mb-1.5">
+                        <span className="font-medium text-foreground">Important Note:</span> The security deposit is a fully refundable guarantee 
+                        that will be returned to you after checkout and property inspection.
+                      </p>
+                      <p>
+                        This amount is <strong>not</strong> part of your accommodation cost and is handled separately.
+                        Prepaying multiple periods can reduce or eliminate the required deposit amount.
+                      </p>
                     </div>
                   </div>
                 </motion.div>
               </div>
             </motion.div>
 
+            {/* Total Summary Section */}
             <motion.div
+              className="p-5 rounded-lg border border-primary/20 shadow-sm bg-gradient-to-r from-primary/5 to-transparent"
               variants={itemVariants}
+              whileHover={{ scale: 1.005 }}
             >
-              <div>
-                <h3 className="text-sm font-semibold mb-2">Total Accommodation Cost</h3>
-                <motion.div className="p-4 bg-primary/5 rounded-lg" variants={itemVariants}>
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center">
-                      <div className="space-y-1">
-                        <div className="font-semibold text-lg">${paymentBreakdown.totalAmount.toLocaleString()}</div>
-                        {paymentBreakdown.savingsPercentage > 0 && (
-                          <div className="text-green-600 text-sm">
-                            You save {formatPercent(paymentBreakdown.savingsPercentage)} compared to the standard rate
-                          </div>
-                        )}
-                      </div>
-                      <div className="text-right text-sm text-muted-foreground">
-                        <div>${formatCurrency(paymentBreakdown.effectiveRate)} per night</div>
-                        <div>for {differenceInDays(checkOut!, checkIn!)} nights</div>
-                      </div>
+              <div className="flex items-center gap-2 mb-4">
+                <span className="bg-primary/10 p-1.5 rounded-md">
+                  <Check className="h-5 w-5 text-primary" />
+                </span>
+                <h3 className="font-medium">Booking Summary</h3>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div className="bg-background/80 p-4 rounded-lg border border-border">
+                  <div className="flex justify-between mb-3">
+                    <span className="text-sm text-muted-foreground">Total Cost</span>
+                    <span className="font-semibold text-xl">${paymentBreakdown.totalAmount.toLocaleString()}</span>
+                  </div>
+                  
+                  <div className="flex flex-col gap-1 text-sm">
+                    <div className="flex justify-between">
+                      <span>Effective nightly rate</span>
+                      <span className="font-medium">${formatCurrency(paymentBreakdown.effectiveRate)}/night</span>
                     </div>
-
-                    {paymentBreakdown.totalSavings > 0 && (
-                      <div className="flex items-center justify-between p-2 bg-green-50 border border-green-100 rounded">
-                        <div className="text-green-700">
-                          <TrendingDown className="inline-block h-4 w-4 mr-1" />
-                          <span className="font-medium">Total Savings</span>
-                        </div>
-                        <span className="font-medium text-green-700">
-                          ${paymentBreakdown.totalSavings.toLocaleString()}
+                    <div className="flex justify-between">
+                      <span>Duration</span>
+                      <span className="font-medium">{differenceInDays(checkOut!, checkIn!)} nights</span>
+                    </div>
+                    {paymentBreakdown.savingsPercentage > 0 && (
+                      <div className="flex justify-between text-green-600 mt-1">
+                        <span className="flex items-center gap-1">
+                          <TrendingDown className="h-3.5 w-3.5" />
+                          <span>Discount applied</span>
                         </span>
+                        <span className="font-medium">{formatPercent(paymentBreakdown.savingsPercentage)} off</span>
                       </div>
                     )}
-                    
-                    <div className="text-xs text-muted-foreground pt-2 border-t">
-                      <p>The initial payment required is ${formatCurrency(paymentBreakdown.initialPayment)} 
-                      for the first payment period based on your selected plan.</p>
-                      <p>Additional payment periods will be billed according to the schedule above.</p>
+                  </div>
+                </div>
+                
+                <div className="bg-background/80 p-4 rounded-lg border border-border">
+                  <div className="flex justify-between mb-3">
+                    <span className="text-sm text-muted-foreground">Initial Payment</span>
+                    <span className="font-semibold text-xl text-primary">${paymentBreakdown.initialPayment.toLocaleString()}</span>
+                  </div>
+                  <div className="text-sm flex flex-col gap-1">
+                    <div className="flex justify-between">
+                      <span>First payment period</span>
+                      <span className="font-medium">${formatCurrency(paymentBreakdown.periods[0].amount)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Security deposit</span>
+                      <span className="font-medium">${formatCurrency(paymentBreakdown.depositAmount)}</span>
+                    </div>
+                    <div className="border-t mt-1 pt-1 flex justify-between">
+                      <span>Due now to confirm</span>
+                      <span className="font-medium">${formatCurrency(paymentBreakdown.initialPayment + paymentBreakdown.depositAmount)}</span>
                     </div>
                   </div>
-                </motion.div>
+                </div>
               </div>
-            </motion.div>
-
-            <motion.div
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              <Button
-                className="w-full"
-                onClick={() => {
-                  // Build query parameters with all user preferences
-                  const queryParams = new URLSearchParams({
-                    propertyId: property?.id?.toString() || '',
-                    packageType: paymentBreakdown.primaryType,
-                    totalAmount: paymentBreakdown.totalAmount.toString(),
-                    depositAmount: paymentBreakdown.depositAmount.toString(),
-                    initialPayment: paymentBreakdown.initialPayment.toString(),
-                    prepaidPeriods: selectedPeriods.join(','),
-                    savingsPercent: paymentBreakdown.savingsPercentage.toFixed(0)
-                  });
-                  
-                  // Navigate to payment page with all parameters
-                  setLocation(`/payment?${queryParams.toString()}`);
-                }}
+              
+              <div className="text-sm text-muted-foreground bg-muted/10 p-3 rounded-md border border-border mb-5">
+                <p className="mb-1">
+                  <span className="font-medium text-foreground">Payment Policy:</span> Initial payment must be received within 24 hours to guarantee your booking.
+                  The selected payment plan determines your billing schedule.
+                </p>
+                <p>
+                  <span className="font-medium text-foreground">Security deposit:</span> The deposit amount is separate from your accommodation costs and is fully refundable.
+                </p>
+              </div>
+              
+              <motion.div
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className="mt-2"
               >
-                Proceed to Payment
-              </Button>
+                <Button
+                  className="w-full py-6 text-lg font-medium shadow-sm"
+                  onClick={() => {
+                    // Build query parameters with all user preferences
+                    const queryParams = new URLSearchParams({
+                      propertyId: property?.id?.toString() || '',
+                      packageType: paymentBreakdown.primaryType,
+                      totalAmount: paymentBreakdown.totalAmount.toString(),
+                      depositAmount: paymentBreakdown.depositAmount.toString(),
+                      initialPayment: paymentBreakdown.initialPayment.toString(),
+                      prepaidPeriods: selectedPeriods.join(','),
+                      savingsPercent: paymentBreakdown.savingsPercentage.toFixed(0)
+                    });
+                    
+                    // Navigate to payment page with all parameters
+                    setLocation(`/payment?${queryParams.toString()}`);
+                  }}
+                >
+                  Proceed to Payment
+                </Button>
+              </motion.div>
             </motion.div>
           </motion.div>
         </CardContent>
