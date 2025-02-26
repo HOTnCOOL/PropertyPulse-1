@@ -1288,21 +1288,50 @@ Important instructions:
       }
       
       // Process the content - try to extract JSON or structured data
-      let extractedData = {};
+      let extractedData: {
+        firstName: string | null;
+        lastName: string | null;
+        nationality: string | null;
+        documentNumber: string | null;
+        personalNumber: string | null;
+        homeAddress: string | null;
+        dateOfBirth: string | null;
+        placeOfBirth: string | null;
+        expiryDate: string | null;
+        idType: string;
+      } = {
+        firstName: null,
+        lastName: null,
+        nationality: null,
+        documentNumber: null,
+        personalNumber: null,
+        homeAddress: null,
+        dateOfBirth: null,
+        placeOfBirth: null,
+        expiryDate: null,
+        idType: 'national_id'
+      };
+      
       try {
+        let parsedJson: any = null;
+        
         // If we got function call data, use it directly (this is the preferred path)
         if (functionCallData) {
           console.log("Using function call data:", functionCallData);
-          const parsedJson = functionCallData;
-          
+          parsedJson = functionCallData;
+        } 
         // If no function call data, try to extract JSON from the response text
-        } else {
+        else if (responseContent) {
           const jsonMatch = responseContent.match(/```json\s*([\s\S]*?)\s*```|(\{[\s\S]*\})/);
           if (jsonMatch) {
             const jsonStr = (jsonMatch[1] || jsonMatch[2]).trim();
-            const parsedJson = JSON.parse(jsonStr);
+            parsedJson = JSON.parse(jsonStr);
             console.log("Parsed JSON data:", parsedJson);
-          
+          }
+        }
+        
+        // If we have parsed JSON (from either source), process it
+        if (parsedJson) {
           // Map the parsed JSON to our expected format
           extractedData = {
             // Handle different name formats
@@ -1349,7 +1378,7 @@ Important instructions:
           };
           
           console.log("Normalized document data:", extractedData);
-        } else {
+        } else if (responseContent) {
           // If JSON extraction fails, try to structure the data ourselves using regex
           const nameMatches = {
             firstName: responseContent.match(/(?:Given Name|First Name|First name|Name|Given name):\s*([^\n,]+)/i),
