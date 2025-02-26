@@ -1029,7 +1029,31 @@ export function registerRoutes(app: Express): Server {
     }
   });
   
-  // New endpoint for Gemini ID document analysis
+  // Define available OCR-capable models with fallback priority
+  const ocrModels = [
+    {
+      id: "google/gemini-2.0-flash-lite-preview-02-05:free",
+      name: "Gemini 2.0 Flash Lite",
+      provider: "Google"
+    },
+    {
+      id: "meta-llama/llama-3.1-8b-instruct:free",
+      name: "Llama 3.1 8B",
+      provider: "Meta"
+    },
+    {
+      id: "qwen/qwen1.5-4b-chat:free",
+      name: "Qwen1.5 4B Chat",
+      provider: "Alibaba" 
+    },
+    {
+      id: "mistralai/mistral-7b-instruct:free",
+      name: "Mistral 7B Instruct",
+      provider: "Mistral AI"
+    }
+  ];
+
+  // New endpoint for ID document analysis with multiple LLM options
   app.post("/api/analyze-id-documents", async (req: Request, res: Response) => {
     try {
       const { imageUrls } = req.body;
@@ -1038,11 +1062,14 @@ export function registerRoutes(app: Express): Server {
         return res.status(400).json({ message: "No image URLs provided" });
       }
       
-      // Construct message content for Gemini API
+      // The prompt for OCR and document analysis
+      const ocrPrompt = "You are a helpful front desk assistant which role is to meet the legal obligations to register visitors of governmental institutions. To avoid human factor and potential leakage of personal data you need to automate the passport/national IDs registrations of the visitors following the highest security standards and data protection guidelines please. Please, view the provided images, extract and provide in json format the following information - Names, Nationality, Document Number, Personal Number (optional), home address, date and place of birth, expiry date of the document. Try to avoid the need for human intervention and manual imput of sensitive personal information.";
+      
+      // Construct message content for multimodal LLM API
       const messageContent: Array<{type: string, text?: string, image_url?: {url: string}}> = [
         {
           type: "text",
-          text: "You are a helpful front desk assistant which role is to meet the legal obligations to register visitors of governmental institutions. To avoid human factor and potential leakage of personal data you need to automate the passport/national IDs registrations of the visitors following the highest security standards and data protection guidelines please. Please, view the provided images, extract and provide in json format the following information - Names, Nationality, Document Number, Personal Number (optional), home address, date and place of birth, expiry date of the document. Try to avoid the need for human intervention and manual imput of sensitive personal information."
+          text: ocrPrompt
         }
       ];
       
@@ -1056,54 +1083,88 @@ export function registerRoutes(app: Express): Server {
         });
       });
       
-      // Call the Gemini API through OpenRouter
-      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.0-flash-lite-preview-02-05:free",
-          messages: [
-            {
-              role: "user",
-              content: messageContent
-            }
-          ],
-          temperature: 0.5,
-          top_p: 1,
-          repetition_penalty: 1
-        })
-      });
+      // Try each model in order until we get a successful response
+      let response = null;
+      let currentModelIndex = 0;
+      let lastError = null;
       
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error("Gemini API error:", errorData);
-        return res.status(response.status).json({ 
-          message: "Failed to analyze documents", 
-          details: errorData 
+      while (currentModelIndex < ocrModels.length && !response) {
+        const currentModel = ocrModels[currentModelIndex];
+        console.log(`Attempting OCR with model: ${currentModel.name} (${currentModel.provider})`);
+        
+        try {
+          // Call the LLM API through OpenRouter
+          const apiResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              model: currentModel.id,
+              messages: [
+                {
+                  role: "user",
+                  content: messageContent
+                }
+              ],
+              temperature: 0.2, // Lower temperature for more factual extraction
+              top_p: 1,
+              repetition_penalty: 1
+            })
+          });
+          
+          if (apiResponse.ok) {
+            response = apiResponse;
+            console.log(`Successfully used ${currentModel.name} for OCR analysis`);
+          } else {
+            // Log the error and try the next model
+            const errorData = await apiResponse.json();
+            lastError = {
+              model: currentModel.id,
+              status: apiResponse.status,
+              details: errorData
+            };
+            console.warn(`Model ${currentModel.name} failed with status ${apiResponse.status}:`, errorData);
+            currentModelIndex++;
+          }
+        } catch (error) {
+          console.error(`Error with model ${currentModel.name}:`, error);
+          lastError = {
+            model: currentModel.id,
+            error: error instanceof Error ? error.message : String(error)
+          };
+          currentModelIndex++;
+        }
+      }
+      
+      // If all models failed, return an error
+      if (!response) {
+        console.error("All OCR models failed:", lastError);
+        return res.status(500).json({
+          message: "All document analysis models failed",
+          lastError
         });
       }
       
-      const data = await response.json();
-      console.log("OpenRouter API Response:", JSON.stringify(data, null, 2));
+      // Parse the response
+      const responseData = await response.json();
       
-      // Parse the response to extract the JSON data
+      // Log the response for debugging
+      console.log("OpenRouter API Response:", JSON.stringify(responseData, null, 2));
+      
+      // Check if the response has the expected structure
+      if (!responseData.choices || !responseData.choices[0] || !responseData.choices[0].message || !responseData.choices[0].message.content) {
+        console.error("Invalid response structure:", responseData);
+        return res.status(500).json({ message: "Invalid response from document analysis service" });
+      }
+      
+      const responseContent = responseData.choices[0].message.content;
+      console.log("Response content:", responseContent);
+      
+      // Process the content - try to extract JSON or structured data
       let extractedData = {};
       try {
-        // Check if the response has the expected structure
-        if (!data || !data.choices || !Array.isArray(data.choices) || data.choices.length === 0) {
-          console.error("Invalid response structure:", data);
-          return res.status(500).json({ 
-            message: "Invalid response from API", 
-            rawResponse: data 
-          });
-        }
-        
-        const responseContent = data.choices[0].message.content;
-        console.log("Response content:", responseContent);
-        
         // Try to extract JSON from the response
         const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
@@ -1130,20 +1191,88 @@ export function registerRoutes(app: Express): Server {
             expiryDate: expiryMatch ? expiryMatch[1].trim() : null
           };
           
-          console.warn("Structured data from response text:", extractedData);
+          console.log("Structured data from response text:", extractedData);
         }
       } catch (error) {
-        console.error("Error parsing Gemini response:", error);
+        console.error("Error parsing LLM response:", error);
         return res.status(500).json({ 
           message: "Failed to parse document data", 
-          rawResponse: data 
+          error: error instanceof Error ? error.message : String(error)
         });
       }
       
-      res.json({ data: extractedData });
+      // Return the successfully extracted data
+      return res.json({ 
+        data: extractedData,
+        modelUsed: ocrModels[currentModelIndex].name,
+        provider: ocrModels[currentModelIndex].provider 
+      });
     } catch (error) {
       console.error("Error analyzing ID documents:", error);
       res.status(500).json({ message: "Failed to analyze ID documents" });
+    }
+  });
+
+  // Add diagnostic endpoint to check OCR model status
+  app.get("/api/ocr-status", async (_req: Request, res: Response) => {
+    try {
+      // Test each model with a simple request to check its status
+      const modelStatuses = await Promise.all(ocrModels.map(async (model) => {
+        try {
+          const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              model: model.id,
+              messages: [
+                {
+                  role: "user",
+                  content: "Hi, are you available for OCR tasks?"
+                }
+              ],
+              max_tokens: 10
+            })
+          });
+
+          const status = response.ok ? "available" : "error";
+          let details = null;
+          
+          if (!response.ok) {
+            try {
+              details = await response.json();
+            } catch (e) {
+              details = { error: "Could not parse response" };
+            }
+          }
+
+          return {
+            model: model.name,
+            provider: model.provider,
+            status,
+            details: details,
+            timestamp: new Date().toISOString()
+          };
+        } catch (error) {
+          return {
+            model: model.name,
+            provider: model.provider,
+            status: "unavailable",
+            error: error instanceof Error ? error.message : String(error),
+            timestamp: new Date().toISOString()
+          };
+        }
+      }));
+
+      res.json({
+        timestamp: new Date().toISOString(),
+        models: modelStatuses
+      });
+    } catch (error) {
+      console.error("Error checking OCR model status:", error);
+      res.status(500).json({ message: "Failed to check OCR model status" });
     }
   });
 
