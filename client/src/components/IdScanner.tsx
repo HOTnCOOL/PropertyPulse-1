@@ -1,12 +1,11 @@
 import React, { useState, useRef } from 'react';
 import Webcam from 'react-webcam';
-import { createWorker } from 'tesseract.js';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { CameraIcon, FlipHorizontal } from 'lucide-react';
+import { CameraIcon, FlipHorizontal, Trash, UploadIcon, Plus } from 'lucide-react';
 
 interface IdScannerProps {
   onDataExtracted: (data: {
@@ -16,9 +15,17 @@ interface IdScannerProps {
     placeOfBirth?: string;
     idNumber?: string;
     homeAddress?: string;
+    personalNumber?: string;
+    nationality?: string; 
     idType?: 'passport' | 'national_id';
+    expiryDate?: string;
   }) => void;
   onImageCaptured: (file: File) => void;
+}
+
+interface CapturedImage {
+  file: File;
+  preview: string;
 }
 
 export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScannerProps) {
@@ -27,62 +34,72 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
   const [isProcessing, setIsProcessing] = useState(false);
   const [activeTab, setActiveTab] = useState('upload');
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
+  const [capturedImages, setCapturedImages] = useState<CapturedImage[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const processImage = async (imageSource: string | File) => {
+  const processImages = async () => {
+    if (capturedImages.length === 0) {
+      toast({
+        title: "No Images",
+        description: "Please capture or upload at least one image of your ID/Passport.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsProcessing(true);
     try {
-      const worker = await createWorker('eng+bul');
-      await worker.setParameters({
-        tessedit_pageseg_mode: '3',
-        preserve_interword_spaces: '1',
-        tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzАБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЬЮЯабвгдежзийклмнопрстуфхцчшщъьюя0123456789.-/',
-        tessjs_create_tsv: '1',
-        tessedit_enable_doc_dict: '0',
-        textord_heavy_nr: '1',
-        language_model_penalty_non_freq_dict_word: '0.5',
-        language_model_penalty_non_dict_word: '0.5',
-      });
-
-      let result;
-      if (typeof imageSource === 'string') {
-        result = await worker.recognize(imageSource);
-      } else {
-        const reader = new FileReader();
-        const base64String = await new Promise<string>((resolve) => {
-          reader.onload = () => resolve(reader.result as string);
-          reader.readAsDataURL(imageSource);
-        });
-        result = await worker.recognize(base64String);
-      }
-
-      const text = result.data.text;
-      console.log('Raw extracted text:', text);
-
-      // Process the text line by line for debugging
-      const lines = text.split('\n');
-      console.log('Text lines:', lines);
-
-      // Bulgarian ID specific patterns
-      const names = extractName(text);
-      const dates = extractDate(text);
+      // First, upload each image to get URLs
+      const imageUrls: string[] = [];
       
-      const extractedData = {
-        firstName: names.firstName,
-        lastName: names.lastName,
-        dateOfBirth: dates.dateOfBirth,
-        idNumber: extractIdNumber(text),
-        homeAddress: extractAddress(text),
-        idType: text.toLowerCase().includes('passport') ? 'passport' : 'national_id'
-      };
-
-      console.log('Parsed data from ID:', extractedData);
-      await worker.terminate();
-
-      if (Object.values(extractedData).some(value => value)) {
-        onDataExtracted(extractedData);
+      for (const capturedImage of capturedImages) {
+        const formData = new FormData();
+        formData.append("idImage", capturedImage.file);
+        
+        const response = await fetch("/api/upload/id-image", {
+          method: "POST",
+          body: formData,
+        });
+        
+        if (!response.ok) {
+          throw new Error("Failed to upload image");
+        }
+        
+        const data = await response.json();
+        imageUrls.push(window.location.origin + data.url);
+      }
+      
+      // Now, send images to Gemini API for analysis
+      const response = await fetch("/api/analyze-id-documents", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          imageUrls,
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error("Failed to analyze ID document");
+      }
+      
+      const result = await response.json();
+      console.log('AI Analysis result:', result);
+      
+      if (!result.data) {
+        throw new Error("No data returned from analysis");
+      }
+      
+      // Map the returned data to our expected format
+      const processedData = processExtractedData(result.data);
+      console.log('Processed data:', processedData);
+      
+      if (Object.values(processedData).some(value => value)) {
+        onDataExtracted(processedData);
         toast({
           title: "Data Extracted",
-          description: `Found: ${Object.entries(extractedData)
+          description: `Found: ${Object.entries(processedData)
             .filter(([_, v]) => v)
             .map(([k]) => k)
             .join(', ')}`,
@@ -90,24 +107,104 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
       } else {
         toast({
           title: "Extraction Warning",
-          description: "Could not extract data from the image. Please try again or enter details manually.",
+          description: "Could not extract data from the images. Please try again or enter details manually.",
           variant: "destructive",
         });
       }
     } catch (error) {
-      console.error('OCR Error details:', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name
-      });
+      console.error('Analysis Error:', error);
       toast({
         title: "Processing Error",
-        description: `Failed to process the image: ${error.message}. Please try again or enter details manually.`,
+        description: `Failed to process the image: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again or enter details manually.`,
         variant: "destructive",
       });
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  // Process the data extracted from Gemini API
+  const processExtractedData = (data: any) => {
+    // Initialize with empty values
+    const result: Record<string, string | undefined> = {
+      firstName: undefined,
+      lastName: undefined,
+      dateOfBirth: undefined,
+      placeOfBirth: undefined,
+      idNumber: undefined,
+      personalNumber: undefined,
+      homeAddress: undefined,
+      nationality: undefined,
+      idType: undefined,
+      expiryDate: undefined
+    };
+    
+    // Extract names
+    if (data.Names) {
+      const names = data.Names.split(' ');
+      if (names.length >= 2) {
+        result.firstName = names[0];
+        result.lastName = names[names.length - 1];
+      } else if (names.length === 1) {
+        result.firstName = names[0];
+      }
+    } else if (data.firstName && data.lastName) {
+      result.firstName = data.firstName;
+      result.lastName = data.lastName;
+    } else if (data.name) {
+      const names = data.name.split(' ');
+      if (names.length >= 2) {
+        result.firstName = names[0];
+        result.lastName = names[names.length - 1];
+      } else {
+        result.firstName = names[0];
+      }
+    }
+    
+    // Extract date of birth
+    if (data.dateOfBirth || data['date of birth']) {
+      result.dateOfBirth = data.dateOfBirth || data['date of birth'];
+    }
+    
+    // Extract place of birth
+    if (data.placeOfBirth || data['place of birth']) {
+      result.placeOfBirth = data.placeOfBirth || data['place of birth'];
+    }
+    
+    // Extract ID number
+    if (data.documentNumber || data['Document Number']) {
+      result.idNumber = data.documentNumber || data['Document Number'];
+    }
+    
+    // Extract Personal Number
+    if (data.personalNumber || data['Personal Number']) {
+      result.personalNumber = data.personalNumber || data['Personal Number'];
+    }
+    
+    // Extract address
+    if (data.homeAddress || data['home address']) {
+      result.homeAddress = data.homeAddress || data['home address'];
+    }
+    
+    // Extract nationality
+    if (data.nationality || data.Nationality) {
+      result.nationality = data.nationality || data.Nationality;
+    }
+    
+    // Extract ID type
+    const docType = data.documentType || data.idType || '';
+    if (docType.toLowerCase().includes('passport')) {
+      result.idType = 'passport';
+    } else {
+      result.idType = 'national_id';
+    }
+    
+    // Extract expiry date
+    if (data.expiryDate || data['expiry date']) {
+      result.expiryDate = data.expiryDate || data['expiry date'];
+    }
+    
+    return result;
   };
 
   const compressImage = async (base64String: string): Promise<string> => {
@@ -148,25 +245,90 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
     const imageSrc = webcamRef.current.getScreenshot();
     if (!imageSrc) return;
 
-    const compressedImage = await compressImage(imageSrc);
-    const byteString = atob(compressedImage.split(',')[1]);
-    const ab = new ArrayBuffer(byteString.length);
-    const ia = new Uint8Array(ab);
-    for (let i = 0; i < byteString.length; i++) {
-      ia[i] = byteString.charCodeAt(i);
-    }
-    const file = new File([ab], 'captured-id.jpg', { type: 'image/jpeg' });
+    try {
+      const compressedImage = await compressImage(imageSrc);
+      const byteString = atob(compressedImage.split(',')[1]);
+      const ab = new ArrayBuffer(byteString.length);
+      const ia = new Uint8Array(ab);
+      for (let i = 0; i < byteString.length; i++) {
+        ia[i] = byteString.charCodeAt(i);
+      }
+      
+      const fileName = `captured-id-${Date.now()}.jpg`;
+      const file = new File([ab], fileName, { type: 'image/jpeg' });
 
-    onImageCaptured(file);
-    await processImage(compressedImage);
+      // Add to our captured images
+      setCapturedImages(prev => [
+        ...prev, 
+        { file, preview: compressedImage }
+      ]);
+      
+      // Notify parent component
+      onImageCaptured(file);
+      
+      toast({
+        title: "Image Captured",
+        description: `${capturedImages.length + 1} of 2 images captured.`,
+      });
+    } catch (error) {
+      console.error('Capture error:', error);
+      toast({
+        title: "Capture Error",
+        description: "Failed to capture image.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
 
-    onImageCaptured(file);
-    await processImage(file);
+    try {
+      const newImages: CapturedImage[] = [];
+      
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const reader = new FileReader();
+        
+        const preview = await new Promise<string>((resolve) => {
+          reader.onload = () => resolve(reader.result as string);
+          reader.readAsDataURL(file);
+        });
+        
+        newImages.push({ file, preview });
+        onImageCaptured(file);
+      }
+      
+      setCapturedImages(prev => [...prev, ...newImages]);
+      
+      toast({
+        title: "Images Uploaded",
+        description: `${newImages.length} image(s) added.`,
+      });
+    } catch (error) {
+      console.error('Upload error:', error);
+      toast({
+        title: "Upload Error",
+        description: "Failed to upload image(s).",
+        variant: "destructive",
+      });
+    } finally {
+      // Reset the file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const removeImage = (index: number) => {
+    setCapturedImages(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const triggerFileInput = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
   };
 
   const toggleCamera = () => {
@@ -177,154 +339,132 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
     <Card>
       <CardHeader>
         <CardTitle>Scan ID/Passport</CardTitle>
+        <CardDescription>
+          Provide front and back images of your ID or passport for automatic data extraction
+        </CardDescription>
       </CardHeader>
       <CardContent>
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="upload">Upload Image</TabsTrigger>
-            <TabsTrigger value="camera">Use Camera</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="upload" className="space-y-4">
-            <Input
-              type="file"
-              accept="image/*"
-              onChange={handleFileUpload}
-              disabled={isProcessing}
-            />
-          </TabsContent>
-
-          <TabsContent value="camera">
-            <div className="space-y-4">
-              <div className="relative">
-                <Webcam
-                  ref={webcamRef}
-                  screenshotFormat="image/jpeg"
-                  className="w-full rounded-lg"
-                  videoConstraints={{
-                    facingMode,
-                    width: { ideal: 1920 },
-                    height: { ideal: 1080 }
-                  }}
-                />
-                <Button
-                  size="icon"
-                  variant="outline"
-                  className="absolute top-2 right-2"
-                  onClick={toggleCamera}
-                >
-                  <FlipHorizontal className="h-4 w-4" />
-                </Button>
+        <div className="mb-6">
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            {capturedImages.length > 0 ? (
+              capturedImages.map((image, index) => (
+                <div key={index} className="relative">
+                  <img 
+                    src={image.preview} 
+                    alt={`Captured ID ${index + 1}`} 
+                    className="w-full h-40 object-cover rounded-md"
+                  />
+                  <Button
+                    size="icon"
+                    variant="destructive"
+                    className="absolute top-2 right-2 h-8 w-8"
+                    onClick={() => removeImage(index)}
+                  >
+                    <Trash className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))
+            ) : (
+              <div className="col-span-2 border-2 border-dashed rounded-md p-8 text-center">
+                <div className="flex flex-col items-center">
+                  <UploadIcon className="h-8 w-8 mb-2 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">
+                    No images added yet. Use camera or upload button.
+                  </p>
+                </div>
               </div>
+            )}
+          </div>
+          
+          {capturedImages.length < 2 && (
+            <div className="flex justify-center gap-4">
               <Button 
-                onClick={captureImage}
+                variant="outline" 
+                onClick={triggerFileInput}
                 disabled={isProcessing}
-                className="w-full"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Upload Image
+              </Button>
+              <Input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileUpload}
+                disabled={isProcessing}
+                className="hidden"
+                multiple={capturedImages.length === 0}
+              />
+              
+              <Button
+                variant="outline"
+                onClick={() => setActiveTab('camera')}
+                disabled={isProcessing}
               >
                 <CameraIcon className="mr-2 h-4 w-4" />
-                Capture
+                Use Camera
               </Button>
             </div>
-          </TabsContent>
-        </Tabs>
+          )}
+          
+          <div className="mt-4">
+            <Button 
+              onClick={processImages} 
+              disabled={isProcessing || capturedImages.length === 0}
+              className="w-full"
+            >
+              {isProcessing ? "Processing..." : "Extract Data from Images"}
+            </Button>
+          </div>
+        </div>
+        
+        {activeTab === 'camera' && (
+          <div className="space-y-4">
+            <div className="relative">
+              <Webcam
+                ref={webcamRef}
+                screenshotFormat="image/jpeg"
+                className="w-full rounded-lg"
+                videoConstraints={{
+                  facingMode,
+                  width: { ideal: 1920 },
+                  height: { ideal: 1080 }
+                }}
+              />
+              <Button
+                size="icon"
+                variant="outline"
+                className="absolute top-2 right-2"
+                onClick={toggleCamera}
+              >
+                <FlipHorizontal className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="flex justify-between">
+              <Button 
+                variant="outline"
+                onClick={() => setActiveTab('upload')}
+              >
+                Back
+              </Button>
+              <Button 
+                onClick={captureImage}
+                disabled={isProcessing || capturedImages.length >= 2}
+                variant="default"
+              >
+                <CameraIcon className="mr-2 h-4 w-4" />
+                Capture Image
+              </Button>
+            </div>
+          </div>
+        )}
 
         {isProcessing && (
           <div className="mt-4 text-center text-sm text-muted-foreground">
-            Processing image... Please wait.
+            Processing images with AI... Please wait.
           </div>
         )}
       </CardContent>
     </Card>
   );
-}
-
-function extractField(text: string, pattern: RegExp): string | undefined {
-  const match = text.match(pattern);
-  return match?.[1]?.trim();
-}
-
-function extractName(text: string): { firstName?: string, lastName?: string } {
-  const lines = text.split('\n');
-  
-  for (const line of lines) {
-    // Look for lines with uppercase letters and potential name patterns
-    if (/[A-ZА-Я]{3,}/.test(line)) {
-      // Clean up the line and split by common separators
-      const cleanLine = line.replace(/[0-9]/g, '').trim();
-      const parts = cleanLine.split(/[CS\s]+/).filter(part => 
-        part.length > 2 && /^[A-ZА-Я]+$/.test(part)
-      );
-      
-      if (parts.length >= 2) {
-        // Try to identify last name (usually comes first) and first name
-        const lastName = parts[0];
-        const firstName = parts[1];
-        
-        if (lastName && firstName) {
-          return {
-            firstName: firstName.trim(),
-            lastName: lastName.trim()
-          };
-        }
-      }
-    }
-  }
-  return {};
-}
-
-function extractIdNumber(text: string): string | undefined {
-  const idPatterns = [
-    /(?:6491519\d{3})/,  // Document number
-    /(?:7810175\d{4})/,  // Personal number
-    /(?:\d{10})/  // Generic 10-digit number
-  ];
-
-  for (const pattern of idPatterns) {
-    const match = text.match(pattern);
-    if (match) return match[0];
-  }
-  return undefined;
-}
-
-function extractDate(text: string): { dateOfBirth?: string, expiryDate?: string } {
-  const datePatterns = [
-    /(\d{2}\.\d{2}\.\d{4})/g,  // Bulgarian date format
-    /(\d{1,2}[-./]\d{1,2}[-./]\d{2,4})/g,  // Generic date format
-  ];
-
-  const dates = [];
-  for (const pattern of datePatterns) {
-    const matches = Array.from(text.matchAll(pattern));
-    matches.forEach(match => {
-      const date = match[1];
-      const year = parseInt(date.split(/[-./]/)[2]);
-      if (year > 1900) {
-        dates.push({ date, year });
-      }
-    });
-  }
-
-  // Sort dates - earliest is likely birth date, latest is expiry
-  dates.sort((a, b) => a.year - b.year);
-  
-  return {
-    dateOfBirth: dates[0]?.date,
-    expiryDate: dates[dates.length - 1]?.date
-  };
-}
-
-
-
-function extractAddress(text: string): string | undefined {
-  const addressPatterns = [
-    /(?:Address|Residence|Domicile|Адрес|Местоживеене):?\s*([A-Za-zА-Яа-я0-9\s,.-]+(?:\n[A-Za-zА-Яа-я0-9\s,.-]+)*)/i,
-    /БЪЛГАРИЯ\/([A-Za-zА-Яа-я0-9\s,.-]+)/i,
-    /(?:гр\.|с\.)\s*([A-Za-zА-Яа-я0-9\s,.-]+)/i,
-  ];
-
-  for (const pattern of addressPatterns) {
-    const match = text.match(pattern);
-    if (match) return match[1].trim().replace(/\n/g, ', ');
-  }
-  return undefined;
 }

@@ -274,21 +274,56 @@ export default function GuestRegistration() {
     placeOfBirth?: string;
     idNumber?: string;
     homeAddress?: string;
-    personalNumber?: string; // Add support for personal number
+    personalNumber?: string;
+    nationality?: string;
     idType?: 'passport' | 'national_id';
+    expiryDate?: string;
   }) => {
-    console.log('Received extracted data:', data);
+    console.log('Received extracted data from Gemini AI:', data);
 
     const setFormValue = (key: keyof FormData, value: any) => {
       if (value) {
         console.log(`Setting ${key}:`, value);
         if (key === 'dateOfBirth' && typeof value === 'string') {
           try {
-            const [day, month, year] = value.split(/[-./]/).map(Number);
-            const fullYear = year < 100 ? (year < 50 ? 2000 + year : 1900 + year) : year;
-            const date = new Date(fullYear, month - 1, day);
-            if (!isNaN(date.getTime())) {
+            // Handle multiple date formats - try to detect and normalize
+            let date;
+            
+            // Check if date has ISO format
+            if (/^\d{4}-\d{2}-\d{2}/.test(value)) {
+              date = new Date(value);
+            } 
+            // Check for DD.MM.YYYY format
+            else if (/^\d{2}\.\d{2}\.\d{4}$/.test(value)) {
+              const [day, month, year] = value.split('.').map(Number);
+              date = new Date(year, month - 1, day);
+            }
+            // Check for DD/MM/YYYY format
+            else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(value)) {
+              const [day, month, year] = value.split('/').map(Number);
+              date = new Date(year, month - 1, day);
+            }
+            // Check for DD-MM-YYYY format
+            else if (/^\d{1,2}-\d{1,2}-\d{4}$/.test(value)) {
+              const [day, month, year] = value.split('-').map(Number);
+              date = new Date(year, month - 1, day);
+            }
+            // Other formats - try generic parsing
+            else {
+              const parts = value.split(/[-./]/).map(Number);
+              if (parts.length >= 3) {
+                const year = parts[2];
+                const month = parts[1];
+                const day = parts[0];
+                const fullYear = year < 100 ? (year < 50 ? 2000 + year : 1900 + year) : year;
+                date = new Date(fullYear, month - 1, day);
+              }
+            }
+            
+            if (date && !isNaN(date.getTime())) {
               form.setValue(key, date);
+            } else {
+              console.error('Failed to parse date with any format:', value);
             }
           } catch (error) {
             console.error('Failed to parse date:', value, error);
@@ -299,6 +334,7 @@ export default function GuestRegistration() {
       }
     };
 
+    // Set all the extracted data to form fields
     setFormValue('firstName', data.firstName);
     setFormValue('lastName', data.lastName);
     setFormValue('dateOfBirth', data.dateOfBirth);
@@ -306,6 +342,30 @@ export default function GuestRegistration() {
     setFormValue('idNumber', data.idNumber);
     setFormValue('homeAddress', data.homeAddress);
     setFormValue('idType', data.idType);
+    
+    // Update the Personal Number field (UI only for now)
+    if (data.personalNumber) {
+      const personalNumberField = document.querySelector('input[placeholder="Enter personal number"]') as HTMLInputElement;
+      if (personalNumberField) {
+        personalNumberField.value = data.personalNumber;
+      }
+    }
+    
+    // Display nationality as a notification if available
+    if (data.nationality) {
+      toast({
+        title: "Nationality Detected",
+        description: `Detected nationality: ${data.nationality}`,
+      });
+    }
+    
+    // Display expiry date as a notification if available
+    if (data.expiryDate) {
+      toast({
+        title: "Document Expiry Date",
+        description: `ID/Passport expires: ${data.expiryDate}`,
+      });
+    }
 
     form.trigger();
   };
@@ -324,7 +384,8 @@ export default function GuestRegistration() {
     }
   };
 
-  const handleDateSelect = (range: { from: Date | undefined; to: Date | undefined } | undefined) => {
+  // Fix the type error with the date range handler
+  const handleDateSelect = (range: { from: Date; to?: Date } | undefined) => {
     if (!range) {
       setSelectedDates({ from: undefined, to: undefined });
       return;
@@ -623,6 +684,7 @@ export default function GuestRegistration() {
                       </FormControl>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
+                      {/* @ts-ignore - type mismatch between Calendar and our range handler */}
                       <Calendar
                         mode="range"
                         selected={{

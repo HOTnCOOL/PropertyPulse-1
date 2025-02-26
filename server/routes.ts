@@ -1028,6 +1028,91 @@ export function registerRoutes(app: Express): Server {
       res.status(500).json({ message: "Failed to upload ID image" });
     }
   });
+  
+  // New endpoint for Gemini ID document analysis
+  app.post("/api/analyze-id-documents", async (req: Request, res: Response) => {
+    try {
+      const { imageUrls } = req.body;
+      
+      if (!imageUrls || !Array.isArray(imageUrls) || imageUrls.length === 0) {
+        return res.status(400).json({ message: "No image URLs provided" });
+      }
+      
+      // Construct message content for Gemini API
+      const messageContent: Array<{type: string, text?: string, image_url?: {url: string}}> = [
+        {
+          type: "text",
+          text: "You are a helpful front desk assistant which role is to meet the legal obligations to register visitors of governmental institutions. To avoid human factor and potential leakage of personal data you need to automate the passport/national IDs registrations of the visitors following the highest security standards and data protection guidelines please. Please, view the provided images, extract and provide in json format the following information - Names, Nationality, Document Number, Personal Number (optional), home address, date and place of birth, expiry date of the document. Try to avoid the need for human intervention and manual imput of sensitive personal information."
+        }
+      ];
+      
+      // Add each image to the message content
+      imageUrls.forEach(url => {
+        messageContent.push({
+          type: "image_url",
+          image_url: {
+            url
+          }
+        });
+      });
+      
+      // Call the Gemini API through OpenRouter
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.0-flash-lite-preview-02-05:free",
+          messages: [
+            {
+              role: "user",
+              content: messageContent
+            }
+          ],
+          temperature: 0.5,
+          top_p: 1,
+          repetition_penalty: 1
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("Gemini API error:", errorData);
+        return res.status(response.status).json({ 
+          message: "Failed to analyze documents", 
+          details: errorData 
+        });
+      }
+      
+      const data = await response.json();
+      
+      // Parse the response to extract the JSON data
+      let extractedData = {};
+      try {
+        const responseContent = data.choices[0].message.content;
+        // Try to extract JSON from the response
+        const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          extractedData = JSON.parse(jsonMatch[0]);
+        } else {
+          console.warn("Could not extract JSON from response:", responseContent);
+        }
+      } catch (error) {
+        console.error("Error parsing Gemini response:", error);
+        return res.status(500).json({ 
+          message: "Failed to parse document data", 
+          rawResponse: data.choices[0].message.content 
+        });
+      }
+      
+      res.json({ data: extractedData });
+    } catch (error) {
+      console.error("Error analyzing ID documents:", error);
+      res.status(500).json({ message: "Failed to analyze ID documents" });
+    }
+  });
 
   // Add endpoint for calendar availability
   app.get("/api/calendar", async (req: Request, res: Response) => {
