@@ -560,7 +560,7 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
 
   return (
     <TooltipProvider>
-      <Card className="border border-border shadow-sm">
+      <Card className="border border-border shadow-sm w-full max-w-none">
         <CardHeader className="bg-muted/30">
           <CardTitle className="flex items-center text-xl">
             <span className="bg-primary/10 p-1.5 rounded-md mr-2">
@@ -571,7 +571,7 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
         </CardHeader>
         <CardContent className="p-5">
           <motion.div
-            className="space-y-6"
+            className="space-y-6 w-full"
             variants={containerVariants}
             initial="hidden"
             animate="visible"
