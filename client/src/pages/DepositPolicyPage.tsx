@@ -11,7 +11,7 @@ export default function DepositPolicyPage() {
       <Button
         variant="ghost"
         className="mb-4"
-        onClick={() => setLocation(-1)}
+        onClick={() => window.history.back()}
       >
         <ChevronLeft className="h-4 w-4 mr-2" />
         Back
@@ -29,18 +29,18 @@ export default function DepositPolicyPage() {
         <h3>Security Deposit Requirements</h3>
         <h4>General Rules</h4>
         <ul>
-          <li>No security deposit is charged for fully prepaid bookings</li>
+          <li>No security deposit is charged for bookings with 3+ prepaid payment periods</li>
           <li>For all stays longer than 3 days that are only partially paid, a security deposit must be paid in advance or guaranteed by credit card</li>
-          <li>The deposit is fully refundable at checkout</li>
-          <li>If at least two packs of the same type are prepaid, the deposit can be reduced by half</li>
+          <li>The security deposit is fully refundable after checkout and property inspection</li>
+          <li>If at least two payment periods of the same type are prepaid, the deposit is reduced by 50%</li>
         </ul>
 
-        <h4>Deposit Amount</h4>
-        <p>The amount of the deposit is determined according to the duration of your stay:</p>
+        <h4>Security Deposit Amount</h4>
+        <p>The amount of the security deposit is determined according to the duration of your stay:</p>
         <ol>
-          <li>$90 for stays longer than 3 days and shorter than 2 weeks (one daily rate deposit)</li>
-          <li>$420 for stays longer than 2 weeks and shorter than 2 months (one weekly rate deposit)</li>
-          <li>$1200 for stays longer than 2 months (one monthly rate deposit)</li>
+          <li>$70 for stays longer than 3 days and shorter than 2 weeks (equivalent to one day's rate)</li>
+          <li>$420 for stays longer than 2 weeks and shorter than 2 months (equivalent to one 7-day period)</li>
+          <li>$1500 for stays longer than 2 months (equivalent to one 30-day period)</li>
         </ol>
 
         <h3>Summary of Payment Options</h3>
@@ -49,23 +49,25 @@ export default function DepositPolicyPage() {
           how your bookings may be structured based on preferred payment plans:
         </p>
 
-        <h4>Monthly Payment</h4>
+        <h4>30-Day Payment Plan</h4>
         <ul>
-          <li>Two monthly packs and two weekly packs with regular prices apply for a booking duration of 2.5 months</li>
-          <li>The total will be calculated without any upfront prepayment discounts</li>
-          <li>Initial Payment Required: First monthly pack + deposit</li>
+          <li>Rate: $1500 every 30 days ($50/night equivalent)</li>
+          <li>Best value for longer stays of 30+ days</li>
+          <li>Initial Payment Required: First 30-day payment period + security deposit (if applicable)</li>
         </ul>
 
-        <h4>Weekly Payment</h4>
+        <h4>7-Day Payment Plan</h4>
         <ul>
-          <li>Paying in weekly installments allows flexibility; however, the total amount at the end of your stay tends to be higher than the first monthly scenario</li>
-          <li>Initial Payment Required: First weekly pack + deposit</li>
+          <li>Rate: $420 every 7 days ($60/night equivalent)</li>
+          <li>Good balance between value and flexibility for medium-length stays</li>
+          <li>Initial Payment Required: First 7-day payment period + security deposit (if applicable)</li>
         </ul>
 
-        <h4>Daily Payment</h4>
+        <h4>Daily Payment Plan</h4>
         <ul>
-          <li>Users can opt to pay on a daily basis, offering maximum flexibility in payment scheduling</li>
-          <li>Initial Payment Required: First daily pack + deposit</li>
+          <li>Rate: $70 per day</li>
+          <li>Maximum flexibility for payment scheduling, but at a higher overall cost</li>
+          <li>Initial Payment Required: First day's payment + security deposit (if applicable)</li>
         </ul>
 
         <h3>Need Assistance?</h3>
