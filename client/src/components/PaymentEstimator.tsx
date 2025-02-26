@@ -97,8 +97,10 @@ interface PaymentBreakdown {
   initialPayment: number;
   totalSavings: number;
   effectiveRate: number;
+  savingsPercentage: number;
 }
 
+// Fixed rates as per requirements
 const DAILY_RATE = 70;
 const WEEKLY_RATE = 420;
 const MONTHLY_RATE = 1500;
@@ -148,104 +150,128 @@ function calculateOptimalPaymentBreakdown(
   const endDate = startOfDay(new Date(checkOut));
   const totalDays = differenceInDays(endDate, currentDate);
 
+  // Simplified payment schedule as per requirements
+  // Only create the first payment period based on the selected plan
   if (preferredType === 'daily') {
-    // First day as a separate period (required)
+    // First daily period (required)
     periods.push({
       type: 'daily',
       startDate: currentDate,
       endDate: addDays(currentDate, 1),
       baseAmount: DAILY_RATE,
       amount: DAILY_RATE,
-      label: 'Day 1 (Required)',
+      label: '1 daily period (Required)',
       index: 0,
       isPrepaid: true // Always prepaid as it's required
     });
 
-    // Remaining days as separate periods
-    for (let i = 1; i < totalDays; i++) {
-      const dayStart = addDays(checkIn, i);
+    // Group remaining days for a simplified payment schedule
+    if (totalDays > 1) {
+      // Group consecutive days into one payment period
+      const remainingDays = totalDays - 1;
       periods.push({
         type: 'daily',
-        startDate: dayStart,
-        endDate: addDays(dayStart, 1),
-        baseAmount: DAILY_RATE,
-        amount: DAILY_RATE,
-        label: `Day ${i + 1}`,
-        index: i,
-        isPrepaid: false // Optional prepayment
+        startDate: addDays(currentDate, 1),
+        endDate: endDate,
+        baseAmount: DAILY_RATE * remainingDays,
+        amount: DAILY_RATE * remainingDays,
+        label: `${remainingDays}x daily periods`,
+        index: 1,
+        isPrepaid: false
       });
     }
   } else if (preferredType === 'weekly' && totalDays >= 7) {
-    // Handle complete weeks
-    let weekIndex = 0;
-    while (differenceInDays(endDate, currentDate) >= 7) {
-      const weekEnd = addWeeks(currentDate, 1);
-      periods.push({
-        type: 'weekly',
-        startDate: currentDate,
-        endDate: weekEnd,
-        baseAmount: WEEKLY_RATE,
-        amount: WEEKLY_RATE,
-        label: weekIndex === 0 ? 'Week 1 (Required)' : `Week ${weekIndex + 1}`,
-        index: weekIndex,
-        isPrepaid: weekIndex === 0 // First week always prepaid
-      });
-      currentDate = weekEnd;
-      weekIndex++;
-    }
+    // First week (required)
+    const weekEnd = addDays(currentDate, 7);
+    periods.push({
+      type: 'weekly',
+      startDate: currentDate,
+      endDate: weekEnd > endDate ? endDate : weekEnd,
+      baseAmount: WEEKLY_RATE,
+      amount: WEEKLY_RATE,
+      label: '1 weekly period (Required)',
+      index: 0,
+      isPrepaid: true
+    });
 
-    // Handle remaining days for weekly plan
-    const remainingDays = differenceInDays(endDate, currentDate);
+    // Handle remaining weeks as a single grouped period
+    const remainingDays = differenceInDays(endDate, weekEnd);
     if (remainingDays > 0) {
-      const weeklyPerNightRate = WEEKLY_RATE / 7; // 60 BGN per night
-      const remainingAmount = weeklyPerNightRate * remainingDays;
-
-      periods.push({
-        type: 'weekly',
-        startDate: currentDate,
-        endDate: endDate,
-        baseAmount: remainingAmount,
-        amount: remainingAmount,
-        label: `${remainingDays} night${remainingDays > 1 ? 's' : ''} at weekly rate`,
-        index: periods.length,
-        isPrepaid: false
-      });
+      const completeWeeks = Math.floor(remainingDays / 7);
+      const remainingPartialDays = remainingDays % 7;
+      
+      if (completeWeeks > 0) {
+        periods.push({
+          type: 'weekly',
+          startDate: weekEnd,
+          endDate: addDays(weekEnd, completeWeeks * 7),
+          baseAmount: WEEKLY_RATE * completeWeeks,
+          amount: WEEKLY_RATE * completeWeeks,
+          label: `${completeWeeks}x weekly periods`,
+          index: 1,
+          isPrepaid: false
+        });
+      }
+      
+      if (remainingPartialDays > 0) {
+        const weeklyPerNightRate = WEEKLY_RATE / 7;
+        periods.push({
+          type: 'weekly',
+          startDate: addDays(weekEnd, completeWeeks * 7),
+          endDate: endDate,
+          baseAmount: weeklyPerNightRate * remainingPartialDays,
+          amount: weeklyPerNightRate * remainingPartialDays,
+          label: `${remainingPartialDays} days at weekly rate`,
+          index: completeWeeks > 0 ? 2 : 1,
+          isPrepaid: false
+        });
+      }
     }
   } else if (preferredType === 'monthly' && differenceInCalendarMonths(endDate, currentDate) >= 1) {
-    // Handle complete months
-    let monthIndex = 0;
-    while (differenceInCalendarMonths(endDate, currentDate) >= 1) {
-      const monthEnd = addMonths(currentDate, 1);
-      periods.push({
-        type: 'monthly',
-        startDate: currentDate,
-        endDate: monthEnd,
-        baseAmount: MONTHLY_RATE,
-        amount: MONTHLY_RATE,
-        label: monthIndex === 0 ? 'Month 1 (Required)' : `Month ${monthIndex + 1}`,
-        index: monthIndex,
-        isPrepaid: monthIndex === 0 // First month always prepaid
-      });
-      currentDate = monthEnd;
-      monthIndex++;
-    }
+    // First month (required)
+    const monthEnd = addMonths(currentDate, 1);
+    periods.push({
+      type: 'monthly',
+      startDate: currentDate,
+      endDate: monthEnd > endDate ? endDate : monthEnd,
+      baseAmount: MONTHLY_RATE,
+      amount: MONTHLY_RATE,
+      label: '1 monthly period (Required)',
+      index: 0,
+      isPrepaid: true
+    });
 
-    // Handle remaining days for monthly plan
-    const remainingDays = differenceInDays(endDate, currentDate);
-    if (remainingDays > 0) {
-      const monthlyPerNightRate = MONTHLY_RATE / 30; // 50 BGN per night
-      const remainingAmount = monthlyPerNightRate * remainingDays;
-
-      periods.push({
-        type: 'monthly',
-        startDate: currentDate,
-        endDate: endDate,
-        baseAmount: remainingAmount,
-        amount: remainingAmount,
-        label: `${remainingDays} night${remainingDays > 1 ? 's' : ''} at monthly rate`,
-        index: periods.length,
-        isPrepaid: false
-      });
+    // Handle remaining time as a grouped period
+    if (monthEnd < endDate) {
+      const remainingMonths = differenceInCalendarMonths(endDate, monthEnd);
+      const remainingDays = differenceInDays(endDate, addMonths(monthEnd, remainingMonths));
+      
+      if (remainingMonths > 0) {
+        periods.push({
+          type: 'monthly',
+          startDate: monthEnd,
+          endDate: addMonths(monthEnd, remainingMonths),
+          baseAmount: MONTHLY_RATE * remainingMonths,
+          amount: MONTHLY_RATE * remainingMonths,
+          label: `${remainingMonths}x monthly periods`,
+          index: 1,
+          isPrepaid: false
+        });
+      }
+      
+      if (remainingDays > 0) {
+        const monthlyPerNightRate = MONTHLY_RATE / 30;
+        periods.push({
+          type: 'monthly',
+          startDate: addMonths(monthEnd, remainingMonths),
+          endDate: endDate,
+          baseAmount: monthlyPerNightRate * remainingDays,
+          amount: monthlyPerNightRate * remainingDays,
+          label: `${remainingDays} days at monthly rate`,
+          index: remainingMonths > 0 ? 2 : 1,
+          isPrepaid: false
+        });
+      }
     }
   }
 
@@ -268,12 +294,15 @@ function calculateOptimalPaymentBreakdown(
 
   const depositAmount = calculateDepositAmount(preferredType, periods.filter(p => p.isPrepaid && p.type === preferredType).length, totalDays);
 
-  // Calculate initial payment (prepaid periods + deposit)
-  const initialPayment = periods.reduce((sum, period) =>
-    sum + (period.isPrepaid ? period.amount : 0), 0) + depositAmount;
+  // Calculate initial payment (only first period as per requirement, deposit is separate)
+  const initialPayment = periods[0].amount;
 
   const totalSavings = periods.reduce((sum, period) =>
     sum + (period.baseAmount - period.amount), 0);
+
+  // Calculate the percentage savings compared to standard price
+  const standardPrice = totalDays * DAILY_RATE;
+  const savingsPercentage = ((standardPrice - totalAmount) / standardPrice) * 100;
 
   return {
     primaryType: preferredType,
@@ -282,7 +311,8 @@ function calculateOptimalPaymentBreakdown(
     depositAmount,
     initialPayment,
     totalSavings,
-    effectiveRate: totalAmount / totalDays
+    effectiveRate: totalAmount / totalDays,
+    savingsPercentage: savingsPercentage > 0 ? savingsPercentage : 0
   };
 }
 
@@ -599,23 +629,16 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                 </Tooltip>
               </div>
               <div className="space-y-2">
-                {paymentBreakdown.periods.map(period => {
-                  if (!period) return null;
-                  return (
-                    <motion.div key={period.index} className="flex justify-between text-sm" variants={itemVariants}>
-                      <span>{period.label} </span>
-                      <span>${period.amount.toLocaleString()}</span>
-                    </motion.div>
-                  );
-                })}
-                {paymentBreakdown.depositAmount > 0 && (
+                {/* Only show the first period as per requirements */}
+                {paymentBreakdown.periods.length > 0 && (
                   <motion.div className="flex justify-between text-sm" variants={itemVariants}>
-                    <span>Security Deposit (Fully Refundable)</span>
-                    <span>+${paymentBreakdown.depositAmount.toLocaleString()}</span>
+                    <span>{paymentBreakdown.periods[0].label}</span>
+                    <span>${paymentBreakdown.periods[0].amount.toLocaleString()}</span>
                   </motion.div>
                 )}
+                
                 <motion.div className="flex justify-between font-semibold text-base pt-2 border-t" variants={itemVariants}>
-                  <span>Total Initial Payment</span>
+                  <span>Initial Payment Due</span>
                   <span>${paymentBreakdown.initialPayment.toLocaleString()}</span>
                 </motion.div>
               </div>
@@ -625,19 +648,12 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                 <div className="space-y-2 text-sm text-yellow-700">
                   <p>
                     Initial payment must be received within 24 hours to guarantee availability.
-                    The security deposit is fully refundable after stay completion and property inspection.
+                    You'll only be charged for the first period of your selected plan.
                   </p>
-                  {paymentBreakdown.depositAmount === 0 ? (
-                    <p className="font-medium">
-                      No security deposit required for fully prepaid bookings.
-                    </p>
-                  ) : (
-                    <p>
-                      Security deposit can be paid in advance or guaranteed by credit card.
-                      {paymentBreakdown.periods.filter(p => p.isPrepaid).length >= 2 &&
-                        " Your deposit is reduced by 50% as you've prepaid 2 or more payment periods."}
-                    </p>
-                  )}
+                  <p>
+                    Additional periods will be billed according to the payment schedule.
+                    See the Security Deposit section for details on the fully refundable guarantee.
+                  </p>
                 </div>
               </div>
             </motion.div>
@@ -691,7 +707,7 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                   </TooltipTrigger>
                   <TooltipContent>
                     <p className="max-w-xs">
-                      Select additional periods to prepay and get progressive discounts.
+                      Prepay multiple periods to receive a discount.
                       Prepay 2+ periods for 50% off deposit, 3+ periods for no deposit!
                     </p>
                   </TooltipContent>
@@ -713,6 +729,23 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                     period
                   );
                   const discountedAmount = period.baseAmount * (1 - discount);
+                  
+                  // Format the date range for display
+                  const startDateFormat = format(period.startDate, "MMM d");
+                  const endDateFormat = format(period.endDate, "MMM d");
+                  const dateDisplay = `${startDateFormat} - ${endDateFormat}`;
+                  
+                  // Define the discount text if applicable
+                  const discountText = discount > 0 && index > 0 
+                    ? `Prepay this period to get ${(discount * 100).toFixed(0)}% discount.` 
+                    : '';
+                  
+                  // Create the payment info text
+                  const paymentInfo = index === 0 
+                    ? 'Required Initial Payment' 
+                    : isSelected 
+                      ? 'Prepaid' 
+                      : `Due by ${startDateFormat}`;
 
                   return (
                     <motion.div
@@ -721,7 +754,6 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                       variants={itemVariants}
                       initial="hidden"
                       animate="visible"
-                      layout
                     >
                       <div className="flex justify-between items-start">
                         <div className="flex items-start space-x-3">
@@ -733,34 +765,22 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                             />
                           )}
                           <div className="space-y-1">
-                            <div
-                              className="font-medium"
-                              layout
-                            >
+                            <div className="font-medium">
                               {period.label}
-                              {discount > 0 && index > 0 && (
-                                <span
-                                  className={`ml-2 text-sm ${isSelected ? 'text-green-600' : 'text-muted-foreground'}`}
-                                >
-                                  ({(discount * 100).toFixed(0)}% off if prepaid)
-                                </span>
-                              )}
                             </div>
                             <div className="text-sm text-muted-foreground">
-                              {format(period.startDate, "MMM d")} - {format(period.endDate, "MMM d")}
+                              {dateDisplay} - {paymentInfo}
                             </div>
+                            {discount > 0 && index > 0 && (
+                              <div className={`text-xs ${isSelected ? 'text-green-600' : 'text-muted-foreground'}`}>
+                                {discountText}
+                              </div>
+                            )}
                           </div>
                         </div>
-                        <div
-                          className="text-right"
-                          layout
-                        >
-                          <div
-                            className="font-medium"
-                            layout
-                          >
+                        <div className="text-right">
+                          <div className="font-medium">
                             {index === 0 ? (
-                              // First period is always at base price
                               `$${period.baseAmount.toLocaleString()}`
                             ) : (
                               <>
@@ -773,10 +793,7 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                               </>
                             )}
                           </div>
-                          <div
-                            className="text-xs text-muted-foreground"
-                            layout
-                          >
+                          <div className="text-xs text-muted-foreground">
                             {isSelected ? 'Prepaid' : `Due by ${format(period.startDate, "MMM d")}`}
                           </div>
                         </div>
@@ -785,24 +802,34 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                   );
                 })}
 
-                {/* Deposit information */}
+                {/* Separate Security Deposit section */}
                 <motion.div className="py-4 bg-primary/5 rounded-lg mt-4">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <span className="font-medium">Security Deposit</span>
-                      {paymentBreakdown.depositAmount === 0 ? (
-                        <span className="text-green-600 text-sm ml-2">
-                          (Waived - 3+ periods prepaid)
-                        </span>
-                      ) : paymentBreakdown.depositAmount < calculateDepositAmount(preferredPackageType, 0, differenceInDays(checkOut!, checkIn!)) ? (
-                        <span className="text-green-600 text-sm ml-2">
-                          (50% off - 2 periods prepaid)
-                        </span>
-                      ) : null}
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <div className="font-medium">Security Deposit</div>
+                        <div className="text-sm text-muted-foreground">
+                          Fully refundable after checkout
+                        </div>
+                        {paymentBreakdown.depositAmount === 0 ? (
+                          <div className="text-green-600 text-sm">
+                            Deposit waived for bookings with 3+ prepaid periods
+                          </div>
+                        ) : paymentBreakdown.depositAmount < calculateDepositAmount(preferredPackageType, 0, differenceInDays(checkOut!, checkIn!)) ? (
+                          <div className="text-green-600 text-sm">
+                            50% deposit discount applied (2 periods prepaid)
+                          </div>
+                        ) : null}
+                      </div>
+                      <span className="font-medium">
+                        ${paymentBreakdown.depositAmount.toLocaleString()}
+                      </span>
                     </div>
-                    <span className="font-medium">
-                      ${paymentBreakdown.depositAmount.toLocaleString()}
-                    </span>
+                    <div className="text-xs text-muted-foreground">
+                      <p>The security deposit is a fully refundable guarantee that will be returned to you 
+                      after checkout and property inspection.</p>
+                      <p>This amount is <strong>not</strong> part of your accommodation cost and is handled separately.</p>
+                    </div>
                   </div>
                 </motion.div>
               </div>
@@ -812,21 +839,41 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
               variants={itemVariants}
             >
               <div>
-                <h3 className="text-sm font-semibold mb-2">Total Stay Cost</h3>
+                <h3 className="text-sm font-semibold mb-2">Total Accommodation Cost</h3>
                 <motion.div className="p-4 bg-primary/5 rounded-lg" variants={itemVariants}>
-                  <div className="space-y-2">
-                    {paymentBreakdown.periods.map((period, index) => (
-                      <motion.div key={index} className="flex justify-between text-sm" variants={itemVariants}>
-                        <span>
-                          {period.label}
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <div className="space-y-1">
+                        <div className="font-semibold text-lg">${paymentBreakdown.totalAmount.toLocaleString()}</div>
+                        {paymentBreakdown.savingsPercentage > 0 && (
+                          <div className="text-green-600 text-sm">
+                            You save {formatPercent(paymentBreakdown.savingsPercentage)} compared to the standard rate
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-right text-sm text-muted-foreground">
+                        <div>${formatCurrency(paymentBreakdown.effectiveRate)} per night</div>
+                        <div>for {differenceInDays(checkOut!, checkIn!)} nights</div>
+                      </div>
+                    </div>
+
+                    {paymentBreakdown.totalSavings > 0 && (
+                      <div className="flex items-center justify-between p-2 bg-green-50 border border-green-100 rounded">
+                        <div className="text-green-700">
+                          <TrendingDown className="inline-block h-4 w-4 mr-1" />
+                          <span className="font-medium">Total Savings</span>
+                        </div>
+                        <span className="font-medium text-green-700">
+                          ${paymentBreakdown.totalSavings.toLocaleString()}
                         </span>
-                        <span>${period.amount.toLocaleString()}</span>
-                      </motion.div>
-                    ))}
-                    <motion.div className="flex justify-between font-semibold text-lg pt-2 border-t" variants={itemVariants}>
-                      <span>Total Accommodation Cost</span>
-                      <span>${paymentBreakdown.totalAmount.toLocaleString()}</span>
-                    </motion.div>
+                      </div>
+                    )}
+                    
+                    <div className="text-xs text-muted-foreground pt-2 border-t">
+                      <p>The initial payment required is ${formatCurrency(paymentBreakdown.initialPayment)} 
+                      for the first period based on your selected plan.</p>
+                      <p>Additional periods will be billed according to the payment schedule above.</p>
+                    </div>
                   </div>
                 </motion.div>
               </div>
@@ -838,7 +885,21 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
             >
               <Button
                 className="w-full"
-                onClick={() => setLocation(`/payment?propertyId=${property?.id}&packageType=${paymentBreakdown.primaryType}`)}
+                onClick={() => {
+                  // Build query parameters with all user preferences
+                  const queryParams = new URLSearchParams({
+                    propertyId: property?.id?.toString() || '',
+                    packageType: paymentBreakdown.primaryType,
+                    totalAmount: paymentBreakdown.totalAmount.toString(),
+                    depositAmount: paymentBreakdown.depositAmount.toString(),
+                    initialPayment: paymentBreakdown.initialPayment.toString(),
+                    prepaidPeriods: selectedPeriods.join(','),
+                    savingsPercent: paymentBreakdown.savingsPercentage.toFixed(0)
+                  });
+                  
+                  // Navigate to payment page with all parameters
+                  setLocation(`/payment?${queryParams.toString()}`);
+                }}
               >
                 Proceed to Payment
               </Button>
