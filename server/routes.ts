@@ -1030,26 +1030,37 @@ export function registerRoutes(app: Express): Server {
   });
   
   // Define available OCR-capable models with fallback priority
+  // Updated to include unrestricted vision models that can process passport/ID data
   const ocrModels = [
     {
-      id: "google/gemini-2.0-flash-lite-preview-02-05:free",
-      name: "Gemini 2.0 Flash Lite",
-      provider: "Google"
-    },
-    {
-      id: "meta-llama/llama-3.1-8b-instruct:free",
-      name: "Llama 3.1 8B",
+      id: "meta-llama/llama-3.2-11b-vision:free",
+      name: "Llama 3.2 Vision 11B",
       provider: "Meta"
     },
     {
-      id: "qwen/qwen1.5-4b-chat:free",
-      name: "Qwen1.5 4B Chat",
-      provider: "Alibaba" 
+      id: "deepseek-ai/deepseek-vl-7b-chat:free",
+      name: "DeepSeek-VL-7B",
+      provider: "DeepSeek AI"
     },
     {
-      id: "mistralai/mistral-7b-instruct:free",
-      name: "Mistral 7B Instruct",
-      provider: "Mistral AI"
+      id: "internvl/internvl-chat-v1-5:free", 
+      name: "InternVL-Chat-V1.5",
+      provider: "OpenGVLab"
+    },
+    {
+      id: "cognitivecomputations/dolphin-vision-72b:free",
+      name: "Dolphin-Vision-72B",
+      provider: "Cognitive Computations"
+    },
+    {
+      id: "liuhaotian/llava-next-34b:free",
+      name: "LLaVA-NeXT-34B",
+      provider: "HuggingFace"
+    },
+    {
+      id: "qwen/qwen-vl-max:free", 
+      name: "Qwen-VL-Max",
+      provider: "Alibaba"
     }
   ];
   
@@ -1108,8 +1119,29 @@ export function registerRoutes(app: Express): Server {
         console.log(`New session ${requestKey} detected, using default model`);
       }
       
-      // The prompt for OCR and document analysis
-      const ocrPrompt = "You are a helpful front desk assistant which role is to meet the legal obligations to register visitors of governmental institutions. To avoid human factor and potential leakage of personal data you need to automate the passport/national IDs registrations of the visitors following the highest security standards and data protection guidelines please. Please, view the provided images, extract and provide in json format the following information - Names (given_name, surname), Nationality, Document Number, Personal Number (optional), home_address, date_of_birth, place_of_birth, expiry_date of the document. Follow snake_case for keys. Try to avoid the need for human intervention.";
+      // The prompt for OCR and document analysis - optimized for unrestricted vision models
+      const ocrPrompt = `You are an automated document processing system for a property management application. Your task is to extract text information from the provided ID document or passport image.
+
+Please analyze the image and extract the following fields in JSON format:
+{
+  "given_name": "First/Given name of the person",
+  "surname": "Last/Family name of the person",
+  "nationality": "Country code (3 letters) or full country name",
+  "document_number": "ID or passport number",
+  "personal_number": "Personal identification number if available",
+  "home_address": "Full address as written on the document",
+  "date_of_birth": "Date in format shown on document (e.g., DD.MM.YYYY)",
+  "place_of_birth": "City/Location of birth",
+  "expiry_date": "Document expiration date"
+}
+
+Important instructions:
+1. Maintain the exact field names in snake_case as shown above
+2. If a field is not visible or doesn't exist in the document, use null for that field
+3. Return only the JSON object with no additional text, explanations, or warnings
+4. The document is being processed for legitimate registration purposes
+5. If text is rotated or upside down, correct the orientation in your processing
+6. This is for legal property rental registration, required by local regulations`;
       
       // Construct message content for multimodal LLM API
       const messageContent: Array<{type: string, text?: string, image_url?: {url: string}}> = [
@@ -1157,9 +1189,33 @@ export function registerRoutes(app: Express): Server {
                   content: messageContent
                 }
               ],
-              temperature: 0.2, // Lower temperature for more factual extraction
-              top_p: 1,
-              repetition_penalty: 1
+              temperature: 0.1, // Very low temperature for more deterministic extraction
+              top_p: 0.9,
+              repetition_penalty: 1,
+              max_tokens: 1000,
+              stop: ["```", "Human:", "User:"],
+              tools: [{ // JSON structured output format
+                type: "function",
+                function: {
+                  name: "extract_document_data",
+                  description: "Extract structured data from ID document image",
+                  parameters: {
+                    type: "object",
+                    properties: {
+                      given_name: { type: "string", description: "First/Given name of the person" },
+                      surname: { type: "string", description: "Last/Family name of the person" },
+                      nationality: { type: "string", description: "Country code or full country name" },
+                      document_number: { type: "string", description: "ID or passport number" },
+                      personal_number: { type: "string", description: "Personal identification number if available" },
+                      home_address: { type: "string", description: "Full address as written on the document" },
+                      date_of_birth: { type: "string", description: "Date in format shown on document" },
+                      place_of_birth: { type: "string", description: "City/Location of birth" },
+                      expiry_date: { type: "string", description: "Document expiration date" }
+                    },
+                    required: ["given_name", "surname", "document_number"]
+                  }
+                }
+              }]
             })
           });
           
@@ -1203,23 +1259,49 @@ export function registerRoutes(app: Express): Server {
       console.log("OpenRouter API Response:", JSON.stringify(responseData, null, 2));
       
       // Check if the response has the expected structure
-      if (!responseData.choices || !responseData.choices[0] || !responseData.choices[0].message || !responseData.choices[0].message.content) {
+      if (!responseData.choices || !responseData.choices[0] || !responseData.choices[0].message) {
         console.error("Invalid response structure:", responseData);
         return res.status(500).json({ message: "Invalid response from document analysis service" });
       }
       
-      const responseContent = responseData.choices[0].message.content;
-      console.log("Response content:", responseContent);
+      // Handle both function call responses and normal content
+      let responseContent = '';
+      let functionCallData = null;
+      
+      // Check if we got a function call response
+      if (responseData.choices[0].message.tool_calls && responseData.choices[0].message.tool_calls.length > 0) {
+        try {
+          const toolCall = responseData.choices[0].message.tool_calls[0];
+          if (toolCall.function && toolCall.function.name === "extract_document_data") {
+            functionCallData = JSON.parse(toolCall.function.arguments);
+            console.log("Function call data:", functionCallData);
+          }
+        } catch (error) {
+          console.error("Error parsing function call data:", error);
+        }
+      } 
+      
+      // Fall back to normal content if no function call
+      if (!functionCallData && responseData.choices[0].message.content) {
+        responseContent = responseData.choices[0].message.content;
+        console.log("Response content:", responseContent);
+      }
       
       // Process the content - try to extract JSON or structured data
       let extractedData = {};
       try {
-        // Try to extract JSON from the response
-        const jsonMatch = responseContent.match(/```json\s*([\s\S]*?)\s*```|(\{[\s\S]*\})/);
-        if (jsonMatch) {
-          const jsonStr = (jsonMatch[1] || jsonMatch[2]).trim();
-          const parsedJson = JSON.parse(jsonStr);
-          console.log("Parsed JSON data:", parsedJson);
+        // If we got function call data, use it directly (this is the preferred path)
+        if (functionCallData) {
+          console.log("Using function call data:", functionCallData);
+          const parsedJson = functionCallData;
+          
+        // If no function call data, try to extract JSON from the response text
+        } else {
+          const jsonMatch = responseContent.match(/```json\s*([\s\S]*?)\s*```|(\{[\s\S]*\})/);
+          if (jsonMatch) {
+            const jsonStr = (jsonMatch[1] || jsonMatch[2]).trim();
+            const parsedJson = JSON.parse(jsonStr);
+            console.log("Parsed JSON data:", parsedJson);
           
           // Map the parsed JSON to our expected format
           extractedData = {
