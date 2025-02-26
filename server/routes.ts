@@ -1029,7 +1029,7 @@ export function registerRoutes(app: Express): Server {
     }
   });
   
-  // Define available OCR-capable models with fallback priority - using only Google Gemini models
+  // Define available OCR-capable models with fallback priority - using only the specified Google Gemini models
   const ocrModels = [
     {
       id: "google/gemini-flash-1.5:free",
@@ -1039,11 +1039,6 @@ export function registerRoutes(app: Express): Server {
     {
       id: "google/gemini-2.0-pro-exp-02-05:free",
       name: "Gemini 2.0 Pro",
-      provider: "Google"
-    },
-    {
-      id: "google/gemini-2.0-flash-lite-preview-02-05:free",
-      name: "Gemini 2.0 Flash Lite",
       provider: "Google"
     }
   ];
@@ -1095,23 +1090,23 @@ export function registerRoutes(app: Express): Server {
         userData.count += 1;
         userData.lastRequestTime = new Date();
         
-        // If this is a repeat request, rotate to the next model
-        if (userData.count > 1) {
-          startingModelIndex = (userData.lastModelIndex + 1) % ocrModels.length;
-          console.log(`Session ${requestKey} detected, rotating from model ${userData.lastModelIndex} to ${startingModelIndex}`);
-        } else {
-          startingModelIndex = userData.lastModelIndex;
-        }
+        // Always rotate models on repeat requests in the same session
+        // This helps in cases where a previous model might have produced poor results
+        startingModelIndex = (userData.lastModelIndex + 1) % ocrModels.length;
+        console.log(`Session ${requestKey} detected (request #${userData.count}), rotating from model ${userData.lastModelIndex} to ${startingModelIndex}`);
         
+        // Update the session data with the new model index
+        userData.lastModelIndex = startingModelIndex;
         recentOcrRequests.set(requestKey, userData);
       } else {
-        // First request from this session
+        // First request from this session - start with the first model
+        startingModelIndex = 0;
         recentOcrRequests.set(requestKey, {
           count: 1,
-          lastModelIndex: 0,
+          lastModelIndex: startingModelIndex,
           lastRequestTime: new Date()
         });
-        console.log(`New session ${requestKey} detected, using default model`);
+        console.log(`New session ${requestKey} detected, using model ${ocrModels[startingModelIndex].name}`);
       }
       
       // The prompt for OCR and document analysis
@@ -1183,6 +1178,9 @@ Do not add ANY commentary, instructions, or explanations to your response - ONLY
       let lastError = null;
       let attemptedModels = 0;
       
+      // Track the failed model to update session data
+      let failedModelIndex = -1;
+      
       while (attemptedModels < ocrModels.length && !response) {
         // Make sure the model index wraps around if needed
         currentModelIndex = (startingModelIndex + attemptedModels) % ocrModels.length;
@@ -1214,6 +1212,15 @@ Do not add ANY commentary, instructions, or explanations to your response - ONLY
           if (apiResponse.ok) {
             response = apiResponse;
             console.log(`Successfully used ${currentModel.name} for OCR analysis`);
+            
+            // If we previously had a failure with the first model, update the session data
+            // to use this successful model next time
+            if (failedModelIndex !== -1 && recentOcrRequests.has(requestKey)) {
+              const userData = recentOcrRequests.get(requestKey)!;
+              userData.lastModelIndex = currentModelIndex;
+              recentOcrRequests.set(requestKey, userData);
+              console.log(`Updated session ${requestKey} to use successful model ${currentModel.name} next time`);
+            }
           } else {
             // Log the error and try the next model
             const errorData = await apiResponse.json();
@@ -1223,7 +1230,13 @@ Do not add ANY commentary, instructions, or explanations to your response - ONLY
               details: errorData
             };
             console.warn(`Model ${currentModel.name} failed with status ${apiResponse.status}:`, errorData);
-            currentModelIndex++;
+            
+            // Record which model failed
+            if (failedModelIndex === -1) {
+              failedModelIndex = currentModelIndex;
+            }
+            
+            attemptedModels++;
           }
         } catch (error) {
           console.error(`Error with model ${currentModel.name}:`, error);
@@ -1231,7 +1244,13 @@ Do not add ANY commentary, instructions, or explanations to your response - ONLY
             model: currentModel.id,
             error: error instanceof Error ? error.message : String(error)
           };
-          currentModelIndex++;
+          
+          // Record which model failed
+          if (failedModelIndex === -1) {
+            failedModelIndex = currentModelIndex;
+          }
+          
+          attemptedModels++;
         }
       }
       
