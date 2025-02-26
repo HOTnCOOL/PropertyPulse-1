@@ -11,7 +11,18 @@ import {
   getDate,
   addDays
 } from "date-fns";
-import { AlertTriangle, Info, TrendingDown, AlertCircle, Calendar as CalendarIcon, Check } from "lucide-react";
+import { 
+  AlertTriangle, 
+  Info, 
+  TrendingDown, 
+  AlertCircle, 
+  Calendar as CalendarIcon, 
+  Check,
+  ArrowUp,
+  ArrowDown,
+  ChevronsUp,
+  ChevronsDown
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { Property } from "@db/schema";
@@ -541,15 +552,41 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
         // When deselecting, remove this and all subsequent periods
         return prev.filter(i => i < index);
       } else {
-        return [...prev, index].sort();
+        return [...prev, index].sort((a, b) => a - b);
       }
     });
+  };
+
+  // Function to handle clicking the up arrow to prepay the next period
+  const handlePrepayNext = () => {
+    if (!paymentBreakdown) return;
+    
+    const nextIndex = selectedPeriods.length > 0 
+      ? Math.max(...selectedPeriods) + 1 
+      : 1;
+    
+    // Check if we have reached the end of available periods
+    if (nextIndex >= paymentBreakdown.periods.length) return;
+    
+    setSelectedPeriods(prev => [...prev, nextIndex].sort((a, b) => a - b));
+  };
+
+  // Function to handle clicking the down arrow to remove the last prepaid period
+  const handleRemoveLastPrepaid = () => {
+    if (!paymentBreakdown || selectedPeriods.length <= 1) return; // Always keep the first period
+    
+    const lastSelected = Math.max(...selectedPeriods);
+    if (lastSelected === 0) return; // Don't remove the required period
+    
+    setSelectedPeriods(prev => prev.filter(i => i !== lastSelected));
   };
 
   const handlePrepayAll = () => {
     setPrepayAll(!prepayAll);
     if (!prepayAll) {
       setSelectedPeriods(paymentBreakdown?.periods.map((_, i) => i) || []);
+    } else {
+      setSelectedPeriods([0]); // Reset to just the required period
     }
   };
 
