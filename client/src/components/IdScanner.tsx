@@ -151,15 +151,26 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
       return value || ''; // Return as is if no slash or return empty string if undefined
     };
     
-    // Extract names - handle the Gemini format
-    if (data.surname || data.given_names) {
-      // Handle the new Gemini format with surname and given_names
-      if (data.given_names) {
+    // Extract names - handle the Gemini format with nested structures
+    if (data.names && (data.names.surname || data.names.given_names)) {
+      // Handle nested names object
+      if (data.names.given_names) {
         // Extract first name from given_names (take the Latin part)
-        const givenNames = extractLatinPart(data.given_names);
+        const givenNames = extractLatinPart(data.names.given_names);
         // Split by spaces to get individual parts, then take first part
         const nameParts = givenNames.split(' ');
         result.firstName = nameParts[0]; // First part of given_names
+      }
+      
+      if (data.names.surname) {
+        result.lastName = extractLatinPart(data.names.surname);
+      }
+    } else if (data.surname || data.given_names) {
+      // Handle the direct format (not nested)
+      if (data.given_names) {
+        const givenNames = extractLatinPart(data.given_names);
+        const nameParts = givenNames.split(' ');
+        result.firstName = nameParts[0];
       }
       
       if (data.surname) {
@@ -215,7 +226,9 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
     }
     
     // Extract address
-    if (data.address) {
+    if (data.home_address) {
+      result.homeAddress = data.home_address;
+    } else if (data.address) {
       result.homeAddress = data.address;
     } else if (data.homeAddress || data['home address']) {
       result.homeAddress = data.homeAddress || data['home address'];
