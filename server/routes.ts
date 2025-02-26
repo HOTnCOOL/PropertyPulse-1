@@ -1079,6 +1079,20 @@ export function registerRoutes(app: Express): Server {
         return res.status(400).json({ message: "No image URLs provided" });
       }
       
+      // Additional validation - ensure all URLs are valid strings and seem to point to actual images
+      const validImageUrls = imageUrls.filter(url => 
+        typeof url === 'string' && 
+        url.trim() !== '' && 
+        (url.includes('uploads/id-images/') || url.startsWith('data:image/'))
+      );
+      
+      if (validImageUrls.length === 0) {
+        return res.status(400).json({ message: "No valid image URLs provided" });
+      }
+      
+      // Use only valid URLs for processing
+      imageUrls = validImageUrls;
+      
       // Determine a unique identifier for this request - either the provided sessionId, IP, or a random value
       const requestKey = sessionId || req.ip || `session-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
       let startingModelIndex = 0;
@@ -1109,23 +1123,14 @@ export function registerRoutes(app: Express): Server {
       }
       
       // The prompt for OCR and document analysis
-      const ocrPrompt = `You are an advanced OCR system designed to extract information from ID documents and passports.
+      const ocrPrompt = `You are an OCR system that extracts personal information from ID documents and passports.
 
-Your task is to carefully analyze the provided images and extract the following information:
-1. firstName - The person's first/given name
-2. lastName - The person's last/surname
-3. dateOfBirth - The person's date of birth (in format YYYY-MM-DD if possible)
-4. placeOfBirth - The place where the person was born
-5. idNumber - The document number or ID number
-6. personalNumber - Any personal identification number (if available)
-7. homeAddress - The person's home address
-8. nationality - The nationality of the document holder
-9. idType - Whether it's a "passport" or "national_id"
-10. expiryDate - The document's expiration date (in format YYYY-MM-DD if possible)
+## GOAL
+Extract ALL text from the ID document images and create a structured output.
 
-Respond ONLY with a JSON object containing these exact field names. If you can't determine a particular field, use null for that field. Do not include any explanations or text outside of the JSON object.
+## FORMAT
+Return EXACTLY this JSON with real values (use null for missing fields):
 
-Example response format:
 {
   "firstName": "John",
   "lastName": "Smith",
@@ -1137,7 +1142,30 @@ Example response format:
   "nationality": "British",
   "idType": "passport",
   "expiryDate": "2030-01-15"
-}`;
+}
+
+## FIELD GUIDE
+- firstName: First name/given name (appear after "Name:", "Given name:", etc.)
+- lastName: Last name/surname (appear after "Surname:", "Family name:", etc.)
+- dateOfBirth: DOB in YYYY-MM-DD format if possible (look for "Date of birth:", "DOB:", etc.)
+- placeOfBirth: City or country of birth (look for "Place of birth:", "Born in:", etc.)
+- idNumber: Document number (look for "Document No:", "ID number:", etc.)
+- personalNumber: Personal ID number (look for "Personal No:", "PIN:", etc.)
+- homeAddress: Full street address (look for "Address:", "Residence:", etc.)
+- nationality: Country name (look for "Nationality:", "Citizenship:", etc.)
+- idType: Either "passport" or "national_id" based on document type
+- expiryDate: Expiration date in YYYY-MM-DD format (look for "Expiry date:", "Valid until:", etc.)
+
+## CRITICAL INSTRUCTIONS
+1. EXTRACT ALL visible text first, then map to appropriate fields
+2. If text appears in multiple languages, use the Latin/English version
+3. For missing information, use null (not empty string)
+4. Return ONLY the JSON object - no explanations or other text
+5. The JSON must be properly formatted
+6. Read both sides of the document if visible
+7. Look for hidden/watermarked text that might contain data
+
+Do not add ANY commentary, instructions, or explanations to your response - ONLY the JSON.`;
       
       // Construct message content for multimodal LLM API
       const messageContent: Array<{type: string, text?: string, image_url?: {url: string}}> = [
@@ -1242,89 +1270,88 @@ Example response format:
       // Process the content - try to extract JSON or structured data
       let extractedData = {};
       try {
-        // Try to extract JSON from the response
-        const jsonMatch = responseContent.match(/```json\s*([\s\S]*?)\s*```|(\{[\s\S]*\})/);
-        if (jsonMatch) {
-          const jsonStr = (jsonMatch[1] || jsonMatch[2]).trim();
-          const parsedJson = JSON.parse(jsonStr);
-          console.log("Parsed JSON data:", parsedJson);
+        // First, try to parse the entire response as JSON directly
+        try {
+          const parsedJson = JSON.parse(responseContent);
+          console.log("Direct JSON parse successful:", parsedJson);
           
-          // Map the parsed JSON to our expected format
+          // Map fields directly - since we've specified the exact format in the prompt
           extractedData = {
-            // Handle different name formats
-            firstName: parsedJson.names?.given_name || parsedJson.names?.first_name || 
-                      parsedJson.names?.firstName || parsedJson.first_name || 
-                      parsedJson.firstName || parsedJson.given_name || null,
-            
-            lastName: parsedJson.names?.surname || parsedJson.names?.last_name || 
-                     parsedJson.names?.lastName || parsedJson.last_name || 
-                     parsedJson.lastName || parsedJson.surname || null,
-            
-            // Combine nested address fields if they exist
-            homeAddress: typeof parsedJson.home_address === 'object' ? 
-              Object.values(parsedJson.home_address).filter(Boolean).join(', ') : 
-              (parsedJson.home_address || parsedJson.homeAddress || parsedJson.address || null),
-            
-            // Document number
-            documentNumber: parsedJson.document_number || parsedJson.documentNumber || 
-                           parsedJson.id_number || parsedJson.idNumber || null,
-            
-            // Personal number variations
-            personalNumber: parsedJson.personal_number || parsedJson.personalNumber || 
-                           parsedJson.personal_id || parsedJson.personalId || 
-                           parsedJson.pid || parsedJson.егн || null,
-            
-            // Date of birth
-            dateOfBirth: parsedJson.date_of_birth || parsedJson.dateOfBirth || 
-                        parsedJson.birth_date || parsedJson.birthDate || parsedJson.dob || null,
-            
-            // Place of birth
-            placeOfBirth: parsedJson.place_of_birth || parsedJson.placeOfBirth || 
-                         parsedJson.birth_place || parsedJson.birthPlace || parsedJson.pob || null,
-            
-            // Nationality
+            firstName: parsedJson.firstName || null,
+            lastName: parsedJson.lastName || null,
+            dateOfBirth: parsedJson.dateOfBirth || null,
+            placeOfBirth: parsedJson.placeOfBirth || null, 
+            idNumber: parsedJson.idNumber || null,
+            personalNumber: parsedJson.personalNumber || null,
+            homeAddress: parsedJson.homeAddress || null,
             nationality: parsedJson.nationality || null,
+            idType: parsedJson.idType || 'national_id',
+            expiryDate: parsedJson.expiryDate || null
+          };
+          
+          console.log("Extracted direct JSON data:", extractedData);
+        } catch (jsonError) {
+          console.log("Direct JSON parse failed, trying to extract JSON from text:", jsonError);
+          
+          // Try to extract JSON from the response if it's wrapped in text or markdown code blocks
+          const jsonMatch = responseContent.match(/```(?:json)?\s*([\s\S]*?)\s*```|(\{[\s\S]*\})/);
+          if (jsonMatch) {
+            const jsonStr = (jsonMatch[1] || jsonMatch[2]).trim();
+            try {
+              const parsedJson = JSON.parse(jsonStr);
+              console.log("Extracted JSON data:", parsedJson);
+              
+              // Map the parsed JSON to our expected format
+              extractedData = {
+                firstName: parsedJson.firstName || parsedJson.first_name || parsedJson.given_name || null,
+                lastName: parsedJson.lastName || parsedJson.last_name || parsedJson.surname || null,
+                dateOfBirth: parsedJson.dateOfBirth || parsedJson.date_of_birth || parsedJson.dob || null,
+                placeOfBirth: parsedJson.placeOfBirth || parsedJson.place_of_birth || null,
+                idNumber: parsedJson.idNumber || parsedJson.id_number || parsedJson.documentNumber || parsedJson.document_number || null,
+                personalNumber: parsedJson.personalNumber || parsedJson.personal_number || null,
+                homeAddress: parsedJson.homeAddress || parsedJson.home_address || parsedJson.address || null,
+                nationality: parsedJson.nationality || null,
+                idType: parsedJson.idType || parsedJson.id_type || parsedJson.document_type || 'national_id',
+                expiryDate: parsedJson.expiryDate || parsedJson.expiry_date || parsedJson.expiration_date || null
+              };
+              
+              console.log("Normalized extracted JSON data:", extractedData);
+            } catch (nestedJsonError) {
+              console.error("Failed to parse extracted JSON:", nestedJsonError);
+              throw new Error("Failed to parse extracted JSON");
+            }
+          } else {
+            // If JSON extraction fails, try to structure the data using regex
+            console.log("No JSON found in response, using regex patterns");
+            const nameMatches = {
+              firstName: responseContent.match(/(?:Given Name|First Name|First name|Name|Given name):\s*([^\n,]+)/i),
+              lastName: responseContent.match(/(?:Surname|Last Name|Last name|Family name):\s*([^\n,]+)/i)
+            };
             
-            // ID type
-            idType: parsedJson.document_type || parsedJson.documentType || 
-                    parsedJson.id_type || parsedJson.idType || 'national_id',
+            const nationalityMatch = responseContent.match(/(?:Nationality|Country|Citizenship):\s*([^\n,]+)/i);
+            const documentNumberMatch = responseContent.match(/(?:Document|ID|Passport|Card) (?:Number|No|#):\s*([^\n,]+)/i);
+            const personalNumberMatch = responseContent.match(/(?:Personal(?:\s+Identification)?\s+Number|PIN|PIC|EGN|ЕГН|National ID):\s*([^\n,]+)/i);
+            const addressMatch = responseContent.match(/(?:(?:Home|Permanent|Residential)\s+)?Address:\s*([^\n]+?)(?:$|\n)/i);
+            const dobMatch = responseContent.match(/(?:Date of Birth|DOB|Birth Date|Born on):\s*([^\n,]+)/i);
+            const pobMatch = responseContent.match(/(?:Place of Birth|POB|Birth Place|Born in):\s*([^\n,]+)/i);
+            const expiryMatch = responseContent.match(/(?:Expiry Date|Valid Until|Expiration|Valid To|Expires):\s*([^\n,]+)/i);
+            const idTypeMatch = responseContent.match(/(?:Document Type|ID Type|Card Type):\s*([^\n,]+)/i);
             
-            // Expiry date
-            expiryDate: parsedJson.expiry_date || parsedJson.expiryDate || 
-                       parsedJson.expiration_date || parsedJson.expirationDate || null
-          };
-          
-          console.log("Normalized document data:", extractedData);
-        } else {
-          // If JSON extraction fails, try to structure the data ourselves using regex
-          const nameMatches = {
-            firstName: responseContent.match(/(?:Given Name|First Name|First name|Name|Given name):\s*([^\n,]+)/i),
-            lastName: responseContent.match(/(?:Surname|Last Name|Last name|Family name):\s*([^\n,]+)/i)
-          };
-          
-          const nationalityMatch = responseContent.match(/(?:Nationality|Country|Citizenship):\s*([^\n,]+)/i);
-          const documentNumberMatch = responseContent.match(/(?:Document|ID|Passport|Card) (?:Number|No|#):\s*([^\n,]+)/i);
-          const personalNumberMatch = responseContent.match(/(?:Personal(?:\s+Identification)?\s+Number|PIN|PIC|EGN|ЕГН|National ID):\s*([^\n,]+)/i);
-          const addressMatch = responseContent.match(/(?:(?:Home|Permanent|Residential)\s+)?Address:\s*([^\n]+?)(?:$|\n)/i);
-          const dobMatch = responseContent.match(/(?:Date of Birth|DOB|Birth Date|Born on):\s*([^\n,]+)/i);
-          const pobMatch = responseContent.match(/(?:Place of Birth|POB|Birth Place|Born in):\s*([^\n,]+)/i);
-          const expiryMatch = responseContent.match(/(?:Expiry Date|Valid Until|Expiration|Valid To|Expires):\s*([^\n,]+)/i);
-          const idTypeMatch = responseContent.match(/(?:Document Type|ID Type|Card Type):\s*([^\n,]+)/i);
-          
-          extractedData = {
-            firstName: nameMatches.firstName ? nameMatches.firstName[1].trim() : null,
-            lastName: nameMatches.lastName ? nameMatches.lastName[1].trim() : null,
-            nationality: nationalityMatch ? nationalityMatch[1].trim() : null,
-            documentNumber: documentNumberMatch ? documentNumberMatch[1].trim() : null,
-            personalNumber: personalNumberMatch ? personalNumberMatch[1].trim() : null,
-            homeAddress: addressMatch ? addressMatch[1].trim() : null,
-            dateOfBirth: dobMatch ? dobMatch[1].trim() : null,
-            placeOfBirth: pobMatch ? pobMatch[1].trim() : null,
-            expiryDate: expiryMatch ? expiryMatch[1].trim() : null,
-            idType: idTypeMatch ? idTypeMatch[1].trim().toLowerCase() : 'national_id'
-          };
-          
-          console.log("Structured data from response text:", extractedData);
+            extractedData = {
+              firstName: nameMatches.firstName ? nameMatches.firstName[1].trim() : null,
+              lastName: nameMatches.lastName ? nameMatches.lastName[1].trim() : null,
+              nationality: nationalityMatch ? nationalityMatch[1].trim() : null,
+              idNumber: documentNumberMatch ? documentNumberMatch[1].trim() : null,
+              personalNumber: personalNumberMatch ? personalNumberMatch[1].trim() : null,
+              homeAddress: addressMatch ? addressMatch[1].trim() : null,
+              dateOfBirth: dobMatch ? dobMatch[1].trim() : null,
+              placeOfBirth: pobMatch ? pobMatch[1].trim() : null,
+              expiryDate: expiryMatch ? expiryMatch[1].trim() : null,
+              idType: idTypeMatch ? idTypeMatch[1].trim().toLowerCase() : 'national_id'
+            };
+            
+            console.log("Structured data from regex patterns:", extractedData);
+          }
         }
       } catch (error) {
         console.error("Error parsing LLM response:", error);
