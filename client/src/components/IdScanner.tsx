@@ -125,6 +125,8 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
 
   // Process the data extracted from Gemini API
   const processExtractedData = (data: any) => {
+    console.log('Processing extracted data:', data);
+    
     // Initialize with empty values
     const result: Record<string, string | undefined> = {
       firstName: undefined,
@@ -139,8 +141,31 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
       expiryDate: undefined
     };
     
-    // Extract names
-    if (data.Names) {
+    // Helper function to extract Latin part from dual-language fields
+    const extractLatinPart = (value: string): string => {
+      // If the value contains a slash, take the part after the slash (Latin alphabet)
+      if (value && value.includes('/')) {
+        const parts = value.split('/');
+        return parts[parts.length - 1]; // Return the last part (Latin)
+      }
+      return value || ''; // Return as is if no slash or return empty string if undefined
+    };
+    
+    // Extract names - handle the Gemini format
+    if (data.surname || data.given_names) {
+      // Handle the new Gemini format with surname and given_names
+      if (data.given_names) {
+        // Extract first name from given_names (take the Latin part)
+        const givenNames = extractLatinPart(data.given_names);
+        // Split by spaces to get individual parts, then take first part
+        const nameParts = givenNames.split(' ');
+        result.firstName = nameParts[0]; // First part of given_names
+      }
+      
+      if (data.surname) {
+        result.lastName = extractLatinPart(data.surname);
+      }
+    } else if (data.Names) {
       const names = data.Names.split(' ');
       if (names.length >= 2) {
         result.firstName = names[0];
@@ -162,48 +187,58 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
     }
     
     // Extract date of birth
-    if (data.dateOfBirth || data['date of birth']) {
+    if (data.date_of_birth) {
+      result.dateOfBirth = data.date_of_birth;
+    } else if (data.dateOfBirth || data['date of birth']) {
       result.dateOfBirth = data.dateOfBirth || data['date of birth'];
     }
     
     // Extract place of birth
-    if (data.placeOfBirth || data['place of birth']) {
+    if (data.place_of_birth) {
+      result.placeOfBirth = extractLatinPart(data.place_of_birth);
+    } else if (data.placeOfBirth || data['place of birth']) {
       result.placeOfBirth = data.placeOfBirth || data['place of birth'];
     }
     
     // Extract ID number
-    if (data.documentNumber || data['Document Number']) {
+    if (data.document_number) {
+      result.idNumber = data.document_number;
+    } else if (data.documentNumber || data['Document Number']) {
       result.idNumber = data.documentNumber || data['Document Number'];
     }
     
     // Extract Personal Number
-    if (data.personalNumber || data['Personal Number']) {
+    if (data.personal_number) {
+      result.personalNumber = data.personal_number;
+    } else if (data.personalNumber || data['Personal Number']) {
       result.personalNumber = data.personalNumber || data['Personal Number'];
     }
     
     // Extract address
-    if (data.homeAddress || data['home address']) {
+    if (data.address) {
+      result.homeAddress = data.address;
+    } else if (data.homeAddress || data['home address']) {
       result.homeAddress = data.homeAddress || data['home address'];
     }
     
     // Extract nationality
-    if (data.nationality || data.Nationality) {
-      result.nationality = data.nationality || data.Nationality;
+    if (data.nationality) {
+      result.nationality = extractLatinPart(data.nationality);
+    } else if (data.Nationality) {
+      result.nationality = data.Nationality;
     }
     
-    // Extract ID type
-    const docType = data.documentType || data.idType || '';
-    if (docType.toLowerCase().includes('passport')) {
-      result.idType = 'passport';
-    } else {
-      result.idType = 'national_id';
-    }
+    // Always set ID type to national_id by default unless explicitly passport
+    result.idType = 'national_id';
     
     // Extract expiry date
-    if (data.expiryDate || data['expiry date']) {
-      result.expiryDate = data.expiryDate || data['expiry date'];
+    if (data.date_of_expiry) {
+      result.expiryDate = data.date_of_expiry;
+    } else if (data.expiryDate || data['expiry date'] || data['Expiry Date']) {
+      result.expiryDate = data.expiryDate || data['expiry date'] || data['Expiry Date'];
     }
     
+    console.log('Processed data for form:', result);
     return result;
   };
 
