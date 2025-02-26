@@ -1078,13 +1078,26 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                                 {paymentInfo}
                               </span>
                             </div>
-                            {discount > 0 && index > 0 && (
-                              <div className={`text-xs flex items-center gap-1 ${
-                                isSelected ? 'text-green-600 font-medium' : 'text-muted-foreground'
-                              }`}>
-                                <TrendingDown className="h-3 w-3" />
-                                {discountText}
-                              </div>
+                            {index > 0 && (
+                              <>
+                                {isSelected && discount > 0 ? (
+                                  <div className="text-xs flex items-center gap-1 text-green-600 font-medium">
+                                    <TrendingDown className="h-3 w-3" />
+                                    {discountText}
+                                  </div>
+                                ) : !isSelected && (
+                                  <div className="text-xs flex items-center gap-1 text-amber-600">
+                                    <TrendingDown className="h-3 w-3" />
+                                    <span className="flex items-center">
+                                      {index === 1 ? "5% discount available" : 
+                                       index === 2 ? "10% discount available" : 
+                                       index === 3 ? "15% discount available" : 
+                                                    "20% discount available"}
+                                      <ArrowUp className="h-3 w-3 ml-1" />
+                                    </span>
+                                  </div>
+                                )}
+                              </>
                             )}
                           </div>
                         </div>
@@ -1145,12 +1158,24 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                                 <span className="text-primary">${period.baseAmount.toLocaleString()}</span>
                               ) : (
                                 <>
-                                  <span className={`${isSelected ? 'text-muted-foreground line-through' : ''} mr-2`}>
-                                    ${period.baseAmount.toLocaleString()}
-                                  </span>
-                                  <span className={isSelected ? 'text-green-600' : 'text-muted-foreground'}>
-                                    ${discountedAmount.toLocaleString()}
-                                  </span>
+                                  {isSelected ? (
+                                    <>
+                                      <span className="text-green-600">
+                                        ${discountedAmount.toLocaleString()}
+                                      </span>
+                                      <span className="text-muted-foreground line-through text-xs ml-1">
+                                        ${period.baseAmount.toLocaleString()}
+                                      </span>
+                                      <span className="ml-1 inline-flex items-center text-xs font-medium text-green-600">
+                                        <Percent className="h-3 w-3 mr-0.5" />
+                                        {(discount * 100).toFixed(0)}%
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <span className="text-muted-foreground">
+                                      ${period.baseAmount.toLocaleString()}
+                                    </span>
+                                  )}
                                 </>
                               )}
                             </div>
