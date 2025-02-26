@@ -44,7 +44,7 @@ interface PaymentEstimatorProps {
   checkOut?: Date;
 }
 
-// Update the discount calculation function
+// Updated discount calculation function with progressive discounts (5% to 20%)
 function calculateDiscount(
   periodIndex: number, 
   selectedPeriods: number[],
@@ -62,16 +62,24 @@ function calculateDiscount(
   if (!selectedPeriods.includes(periodIndex)) return 0;
   
   if (discountType === 'progressive') {
-    // Progressive discount rates based on period index
-    // periodIndex 1 (2nd period) = 5%, 2 (3rd period) = 10%, 3 = 15%, 4+ = 20%
-    const discountRates = [0, 0.05, 0.10, 0.15, 0.20]; // First rate is for index 0, not used
+    // Calculate the prepaid period number (1-based)
+    // This is different from the period index - it's the position in the series of prepaid periods
+    // Sort selected periods to ensure correct order
+    const sortedPrepaidPeriods = [...selectedPeriods].sort((a, b) => a - b);
+    // Find position of this period in the prepaid periods (excluding the first required period)
+    const prepaidPosition = sortedPrepaidPeriods.filter(p => p > 0).indexOf(periodIndex) + 1;
     
-    // Use period index to determine discount rate, cap at 20% for 5th and above
-    const discountRate = periodIndex >= discountRates.length ? 0.20 : discountRates[periodIndex];
-    
-    return discountRate;
+    // Progressive discounts: 
+    // 1st additional prepaid (2nd period): 5%
+    // 2nd additional prepaid (3rd period): 10%
+    // 3rd additional prepaid (4th period): 15%
+    // 4th+ additional prepaid (5th+ period): 20%
+    if (prepaidPosition === 1) return 0.05;
+    if (prepaidPosition === 2) return 0.10;
+    if (prepaidPosition === 3) return 0.15;
+    return 0.20; // 4th and beyond
   } else if (discountType === 'bulkPrepay') {
-    // Buy 5 get 1 at 50% off
+    // Buy 5 get 1 at 50% off (alternative discount strategy)
     const periodsRequired = 5;
     const discount = 0.5; // 50% off
     
@@ -285,10 +293,40 @@ function calculateOptimalPaymentBreakdown(
     }
   }
 
-  // Apply prepayment selections and discounts
+  // Apply prepayment selections
   periods.forEach((period, index) => {
     if (!period.isPrepaid) { // Skip already prepaid periods (first period)
       period.isPrepaid = prepayAll || selectedPeriods.includes(index);
+    }
+  });
+
+  // Recalculate labels for consecutive periods
+  let currentPeriodCount = 1; // Start with 1 (required period)
+  periods.forEach((period, index) => {
+    if (index === 0) {
+      period.label = `1 ${preferredType} period (Required)`;
+    } else if (index === 1 && period.isPrepaid) {
+      // Update the first and second period label when the second is prepaid
+      periods[0].label = `${++currentPeriodCount} ${preferredType} periods (Required)`;
+      period.label = periods[0].label;
+    } else if (index > 1 && period.isPrepaid) {
+      // Update prepaid periods labels to show as one group
+      currentPeriodCount++;
+      periods[0].label = `${currentPeriodCount} ${preferredType} periods (Required)`;
+      period.label = periods[0].label;
+    } else if (index > 0 && !period.isPrepaid) {
+      // Adjust non-prepaid period labels
+      if (period.type === preferredType) {
+        // Count remaining periods of the same type
+        const remainingCount = periods.slice(index).filter(p => 
+          p.type === preferredType && !p.isPrepaid).length;
+        
+        if (remainingCount > 1) {
+          period.label = `${remainingCount}x ${preferredType} periods`;
+        } else {
+          period.label = `1 ${preferredType} period`;
+        }
+      }
     }
   });
 
