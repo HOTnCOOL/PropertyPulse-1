@@ -1029,19 +1029,25 @@ export function registerRoutes(app: Express): Server {
     }
   });
   
-  // Define available OCR-capable models with fallback priority - using only the specified Google Gemini models
+  // Define available OCR-capable models with fallback priority - STRICTLY using ONLY the specified Google Gemini models
   const ocrModels = [
     {
-      id: "google/gemini-flash-1.5:free",
+      id: "google/gemini-flash-1.5:free",  // First choice - Gemini Flash 1.5
       name: "Gemini Flash 1.5",
       provider: "Google"
     },
     {
-      id: "google/gemini-2.0-pro-exp-02-05:free",
+      id: "google/gemini-2.0-pro-exp-02-05:free", // Second choice - Gemini 2.0 Pro
       name: "Gemini 2.0 Pro",
       provider: "Google"
     }
   ];
+  
+  // Explicitly log available models to ensure proper configuration
+  console.log("OCR models available:");
+  ocrModels.forEach((model, index) => {
+    console.log(`  [${index}] ${model.name} (${model.provider}) - ID: ${model.id}`);
+  });
   
   // Store recent OCR requests to rotate models for repeat users
   const recentOcrRequests = new Map<string, { 
@@ -1188,15 +1194,28 @@ Do not add ANY commentary, instructions, or explanations to your response - ONLY
         console.log(`Attempting OCR with model: ${currentModel.name} (${currentModel.provider})`);
         
         try {
-          // Call the LLM API through OpenRouter
+          // Call the LLM API through OpenRouter - STRICTLY enforce Gemini models only
+          const selectedModel = currentModel.id;
+          
+          // Extra validation to ensure ONLY Google Gemini models are used
+          if (!selectedModel.includes('google/gemini')) {
+            console.error(`MODEL POLICY VIOLATION: Attempted to use non-Gemini model: ${selectedModel}`);
+            throw new Error(`Security policy violation: Only Google Gemini models are permitted for OCR`);
+          }
+          
+          console.log(`Sending OCR request to model: ${selectedModel}`);
+          
           const apiResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
             method: "POST",
             headers: {
               "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
-              "Content-Type": "application/json"
+              "Content-Type": "application/json",
+              "HTTP-Referer": "https://property-management.replit.app", // Help OpenRouter track usage
+              "X-Title": "Property Management OCR" // Help OpenRouter track usage
             },
             body: JSON.stringify({
-              model: currentModel.id,
+              model: selectedModel,
+              route: "google/gemini", // Force routing through Google models only
               messages: [
                 {
                   role: "user",
@@ -1372,11 +1391,44 @@ Do not add ANY commentary, instructions, or explanations to your response - ONLY
         });
       }
       
+      // Get the actual model used from the response if available
+      let actualModelUsed = ocrModels[currentModelIndex].name;
+      let actualProvider = ocrModels[currentModelIndex].provider;
+      
+      // Try to get the actual model from response (OpenRouter includes this)
+      if (responseData.model) {
+        const modelString = responseData.model;
+        
+        // Override ONLY if it's a Google Gemini model
+        if (modelString.includes('gemini')) {
+          const modelParts = modelString.split('/');
+          if (modelParts.length >= 2) {
+            actualProvider = modelParts[0]; // e.g., "google"
+            
+            // Extract a nice name from the model ID
+            let modelName = modelParts[1]; // e.g., "gemini-flash-1.5" 
+            if (modelName.includes('gemini')) {
+              // Format it nicely
+              modelName = modelName
+                .replace('-', ' ')
+                .split(':')[0] // Remove any version suffix like ":free"
+                .replace(/\b\w/g, l => l.toUpperCase()); // Capitalize words
+              
+              actualModelUsed = modelName; // e.g., "Gemini Flash 1.5"
+            }
+          }
+        } else if (!modelString.includes('google/gemini')) {
+          // If we got a non-Gemini model despite our safeguards, log a security issue
+          console.error(`SECURITY WARNING: Non-Gemini model used for OCR: ${modelString}`);
+          // Don't reveal this to client - stick with configured model name
+        }
+      }
+      
       // Return the successfully extracted data
       return res.json({ 
         data: extractedData,
-        modelUsed: ocrModels[currentModelIndex].name,
-        provider: ocrModels[currentModelIndex].provider 
+        modelUsed: actualModelUsed,
+        provider: actualProvider
       });
     } catch (error) {
       console.error("Error analyzing ID documents:", error);
@@ -1384,17 +1436,47 @@ Do not add ANY commentary, instructions, or explanations to your response - ONLY
     }
   });
 
-  // Add diagnostic endpoint to check OCR model status
+  // Add diagnostic endpoint to check OCR model status with improved logging
   app.get("/api/ocr-status", async (_req: Request, res: Response) => {
     try {
+      console.log("OCR model status check initiated");
+      console.log("OpenRouter API Key (masked):", process.env.OPENROUTER_API_KEY ? 
+        process.env.OPENROUTER_API_KEY.substring(0, 4) + "..." + 
+        process.env.OPENROUTER_API_KEY.substring(process.env.OPENROUTER_API_KEY.length - 4) : 
+        "NOT SET");
+      
+      // Show the models we're configured to use
+      console.log("OCR models configured in system:");
+      ocrModels.forEach((model, index) => {
+        console.log(`  [${index}] ${model.name} (${model.provider}) - ID: ${model.id}`);
+      });
+      
       // Test each model with a simple request to check its status
-      const modelStatuses = await Promise.all(ocrModels.map(async (model) => {
+      console.log("Testing models with OpenRouter...");
+      const modelStatuses = await Promise.all(ocrModels.map(async (model, idx) => {
         try {
+          console.log(`Testing model ${idx}: ${model.name} (${model.id})`);
+          
+          // Enforce specific allowed models only
+          if (!model.id.includes("google/gemini")) {
+            console.warn(`Model ${model.id} is not an allowed Gemini model - skipping test`);
+            return {
+              model: model.name,
+              provider: model.provider,
+              id: model.id,
+              status: "blocked",
+              reason: "Only Google Gemini models are allowed for OCR",
+              timestamp: new Date().toISOString()
+            };
+          }
+          
           const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
             method: "POST",
             headers: {
               "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
-              "Content-Type": "application/json"
+              "Content-Type": "application/json",
+              "HTTP-Referer": "https://property-management.replit.app", // Help OpenRouter track usage
+              "X-Title": "Property Management OCR" // Help OpenRouter track usage 
             },
             body: JSON.stringify({
               model: model.id,
@@ -1411,25 +1493,38 @@ Do not add ANY commentary, instructions, or explanations to your response - ONLY
           const status = response.ok ? "available" : "error";
           let details = null;
           
-          if (!response.ok) {
+          if (response.ok) {
+            console.log(`Model ${model.name} test SUCCESS`);
             try {
               details = await response.json();
             } catch (e) {
-              details = { error: "Could not parse response" };
+              console.warn(`Could not parse successful response for ${model.name}:`, e);
+            }
+          } else {
+            console.warn(`Model ${model.name} test FAILED with status ${response.status}`);
+            try {
+              details = await response.json();
+              console.warn(`Error details:`, details);
+            } catch (e) {
+              details = { error: "Could not parse error response" };
+              console.warn(`Could not parse error response:`, e);
             }
           }
 
           return {
             model: model.name,
             provider: model.provider,
+            id: model.id,
             status,
             details: details,
             timestamp: new Date().toISOString()
           };
         } catch (error) {
+          console.error(`Error testing model ${model.name}:`, error);
           return {
             model: model.name,
             provider: model.provider,
+            id: model.id,
             status: "unavailable",
             error: error instanceof Error ? error.message : String(error),
             timestamp: new Date().toISOString()
@@ -1437,13 +1532,18 @@ Do not add ANY commentary, instructions, or explanations to your response - ONLY
         }
       }));
 
+      console.log("OCR model status check completed");
       res.json({
         timestamp: new Date().toISOString(),
-        models: modelStatuses
+        models: modelStatuses,
+        message: "Only Google Gemini models are permitted for OCR in this application"
       });
     } catch (error) {
       console.error("Error checking OCR model status:", error);
-      res.status(500).json({ message: "Failed to check OCR model status" });
+      res.status(500).json({ 
+        message: "Failed to check OCR model status",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 

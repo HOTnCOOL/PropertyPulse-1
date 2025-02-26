@@ -453,16 +453,16 @@ export default function GuestRegistration() {
     }
   };
 
-  // Fix the type error with the date range handler
-  const handleDateSelect = (range: { from: Date; to?: Date } | undefined) => {
+  // Fixed type error with the date range handler for Calendar component
+  const handleDateSelect = (range: any) => {
     if (!range) {
       setSelectedDates({ from: undefined, to: undefined });
       return;
     }
 
     setSelectedDates({
-      from: range.from,
-      to: range.to
+      from: range.from ? new Date(range.from) : undefined,
+      to: range.to ? new Date(range.to) : undefined
     });
   };
 
@@ -562,7 +562,7 @@ export default function GuestRegistration() {
                       <FormItem className="hidden">
                         {/* Hidden address field - required by DB but hidden from UI */}
                         <FormControl>
-                          <Input {...field} defaultValue="Not provided" />
+                          <Input {...field} />
                         </FormControl>
                       </FormItem>
                     )}

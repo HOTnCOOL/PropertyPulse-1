@@ -122,10 +122,24 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
           .filter(([_, v]) => v)
           .map(([k]) => k);
           
+        // Create a more comprehensive success message including model details
+        const modelInfo = result.modelUsed && result.provider ? 
+          `using ${result.modelUsed} by ${result.provider}` : 
+          (result.modelUsed ? `using ${result.modelUsed}` : '');
+          
         toast({
           title: "Data Extracted Successfully",
-          description: `Found: ${foundFields.join(', ')}${result.modelUsed ? ` (using ${result.modelUsed})` : ''}`,
+          description: `Found ${foundFields.length} fields: ${foundFields.join(', ')}`,
         });
+        
+        // Show a separate toast with model info if available
+        if (modelInfo) {
+          toast({
+            title: "AI Model Information",
+            description: `Document processed ${modelInfo}`,
+            variant: "default"
+          });
+        }
       } else {
         toast({
           title: "Extraction Warning",
