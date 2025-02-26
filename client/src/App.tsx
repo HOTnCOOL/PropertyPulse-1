@@ -7,7 +7,8 @@ import Financials from "./pages/Financials";
 import { PublicPropertyList } from "./pages/PublicPropertyList";
 import GuestPayment from "./pages/GuestPayment";
 import Auth from "./pages/Auth";
-import DepositPolicyPage from "./pages/DepositPolicyPage"; // Added import
+import DepositPolicyPage from "./pages/DepositPolicyPage";
+import PaymentCalculatorDemo from "./pages/PaymentCalculatorDemo";
 import Sidebar from "./components/Sidebar";
 import React from "react";
 
@@ -83,6 +84,12 @@ function App() {
       <Route path="/guest-dashboard">
         <PublicLayout>
           <GuestDashboard />
+        </PublicLayout>
+      </Route>
+      
+      <Route path="/payment-demo">
+        <PublicLayout>
+          <PaymentCalculatorDemo />
         </PublicLayout>
       </Route>
 
