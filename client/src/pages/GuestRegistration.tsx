@@ -704,9 +704,9 @@ export default function GuestRegistration() {
           </CardContent>
         </Card>
 
-        <div className="grid gap-6 md:grid-cols-2 mt-6">
+        <div className="grid gap-6 mt-6 w-full">
           {selectedProperty && (
-            <div className="payment-estimator">
+            <div className="payment-estimator w-full md:col-span-2">
               <PaymentEstimator
                 property={selectedProperty}
                 checkIn={selectedDates.from}

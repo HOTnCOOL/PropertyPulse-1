@@ -560,8 +560,8 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
 
   return (
     <TooltipProvider>
-      <Card className="border border-border shadow-sm w-full max-w-full" style={{ width: '100%', maxWidth: '100%' }}>
-        <CardHeader className="bg-muted/30">
+      <Card className="border border-border shadow-sm w-full max-w-full" style={{ width: '100%' }}>
+        <CardHeader className="bg-muted/30 w-full">
           <CardTitle className="flex items-center text-xl">
             <span className="bg-primary/10 p-1.5 rounded-md mr-2">
               <TrendingDown className="h-5 w-5 text-primary" />
@@ -569,13 +569,12 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
             Payment Plan Selection
           </CardTitle>
         </CardHeader>
-        <CardContent className="p-5">
+        <CardContent className="p-5 w-full">
           <motion.div
             className="space-y-6 w-full"
             variants={containerVariants}
             initial="hidden"
             animate="visible"
-            style={{ width: '100%' }}
           >
             <motion.div
               className="p-5 bg-card rounded-lg shadow-sm border border-border space-y-4"
