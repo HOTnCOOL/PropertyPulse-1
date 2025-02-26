@@ -1166,29 +1166,85 @@ export function registerRoutes(app: Express): Server {
       let extractedData = {};
       try {
         // Try to extract JSON from the response
-        const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
+        const jsonMatch = responseContent.match(/```json\s*([\s\S]*?)\s*```|(\{[\s\S]*\})/);
         if (jsonMatch) {
-          extractedData = JSON.parse(jsonMatch[0]);
+          const jsonStr = (jsonMatch[1] || jsonMatch[2]).trim();
+          const parsedJson = JSON.parse(jsonStr);
+          console.log("Parsed JSON data:", parsedJson);
+          
+          // Map the parsed JSON to our expected format
+          extractedData = {
+            // Handle different name formats
+            firstName: parsedJson.names?.given_name || parsedJson.names?.first_name || 
+                      parsedJson.names?.firstName || parsedJson.first_name || 
+                      parsedJson.firstName || parsedJson.given_name || null,
+            
+            lastName: parsedJson.names?.surname || parsedJson.names?.last_name || 
+                     parsedJson.names?.lastName || parsedJson.last_name || 
+                     parsedJson.lastName || parsedJson.surname || null,
+            
+            // Combine nested address fields if they exist
+            homeAddress: typeof parsedJson.home_address === 'object' ? 
+              Object.values(parsedJson.home_address).filter(Boolean).join(', ') : 
+              (parsedJson.home_address || parsedJson.homeAddress || parsedJson.address || null),
+            
+            // Document number
+            documentNumber: parsedJson.document_number || parsedJson.documentNumber || 
+                           parsedJson.id_number || parsedJson.idNumber || null,
+            
+            // Personal number variations
+            personalNumber: parsedJson.personal_number || parsedJson.personalNumber || 
+                           parsedJson.personal_id || parsedJson.personalId || 
+                           parsedJson.pid || parsedJson.егн || null,
+            
+            // Date of birth
+            dateOfBirth: parsedJson.date_of_birth || parsedJson.dateOfBirth || 
+                        parsedJson.birth_date || parsedJson.birthDate || parsedJson.dob || null,
+            
+            // Place of birth
+            placeOfBirth: parsedJson.place_of_birth || parsedJson.placeOfBirth || 
+                         parsedJson.birth_place || parsedJson.birthPlace || parsedJson.pob || null,
+            
+            // Nationality
+            nationality: parsedJson.nationality || null,
+            
+            // ID type
+            idType: parsedJson.document_type || parsedJson.documentType || 
+                    parsedJson.id_type || parsedJson.idType || 'national_id',
+            
+            // Expiry date
+            expiryDate: parsedJson.expiry_date || parsedJson.expiryDate || 
+                       parsedJson.expiration_date || parsedJson.expirationDate || null
+          };
+          
+          console.log("Normalized document data:", extractedData);
         } else {
-          // If JSON extraction fails, try to structure the data ourselves
-          const nameMatch = responseContent.match(/(?:Name|Names):\s*([^\n]+)/i);
-          const nationalityMatch = responseContent.match(/Nationality:\s*([^\n]+)/i);
-          const documentNumberMatch = responseContent.match(/(?:Document|ID|Passport) Number:\s*([^\n]+)/i);
-          const personalNumberMatch = responseContent.match(/Personal Number:\s*([^\n]+)/i);
-          const addressMatch = responseContent.match(/(?:Home )?Address:\s*([^\n]+)/i);
-          const dobMatch = responseContent.match(/(?:Date of Birth|DOB|Birth Date):\s*([^\n]+)/i);
-          const pobMatch = responseContent.match(/(?:Place of Birth|POB|Birth Place):\s*([^\n]+)/i);
-          const expiryMatch = responseContent.match(/(?:Expiry Date|Valid Until|Expiration):\s*([^\n]+)/i);
+          // If JSON extraction fails, try to structure the data ourselves using regex
+          const nameMatches = {
+            firstName: responseContent.match(/(?:Given Name|First Name|First name|Name|Given name):\s*([^\n,]+)/i),
+            lastName: responseContent.match(/(?:Surname|Last Name|Last name|Family name):\s*([^\n,]+)/i)
+          };
+          
+          const nationalityMatch = responseContent.match(/(?:Nationality|Country|Citizenship):\s*([^\n,]+)/i);
+          const documentNumberMatch = responseContent.match(/(?:Document|ID|Passport|Card) (?:Number|No|#):\s*([^\n,]+)/i);
+          const personalNumberMatch = responseContent.match(/(?:Personal(?:\s+Identification)?\s+Number|PIN|PIC|EGN|ЕГН|National ID):\s*([^\n,]+)/i);
+          const addressMatch = responseContent.match(/(?:(?:Home|Permanent|Residential)\s+)?Address:\s*([^\n]+?)(?:$|\n)/i);
+          const dobMatch = responseContent.match(/(?:Date of Birth|DOB|Birth Date|Born on):\s*([^\n,]+)/i);
+          const pobMatch = responseContent.match(/(?:Place of Birth|POB|Birth Place|Born in):\s*([^\n,]+)/i);
+          const expiryMatch = responseContent.match(/(?:Expiry Date|Valid Until|Expiration|Valid To|Expires):\s*([^\n,]+)/i);
+          const idTypeMatch = responseContent.match(/(?:Document Type|ID Type|Card Type):\s*([^\n,]+)/i);
           
           extractedData = {
-            names: nameMatch ? { full: nameMatch[1].trim() } : null,
+            firstName: nameMatches.firstName ? nameMatches.firstName[1].trim() : null,
+            lastName: nameMatches.lastName ? nameMatches.lastName[1].trim() : null,
             nationality: nationalityMatch ? nationalityMatch[1].trim() : null,
             documentNumber: documentNumberMatch ? documentNumberMatch[1].trim() : null,
             personalNumber: personalNumberMatch ? personalNumberMatch[1].trim() : null,
             homeAddress: addressMatch ? addressMatch[1].trim() : null,
             dateOfBirth: dobMatch ? dobMatch[1].trim() : null,
             placeOfBirth: pobMatch ? pobMatch[1].trim() : null,
-            expiryDate: expiryMatch ? expiryMatch[1].trim() : null
+            expiryDate: expiryMatch ? expiryMatch[1].trim() : null,
+            idType: idTypeMatch ? idTypeMatch[1].trim().toLowerCase() : 'national_id'
           };
           
           console.log("Structured data from response text:", extractedData);
