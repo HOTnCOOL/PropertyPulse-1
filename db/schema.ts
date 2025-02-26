@@ -70,7 +70,7 @@ export const guests = pgTable("guests", {
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
   email: text("email").notNull(),
-  phone: text("phone").notNull(),
+  phone: text("phone"),
   propertyId: integer("property_id").references(() => properties.id),
   checkIn: timestamp("check_in"), // Made nullable
   checkOut: timestamp("check_out"), // Made nullable
@@ -78,9 +78,10 @@ export const guests = pgTable("guests", {
   bookingReference: varchar("booking_reference", { length: 10 }),
   dateOfBirth: timestamp("date_of_birth"),
   placeOfBirth: text("place_of_birth"),
-  address: text("address").notNull(),
+  // Removed address field
   homeAddress: text("home_address"),
-  idNumber: text("id_number"),
+  personalNumber: text("personal_number"), // Added personal number field
+  idNumber: text("id_number").notNull(), // Made ID/Passport required
   idType: text("id_type"),
   idImageUrl: text("id_image_url"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -204,7 +205,7 @@ export const insertGuestSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
   email: z.string().email("Invalid email address"),
-  phone: z.string().min(1, "Phone number is required"),
+  phone: z.string().optional(),
   propertyId: z.number(),
   checkIn: z.string().or(z.date()).nullish(), // Made optional and nullish
   checkOut: z.string().or(z.date()).nullish(), // Made optional and nullish
@@ -212,9 +213,10 @@ export const insertGuestSchema = z.object({
   bookingReference: z.string().length(10).optional(),
   dateOfBirth: z.string().or(z.date()).optional().nullable(),
   placeOfBirth: z.string().optional(),
+  // Removed address field
   homeAddress: z.string().optional(),
-  address: z.string(),
-  idNumber: z.string().optional(),
+  personalNumber: z.string().optional(), // Added personal number field
+  idNumber: z.string().min(1, "ID/Passport number is required"), // Made ID/Passport required
   idType: z.enum(['passport', 'national_id']).optional(),
   idImageUrl: z.string().optional(),
 });

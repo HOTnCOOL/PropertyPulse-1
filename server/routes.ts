@@ -448,8 +448,8 @@ export function registerRoutes(app: Express): Server {
       const { query } = req.query;
 
       if (!query || typeof query !== 'string' || query.length < 2) {
-        return res.status(400).json({ 
-          message: "Search query must be at least 2 characters long" 
+        return res.status(400).json({
+          message: "Search query must be at least 2 characters long"
         });
       }
 
@@ -529,7 +529,6 @@ export function registerRoutes(app: Express): Server {
           .insert(guests)
           .values({
             ...req.body,
-            address: req.body.homeAddress || 'Not provided', // Map homeAddress to address
             dateOfBirth: dateOfBirth,
             bookingReference,
           })

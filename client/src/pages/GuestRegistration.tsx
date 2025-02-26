@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -45,6 +45,7 @@ export default function GuestRegistration() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
+  const idScannerRef = useRef<HTMLDivElement>(null);
   const [selectedDates, setSelectedDates] = useState<{
     from: Date | undefined;
     to: Date | undefined;
@@ -67,15 +68,22 @@ export default function GuestRegistration() {
       email: "",
       phone: "",
       propertyId: preSelectedPropertyId ? Number(preSelectedPropertyId) : undefined,
-      address: "",
       dateOfBirth: undefined,
       placeOfBirth: "",
       homeAddress: "",
+      personalNumber: "", // Added personal number field
       idNumber: "",
       idType: undefined,
       idImageUrl: "",
     },
   });
+
+  // Scroll to ID Scanner on page load
+  useEffect(() => {
+    if (idScannerRef.current) {
+      idScannerRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, []);
 
   // Handle selecting an existing guest
   const handleGuestSelect = (guest: any) => {
@@ -83,11 +91,11 @@ export default function GuestRegistration() {
     form.setValue("firstName", guest.firstName);
     form.setValue("lastName", guest.lastName);
     form.setValue("email", guest.email);
-    form.setValue("phone", guest.phone);
-    form.setValue("address", guest.address);
+    form.setValue("phone", guest.phone || "");
     form.setValue("dateOfBirth", guest.dateOfBirth ? new Date(guest.dateOfBirth) : undefined);
     form.setValue("placeOfBirth", guest.placeOfBirth || "");
     form.setValue("homeAddress", guest.homeAddress || "");
+    form.setValue("personalNumber", guest.personalNumber || "");
     form.setValue("idNumber", guest.idNumber || "");
     form.setValue("idType", guest.idType);
     form.setValue("idImageUrl", guest.idImageUrl || "");
@@ -205,27 +213,27 @@ export default function GuestRegistration() {
       console.log('Form is valid:', form.formState.isValid);
 
       // Validate required fields
-      if (!values.firstName || !values.lastName || !values.email || !values.phone || !values.address || !values.propertyId) {
+      if (!values.firstName || !values.lastName || !values.email || !values.idNumber || !values.propertyId) {
         toast({
           title: "Validation Error",
-          description: "Please fill in all required fields",
+          description: "Please fill in all required fields: First Name, Last Name, Email, ID/Passport, and Property",
           variant: "destructive",
         });
         return;
       }
 
-      // Create the guest registration payload without dates
+      // Create the guest registration payload
       const guestData = {
         firstName: values.firstName,
         lastName: values.lastName,
         email: values.email,
-        phone: values.phone,
-        address: values.address,
+        phone: values.phone || "",
         propertyId: values.propertyId,
         dateOfBirth: values.dateOfBirth ? new Date(values.dateOfBirth).toISOString() : null,
         placeOfBirth: values.placeOfBirth || "",
         homeAddress: values.homeAddress || "",
-        idNumber: values.idNumber || "",
+        personalNumber: values.personalNumber || "", // Include personal number field
+        idNumber: values.idNumber,
         idType: values.idType || undefined,
         idImageUrl: values.idImageUrl || "",
       };
@@ -264,6 +272,7 @@ export default function GuestRegistration() {
     placeOfBirth?: string;
     idNumber?: string;
     homeAddress?: string;
+    personalNumber?: string; // Add support for personal number
     idType?: 'passport' | 'national_id';
   }) => {
     console.log('Received extracted data:', data);
@@ -294,6 +303,7 @@ export default function GuestRegistration() {
     setFormValue('placeOfBirth', data.placeOfBirth);
     setFormValue('idNumber', data.idNumber);
     setFormValue('homeAddress', data.homeAddress);
+    setFormValue('personalNumber', data.personalNumber);
     setFormValue('idType', data.idType);
 
     form.trigger();
@@ -340,6 +350,16 @@ export default function GuestRegistration() {
             <div className="mb-6">
               <GuestSearch onGuestSelect={handleGuestSelect} />
             </div>
+
+            {/* ID Scanner section - Moved to the top */}
+            <div className="mb-6" ref={idScannerRef}>
+              <h3 className="text-lg font-medium mb-3">Scan ID/Passport</h3>
+              <IdScanner
+                onDataExtracted={handleExtractedData}
+                onImageCaptured={handleIdImageCaptured}
+              />
+            </div>
+
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                 <div className="space-y-4">
@@ -351,7 +371,7 @@ export default function GuestRegistration() {
                       name="firstName"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>First Name</FormLabel>
+                          <FormLabel>First Name *</FormLabel>
                           <FormControl>
                             <Input {...field} />
                           </FormControl>
@@ -364,7 +384,7 @@ export default function GuestRegistration() {
                       name="lastName"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Last Name</FormLabel>
+                          <FormLabel>Last Name *</FormLabel>
                           <FormControl>
                             <Input {...field} />
                           </FormControl>
@@ -380,7 +400,7 @@ export default function GuestRegistration() {
                       name="email"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Email</FormLabel>
+                          <FormLabel>Email *</FormLabel>
                           <FormControl>
                             <Input type="email" {...field} />
                           </FormControl>
@@ -403,12 +423,13 @@ export default function GuestRegistration() {
                     />
                   </div>
 
+                  {/* Personal Number field - Added */}
                   <FormField
                     control={form.control}
-                    name="address"
+                    name="personalNumber"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Current Address</FormLabel>
+                        <FormLabel>Personal Number</FormLabel>
                         <FormControl>
                           <Input {...field} />
                         </FormControl>
@@ -451,7 +472,7 @@ export default function GuestRegistration() {
                     name="idNumber"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>ID/Passport Number</FormLabel>
+                        <FormLabel>ID/Passport Number *</FormLabel>
                         <FormControl>
                           <Input {...field} />
                         </FormControl>
@@ -513,7 +534,7 @@ export default function GuestRegistration() {
                   name="propertyId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Property</FormLabel>
+                      <FormLabel>Property *</FormLabel>
                       <Select
                         onValueChange={(value) => field.onChange(Number(value))}
                         value={field.value?.toString()}
@@ -538,13 +559,6 @@ export default function GuestRegistration() {
                     </FormItem>
                   )}
                 />
-
-                <div className="mb-6">
-                  <IdScanner
-                    onDataExtracted={handleExtractedData}
-                    onImageCaptured={handleIdImageCaptured}
-                  />
-                </div>
 
                 <Button
                   type="submit"
