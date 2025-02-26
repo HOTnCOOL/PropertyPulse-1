@@ -866,7 +866,7 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
               variants={itemVariants}
               whileHover={{ scale: 1.005 }}
             >
-              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-3">
                 <div className="flex items-center gap-2">
                   <span className="bg-primary/10 p-1.5 rounded-md">
                     <CalendarIcon className="h-5 w-5 text-primary" />
@@ -887,6 +887,82 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                     </p>
                   </TooltipContent>
                 </Tooltip>
+              </div>
+              
+              {/* Interactive payment controls */}
+              <div className="flex flex-wrap gap-2 mb-4">
+                <motion.button
+                  type="button"
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                    prepayAll
+                      ? 'bg-green-600 text-white'
+                      : 'bg-green-50 text-green-700 hover:bg-green-100'
+                  }`}
+                  onClick={handlePrepayAll}
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
+                >
+                  {prepayAll ? (
+                    <>
+                      <Check className="h-4 w-4" />
+                      All Periods Prepaid
+                    </>
+                  ) : (
+                    <>
+                      <ChevronsUp className="h-4 w-4" />
+                      Prepay All Periods
+                    </>
+                  )}
+                </motion.button>
+                
+                {!prepayAll && selectedPeriods.length > 1 && (
+                  <motion.button
+                    type="button"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors"
+                    onClick={() => setSelectedPeriods([0])}
+                    whileHover={{ scale: 1.03 }}
+                    whileTap={{ scale: 0.97 }}
+                  >
+                    <ChevronsDown className="h-4 w-4" />
+                    Reset to Required Only
+                  </motion.button>
+                )}
+                
+                {!prepayAll && paymentBreakdown.periods.length > 1 && (
+                  <>
+                    <motion.button
+                      type="button"
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                        Math.max(...selectedPeriods) < paymentBreakdown.periods.length - 1
+                          ? 'bg-green-50 text-green-700 hover:bg-green-100'
+                          : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      }`}
+                      onClick={handlePrepayNext}
+                      disabled={Math.max(...selectedPeriods) >= paymentBreakdown.periods.length - 1}
+                      whileHover={Math.max(...selectedPeriods) < paymentBreakdown.periods.length - 1 ? { scale: 1.03 } : {}}
+                      whileTap={Math.max(...selectedPeriods) < paymentBreakdown.periods.length - 1 ? { scale: 0.97 } : {}}
+                    >
+                      <ArrowUp className="h-4 w-4" />
+                      Add One Period
+                    </motion.button>
+                    
+                    <motion.button
+                      type="button"
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                        selectedPeriods.length > 1
+                          ? 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+                          : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      }`}
+                      onClick={handleRemoveLastPrepaid}
+                      disabled={selectedPeriods.length <= 1}
+                      whileHover={selectedPeriods.length > 1 ? { scale: 1.03 } : {}}
+                      whileTap={selectedPeriods.length > 1 ? { scale: 0.97 } : {}}
+                    >
+                      <ArrowDown className="h-4 w-4" />
+                      Remove One Period
+                    </motion.button>
+                  </>
+                )}
               </div>
               
               <div className="bg-muted/10 rounded-lg border border-border overflow-hidden">
@@ -972,30 +1048,81 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                           </div>
                         </div>
                         
-                        <div className="text-right">
-                          <div className="font-medium">
-                            {index === 0 ? (
-                              <span className="text-primary">${period.baseAmount.toLocaleString()}</span>
-                            ) : (
-                              <>
-                                <span className={`${isSelected ? 'text-muted-foreground line-through' : ''} mr-2`}>
-                                  ${period.baseAmount.toLocaleString()}
+                        <div className="flex items-center gap-4">
+                          {/* Interactive arrows for moving payments */}
+                          {index > 0 && (
+                            <div className="flex flex-col items-center justify-center gap-2">
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <motion.button
+                                    type="button"
+                                    className={`flex items-center justify-center p-1.5 rounded-full transition-colors ${
+                                      !isSelected && canSelect 
+                                        ? 'bg-green-100 hover:bg-green-200 text-green-700' 
+                                        : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                    }`}
+                                    onClick={() => !isSelected && canSelect && handlePeriodSelect(index)}
+                                    disabled={isSelected || !canSelect || prepayAll}
+                                    whileHover={!isSelected && canSelect ? { scale: 1.1 } : {}}
+                                    whileTap={!isSelected && canSelect ? { scale: 0.95 } : {}}
+                                  >
+                                    <ArrowUp className="h-4 w-4" />
+                                  </motion.button>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">
+                                  <p>Add to prepaid periods</p>
+                                </TooltipContent>
+                              </Tooltip>
+                              
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <motion.button
+                                    type="button"
+                                    className={`flex items-center justify-center p-1.5 rounded-full transition-colors ${
+                                      isSelected && index > 0 && !prepayAll
+                                        ? 'bg-amber-100 hover:bg-amber-200 text-amber-700'
+                                        : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                    }`}
+                                    onClick={() => isSelected && index > 0 && !prepayAll && handlePeriodSelect(index)}
+                                    disabled={!isSelected || index === 0 || prepayAll}
+                                    whileHover={isSelected && index > 0 && !prepayAll ? { scale: 1.1 } : {}}
+                                    whileTap={isSelected && index > 0 && !prepayAll ? { scale: 0.95 } : {}}
+                                  >
+                                    <ArrowDown className="h-4 w-4" />
+                                  </motion.button>
+                                </TooltipTrigger>
+                                <TooltipContent side="bottom">
+                                  <p>Remove from prepaid periods</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </div>
+                          )}
+                          
+                          <div className="text-right">
+                            <div className="font-medium">
+                              {index === 0 ? (
+                                <span className="text-primary">${period.baseAmount.toLocaleString()}</span>
+                              ) : (
+                                <>
+                                  <span className={`${isSelected ? 'text-muted-foreground line-through' : ''} mr-2`}>
+                                    ${period.baseAmount.toLocaleString()}
+                                  </span>
+                                  <span className={isSelected ? 'text-green-600' : 'text-muted-foreground'}>
+                                    ${discountedAmount.toLocaleString()}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                            <div className="text-xs text-muted-foreground mt-1">
+                              {isSelected ? (
+                                <span className="inline-flex items-center gap-1 text-green-600">
+                                  <Check className="h-3 w-3" />
+                                  Prepaid
                                 </span>
-                                <span className={isSelected ? 'text-green-600' : 'text-muted-foreground'}>
-                                  ${discountedAmount.toLocaleString()}
-                                </span>
-                              </>
-                            )}
-                          </div>
-                          <div className="text-xs text-muted-foreground mt-1">
-                            {isSelected ? (
-                              <span className="inline-flex items-center gap-1 text-green-600">
-                                <Check className="h-3 w-3" />
-                                Prepaid
-                              </span>
-                            ) : (
-                              `Due by ${format(period.startDate, "MMM d")}`
-                            )}
+                              ) : (
+                                `Due by ${format(period.startDate, "MMM d")}`
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1025,17 +1152,47 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                           <span className="text-sm text-blue-600 bg-blue-100/50 px-2 py-0.5 rounded-full">Returns after checkout</span>
                         </div>
                         
+                        {/* Deposit status with visualization of discount */}
                         {paymentBreakdown.depositAmount === 0 ? (
                           <div className="text-green-600 text-sm mt-1 flex items-center gap-1">
                             <Check className="h-3.5 w-3.5" />
                             <span>Deposit waived (3+ prepaid periods)</span>
                           </div>
                         ) : paymentBreakdown.depositAmount < calculateDepositAmount(preferredPackageType, 0, differenceInDays(checkOut!, checkIn!)) ? (
-                          <div className="text-green-600 text-sm mt-1 flex items-center gap-1">
-                            <TrendingDown className="h-3.5 w-3.5" />
-                            <span>50% discount applied (2 prepaid periods)</span>
+                          <div className="text-green-600 text-sm mt-1">
+                            <div className="flex items-center gap-1">
+                              <TrendingDown className="h-3.5 w-3.5" />
+                              <span>50% discount applied (2 prepaid periods)</span>
+                            </div>
+                            <div className="mt-1 bg-gray-100 rounded-full h-2 overflow-hidden">
+                              <div 
+                                className="bg-green-500 h-full rounded-full" 
+                                style={{ width: '50%' }}
+                              ></div>
+                            </div>
+                            <div className="flex justify-between text-xs mt-0.5">
+                              <span>Discount: 50%</span>
+                              <span>Prepaid periods: {selectedPeriods.length}/3</span>
+                            </div>
                           </div>
-                        ) : null}
+                        ) : (
+                          <div className="text-amber-600 text-sm mt-1">
+                            <div className="flex items-center gap-1">
+                              <Info className="h-3.5 w-3.5" />
+                              <span>Prepay more periods to reduce deposit</span>
+                            </div>
+                            <div className="mt-1 bg-gray-100 rounded-full h-2 overflow-hidden">
+                              <div 
+                                className="bg-amber-500 h-full rounded-full" 
+                                style={{ width: `${Math.min((selectedPeriods.length / 3) * 100, 100)}%` }}
+                              ></div>
+                            </div>
+                            <div className="flex justify-between text-xs mt-0.5">
+                              <span>Prepaid: {selectedPeriods.length} period{selectedPeriods.length !== 1 ? 's' : ''}</span>
+                              <span>Next discount: 2 periods</span>
+                            </div>
+                          </div>
+                        )}
                       </div>
                       <span className="font-semibold text-xl">
                         ${paymentBreakdown.depositAmount.toLocaleString()}
