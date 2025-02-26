@@ -46,45 +46,43 @@ interface PaymentEstimatorProps {
 // Update the discount calculation function
 function calculateDiscount(
   periodIndex: number, 
-  discountConfig: any, 
   selectedPeriods: number[],
   preferredType: 'monthly' | 'weekly' | 'daily',
-  period: PaymentPeriod
+  period: PaymentPeriod,
+  discountType: 'progressive' | 'bulkPrepay' = 'progressive'
 ): number {
-  // Early return if no discount config or period type doesn't match
-  if (!discountConfig || !discountConfig[preferredType] || period.type !== preferredType) return 0;
-
-  const planConfig = discountConfig[preferredType];
-
-  // Return 0 if plan config is invalid
-  if (!planConfig || !planConfig.type) return 0;
-
-  if (planConfig.type === 'progressive') {
-    // First period has no discount
-    if (periodIndex <= 0) return 0;
-    // Calculate progressive discount (configurable rate per period, up to max)
-    const rate = (planConfig.progressiveRate ?? 10) / 100; // Default 10%
-    const max = (planConfig.progressiveMax ?? 50) / 100; // Default 50%
-    return Math.min(periodIndex * rate, max);
-  } else if (planConfig.type === 'bulkPrepay') {
-    const periodsRequired = planConfig.periodsRequired ?? 5;
-    const discount = (planConfig.nextPeriodDiscount ?? 50) / 100;
-
-    // Check if we have enough consecutive prepaid periods before this one
-    const consecutivePrepaidBefore = selectedPeriods
-      .filter(i => i < periodIndex)
-      .sort((a, b) => a - b)
-      .reduce((count, current, i, arr) => {
-        // Reset count if there's a gap in consecutive numbers
-        if (i > 0 && current !== arr[i-1] + 1) return 0;
-        return count + 1;
-      }, 0);
-
-    // Apply discount if we have the required number of consecutive prepaid periods
-    if (consecutivePrepaidBefore > 0 && consecutivePrepaidBefore % periodsRequired === 0) {
+  // First period has no discount
+  if (periodIndex <= 0) return 0;
+  
+  // Make sure period type matches preferred type
+  if (period.type !== preferredType) return 0;
+  
+  // Only apply discount if the period is selected for prepayment
+  if (!selectedPeriods.includes(periodIndex)) return 0;
+  
+  if (discountType === 'progressive') {
+    // Progressive discount rates based on period index
+    // periodIndex 1 (2nd period) = 5%, 2 (3rd period) = 10%, 3 = 15%, 4+ = 20%
+    const discountRates = [0, 0.05, 0.10, 0.15, 0.20]; // First rate is for index 0, not used
+    
+    // Use period index to determine discount rate, cap at 20% for 5th and above
+    const discountRate = periodIndex >= discountRates.length ? 0.20 : discountRates[periodIndex];
+    
+    return discountRate;
+  } else if (discountType === 'bulkPrepay') {
+    // Buy 5 get 1 at 50% off
+    const periodsRequired = 5;
+    const discount = 0.5; // 50% off
+    
+    // Count how many full groups of 5 we have up to this period
+    const fullGroupsBeforeThisPeriod = Math.floor((periodIndex - 1) / periodsRequired);
+    
+    // If this is a 6th period (index 5, 11, 17, etc.), apply the discount
+    if (fullGroupsBeforeThisPeriod > 0 && periodIndex % periodsRequired === 0) {
       return discount;
     }
   }
+  
   return 0;
 }
 
@@ -296,7 +294,7 @@ function calculateOptimalPaymentBreakdown(
   // Apply discounts to prepaid periods
   periods.forEach((period, index) => {
     if (period.isPrepaid && index > 0) { // Skip first period
-      const discount = calculateDiscount(index, discountConfig, selectedPeriods, preferredType, period);
+      const discount = calculateDiscount(index, selectedPeriods, preferredType, period);
       period.amount = period.baseAmount * (1 - discount);
     }
   });
@@ -975,7 +973,6 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                   // Calculate the discount that would apply to this period
                   const discount = calculateDiscount(
                     index,
-                    property?.discountConfig,
                     selectedPeriods,
                     preferredPackageType,
                     period
@@ -987,10 +984,15 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                   const endDateFormat = format(period.endDate, "MMM d");
                   const dateDisplay = `${startDateFormat} - ${endDateFormat}`;
                   
-                  // Define the discount text if applicable
-                  const discountText = discount > 0 && index > 0 
-                    ? `${(discount * 100).toFixed(0)}% prepayment discount available` 
-                    : '';
+                  // Define the discount text with more detailed information
+                  let discountText = '';
+                  if (discount > 0 && index > 0) {
+                    // Progressive discount descriptions
+                    if (index === 1) discountText = '5% discount (2nd period)';
+                    else if (index === 2) discountText = '10% discount (3rd period)';
+                    else if (index === 3) discountText = '15% discount (4th period)';
+                    else if (index >= 4) discountText = '20% discount (5th+ period)';
+                  }
                   
                   // Create the payment info text
                   const paymentInfo = index === 0 
@@ -1129,6 +1131,49 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
                     </motion.div>
                   );
                 })}
+
+                {/* Progressive Discount Information Section */}
+                <motion.div
+                  className="p-4 mt-4 border-t border-border bg-gradient-to-r from-green-50 to-transparent rounded-md"
+                  variants={itemVariants}
+                  initial="hidden"
+                  animate="visible"
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="bg-green-100 p-1.5 rounded-md">
+                      <Percent className="text-green-600 h-4 w-4" />
+                    </span>
+                    <h3 className="font-medium text-foreground text-sm">Progressive Discount Rates</h3>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
+                    <div className="p-2 bg-white/80 rounded border border-green-100 text-center">
+                      <div className="text-sm font-medium mb-1">1st Period</div>
+                      <div className="text-gray-500">Required</div>
+                      <div className="text-green-600 font-bold mt-1">0%</div>
+                    </div>
+                    <div className="p-2 bg-white/80 rounded border border-green-100 text-center">
+                      <div className="text-sm font-medium mb-1">2nd Period</div>
+                      <div className="text-gray-500">Optional</div>
+                      <div className="text-green-600 font-bold mt-1">5%</div>
+                    </div>
+                    <div className="p-2 bg-white/80 rounded border border-green-100 text-center">
+                      <div className="text-sm font-medium mb-1">3rd Period</div>
+                      <div className="text-gray-500">Optional</div>
+                      <div className="text-green-600 font-bold mt-1">10%</div>
+                    </div>
+                    <div className="p-2 bg-white/80 rounded border border-green-100 text-center">
+                      <div className="text-sm font-medium mb-1">4th Period</div>
+                      <div className="text-gray-500">Optional</div>
+                      <div className="text-green-600 font-bold mt-1">15%</div>
+                    </div>
+                    <div className="p-2 bg-white/80 rounded border border-green-100 text-center md:col-span-1 col-span-2">
+                      <div className="text-sm font-medium mb-1">5th+ Period</div>
+                      <div className="text-gray-500">Optional</div>
+                      <div className="text-green-600 font-bold mt-1">20%</div>
+                    </div>
+                  </div>
+                </motion.div>
 
                 {/* Separate Security Deposit section */}
                 <motion.div 
