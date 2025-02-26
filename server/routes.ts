@@ -1087,23 +1087,56 @@ export function registerRoutes(app: Express): Server {
       }
       
       const data = await response.json();
+      console.log("OpenRouter API Response:", JSON.stringify(data, null, 2));
       
       // Parse the response to extract the JSON data
       let extractedData = {};
       try {
+        // Check if the response has the expected structure
+        if (!data || !data.choices || !Array.isArray(data.choices) || data.choices.length === 0) {
+          console.error("Invalid response structure:", data);
+          return res.status(500).json({ 
+            message: "Invalid response from API", 
+            rawResponse: data 
+          });
+        }
+        
         const responseContent = data.choices[0].message.content;
+        console.log("Response content:", responseContent);
+        
         // Try to extract JSON from the response
         const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
           extractedData = JSON.parse(jsonMatch[0]);
         } else {
-          console.warn("Could not extract JSON from response:", responseContent);
+          // If JSON extraction fails, try to structure the data ourselves
+          const nameMatch = responseContent.match(/(?:Name|Names):\s*([^\n]+)/i);
+          const nationalityMatch = responseContent.match(/Nationality:\s*([^\n]+)/i);
+          const documentNumberMatch = responseContent.match(/(?:Document|ID|Passport) Number:\s*([^\n]+)/i);
+          const personalNumberMatch = responseContent.match(/Personal Number:\s*([^\n]+)/i);
+          const addressMatch = responseContent.match(/(?:Home )?Address:\s*([^\n]+)/i);
+          const dobMatch = responseContent.match(/(?:Date of Birth|DOB|Birth Date):\s*([^\n]+)/i);
+          const pobMatch = responseContent.match(/(?:Place of Birth|POB|Birth Place):\s*([^\n]+)/i);
+          const expiryMatch = responseContent.match(/(?:Expiry Date|Valid Until|Expiration):\s*([^\n]+)/i);
+          
+          extractedData = {
+            names: nameMatch ? { full: nameMatch[1].trim() } : null,
+            nationality: nationalityMatch ? nationalityMatch[1].trim() : null,
+            documentNumber: documentNumberMatch ? documentNumberMatch[1].trim() : null,
+            personalNumber: personalNumberMatch ? personalNumberMatch[1].trim() : null,
+            homeAddress: addressMatch ? addressMatch[1].trim() : null,
+            dateOfBirth: dobMatch ? dobMatch[1].trim() : null,
+            placeOfBirth: pobMatch ? pobMatch[1].trim() : null,
+            expiryDate: expiryMatch ? expiryMatch[1].trim() : null
+          };
+          
+          console.warn("Structured data from response text:", extractedData);
         }
       } catch (error) {
         console.error("Error parsing Gemini response:", error);
         return res.status(500).json({ 
           message: "Failed to parse document data", 
-          rawResponse: data.choices[0].message.content 
+          rawResponse: data 
         });
       }
       

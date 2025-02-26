@@ -1,0 +1,80 @@
+chunk-XQLYTHWV.js?v=4659a69f:521 Warning: Input contains an input of type undefined with both value and defaultValue props. Input elements must be either controlled or uncontrolled (specify either the value prop, or the defaultValue prop, but not both). Decide between using a controlled or uncontrolled input element and remove one of these props. More info: https://reactjs.org/link/controlled-components
+    at input
+    at _c (https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/src/components/ui/input.tsx:20:11)
+    at https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-S7F25QQB.js?v=4659a69f:52:11
+    at https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-S7F25QQB.js?v=4659a69f:33:11
+    at https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/src/components/ui/form.tsx:127:9
+    at div
+    at https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/src/components/ui/form.tsx:71:6
+    at Controller (https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-FHT2UI52.js?v=4659a69f:313:35)
+    at FormField (https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/src/components/ui/form.tsx:32:6)
+    at div
+    at form
+    at FormProvider (https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-FHT2UI52.js?v=4659a69f:102:11)
+    at div
+    at _c9 (https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/src/components/ui/card.tsx:106:12)
+    at div
+    at _c (https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/src/components/ui/card.tsx:20:11)
+    at div
+    at div
+    at GuestRegistration (https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/src/pages/GuestRegistration.tsx:58:21)
+    at main
+    at div
+    at PublicLayout (https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/src/App.tsx:49:25)
+    at Route (https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=4659a69f:191:16)
+    at Switch (https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=4659a69f:247:17)
+    at App
+    at QueryClientProvider (https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=4659a69f:2829:3)
+printWarning @ chunk-XQLYTHWV.js?v=4659a69f:521
+error @ chunk-XQLYTHWV.js?v=4659a69f:505
+initWrapperState @ chunk-XQLYTHWV.js?v=4659a69f:1944
+setInitialProperties @ chunk-XQLYTHWV.js?v=4659a69f:7573
+finalizeInitialChildren @ chunk-XQLYTHWV.js?v=4659a69f:8345
+completeWork @ chunk-XQLYTHWV.js?v=4659a69f:16293
+completeUnitOfWork @ chunk-XQLYTHWV.js?v=4659a69f:19224
+performUnitOfWork @ chunk-XQLYTHWV.js?v=4659a69f:19206
+workLoopSync @ chunk-XQLYTHWV.js?v=4659a69f:19137
+renderRootSync @ chunk-XQLYTHWV.js?v=4659a69f:19116
+performSyncWorkOnRoot @ chunk-XQLYTHWV.js?v=4659a69f:18874
+flushSyncCallbacks @ chunk-XQLYTHWV.js?v=4659a69f:9119
+(anonymous) @ chunk-XQLYTHWV.js?v=4659a69f:18627
+IdScanner.tsx:73 
+            
+            
+           POST https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/api/analyze-id-documents 500 (Internal Server Error)
+processImages @ IdScanner.tsx:73
+await in processImages
+callCallback2 @ chunk-XQLYTHWV.js?v=4659a69f:3674
+invokeGuardedCallbackDev @ chunk-XQLYTHWV.js?v=4659a69f:3699
+invokeGuardedCallback @ chunk-XQLYTHWV.js?v=4659a69f:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-XQLYTHWV.js?v=4659a69f:3736
+executeDispatch @ chunk-XQLYTHWV.js?v=4659a69f:7014
+processDispatchQueueItemsInOrder @ chunk-XQLYTHWV.js?v=4659a69f:7034
+processDispatchQueue @ chunk-XQLYTHWV.js?v=4659a69f:7043
+dispatchEventsForPlugins @ chunk-XQLYTHWV.js?v=4659a69f:7051
+(anonymous) @ chunk-XQLYTHWV.js?v=4659a69f:7174
+batchedUpdates$1 @ chunk-XQLYTHWV.js?v=4659a69f:18913
+batchedUpdates @ chunk-XQLYTHWV.js?v=4659a69f:3579
+dispatchEventForPluginEventSystem @ chunk-XQLYTHWV.js?v=4659a69f:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-XQLYTHWV.js?v=4659a69f:5478
+dispatchEvent @ chunk-XQLYTHWV.js?v=4659a69f:5472
+dispatchDiscreteEvent @ chunk-XQLYTHWV.js?v=4659a69f:5449
+IdScanner.tsx:115 Analysis Error: Error: Failed to analyze ID document
+    at processImages (IdScanner.tsx:84:15)
+processImages @ IdScanner.tsx:115
+await in processImages
+callCallback2 @ chunk-XQLYTHWV.js?v=4659a69f:3674
+invokeGuardedCallbackDev @ chunk-XQLYTHWV.js?v=4659a69f:3699
+invokeGuardedCallback @ chunk-XQLYTHWV.js?v=4659a69f:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-XQLYTHWV.js?v=4659a69f:3736
+executeDispatch @ chunk-XQLYTHWV.js?v=4659a69f:7014
+processDispatchQueueItemsInOrder @ chunk-XQLYTHWV.js?v=4659a69f:7034
+processDispatchQueue @ chunk-XQLYTHWV.js?v=4659a69f:7043
+dispatchEventsForPlugins @ chunk-XQLYTHWV.js?v=4659a69f:7051
+(anonymous) @ chunk-XQLYTHWV.js?v=4659a69f:7174
+batchedUpdates$1 @ chunk-XQLYTHWV.js?v=4659a69f:18913
+batchedUpdates @ chunk-XQLYTHWV.js?v=4659a69f:3579
+dispatchEventForPluginEventSystem @ chunk-XQLYTHWV.js?v=4659a69f:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-XQLYTHWV.js?v=4659a69f:5478
+dispatchEvent @ chunk-XQLYTHWV.js?v=4659a69f:5472
+dispatchDiscreteEvent @ chunk-XQLYTHWV.js?v=4659a69f:5449
