@@ -1216,6 +1216,12 @@ Do not add ANY commentary, instructions, or explanations to your response - ONLY
             body: JSON.stringify({
               model: selectedModel,
               route: "google/gemini", // Force routing through Google models only
+              extra_body: {
+                models: [selectedModel], // Explicitly tell OpenRouter to ONLY use this model
+                providers: ["google"]    // Explicitly tell OpenRouter to ONLY use Google
+              },
+              fallbacks: [], // No fallbacks allowed - fail rather than use a different model
+              transform_json: true, // Force JSON output
               messages: [
                 {
                   role: "user",
@@ -1436,6 +1442,18 @@ Do not add ANY commentary, instructions, or explanations to your response - ONLY
     }
   });
 
+  // Add endpoint for OCR configuration status (developer-facing)
+  app.get("/api/ocr-config", async (_req: Request, res: Response) => {
+    return res.json({
+      policyVersion: "2.0.1",
+      enforcementLevel: "strict", // Options: strict, fallback, none
+      allowedProviders: ["Google"],
+      allowedModels: ocrModels.map(m => m.id),
+      modelPriority: ocrModels.map(m => m.name),
+      message: "This application enforces STRICT usage of Google Gemini models for OCR and document processing"
+    });
+  });
+  
   // Add diagnostic endpoint to check OCR model status with improved logging
   app.get("/api/ocr-status", async (_req: Request, res: Response) => {
     try {
