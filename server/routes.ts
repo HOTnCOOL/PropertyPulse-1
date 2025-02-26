@@ -1066,7 +1066,7 @@ export function registerRoutes(app: Express): Server {
     }
   }, 15 * 60 * 1000); // Run every 15 minutes
 
-  // New endpoint for ID document analysis with multiple LLM options and session-based rotation
+  // New endpoint for ID document analysis with strict Google Gemini model enforcement
   app.post("/api/analyze-id-documents", async (req: Request, res: Response) => {
     try {
       const { imageUrls: rawImageUrls, sessionId } = req.body;
@@ -1090,6 +1090,20 @@ export function registerRoutes(app: Express): Server {
       const requestKey = sessionId || req.ip || `session-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
       let startingModelIndex = 0;
 
+      // STRICT ENFORCEMENT: Only Google Gemini models are allowed
+      console.log(`OCR request: Enforcing STRICT Google Gemini models only policy`);
+      
+      // Verify that our ocrModels array ONLY contains Google Gemini models
+      const nonGeminiModels = ocrModels.filter(model => !model.id.includes('google/gemini'));
+      if (nonGeminiModels.length > 0) {
+        console.error(`SECURITY VIOLATION: Non-Gemini models found in ocrModels:`, 
+                     nonGeminiModels.map(m => m.id).join(', '));
+        return res.status(500).json({ 
+          message: "OCR configuration error: Only Google Gemini models are permitted",
+          error: "Security policy violation"
+        });
+      }
+      
       // Check if we've seen this session before and determine model to use
       if (recentOcrRequests.has(requestKey)) {
         const userData = recentOcrRequests.get(requestKey)!;
@@ -1197,7 +1211,7 @@ Do not add ANY commentary, instructions, or explanations to your response - ONLY
           // Call the LLM API through OpenRouter - STRICTLY enforce Gemini models only
           const selectedModel = currentModel.id;
           
-          // Extra validation to ensure ONLY Google Gemini models are used
+          // STRICT validation to ensure ONLY Google Gemini models are used
           if (!selectedModel.includes('google/gemini')) {
             console.error(`MODEL POLICY VIOLATION: Attempted to use non-Gemini model: ${selectedModel}`);
             throw new Error(`Security policy violation: Only Google Gemini models are permitted for OCR`);
@@ -1219,10 +1233,12 @@ Do not add ANY commentary, instructions, or explanations to your response - ONLY
             body: JSON.stringify({
               model: selectedModel,
               route: "google/gemini", // Force routing through Google models only
+              refuse_non_gemini: true, // Custom flag to refuse non-Gemini models
               extra_body: {
                 models: [selectedModel], // Explicitly tell OpenRouter to ONLY use this model
                 providers: ["google"],   // Explicitly tell OpenRouter to ONLY use Google
-                strict_enforcement: true // *NEW* Explicitly tell OpenRouter to enforce our model selection strictly
+                strict_enforcement: true, // Explicitly tell OpenRouter to enforce our model selection strictly
+                no_fallbacks: true      // Additional redundant fallback prevention
               },
               fallbacks: [], // No fallbacks allowed - fail rather than use a different model
               transform_json: true, // Force JSON output
@@ -1306,6 +1322,28 @@ Do not add ANY commentary, instructions, or explanations to your response - ONLY
       
       const responseContent = responseData.choices[0].message.content;
       console.log("Response content:", responseContent);
+      
+      // CRITICAL SECURITY CHECK: Verify the response is from a Google Gemini model
+      if (!responseData.model || !responseData.model.includes('google/gemini')) {
+        console.error("MODEL SECURITY VIOLATION: Received response from non-Gemini model:", responseData.model);
+        return res.status(403).json({
+          message: "Security policy violation: Only responses from Google Gemini models are permitted",
+          actualModel: responseData.model || "unknown"
+        });
+      }
+
+      // Check for specific patterns that might indicate Llama model usage
+      const metaLlamaSignature = /llama|meta-llama|meta\/llama/i;
+      if (metaLlamaSignature.test(responseData.model)) {
+        console.error("MODEL SECURITY VIOLATION: Meta Llama model detected in response:", responseData.model);
+        return res.status(403).json({
+          message: "Security policy violation: Meta Llama models are not permitted for OCR",
+          actualModel: responseData.model
+        });
+      }
+      
+      // Log the actual model used (should be Gemini)
+      console.log("OCR processed successfully with validated Gemini model:", responseData.model);
       
       // Process the content - try to extract JSON or structured data
       let extractedData = {};
