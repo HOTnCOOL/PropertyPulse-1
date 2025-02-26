@@ -1,0 +1,54 @@
+13
+ctures[^3][^8][^13]. The emergence of models like Llama 3.2 Vision and Qwen2-VL demonstrates how VLMs ach
+46
+### 1. Llama 3.1 8B Instruct
+48
+Meta's optimized iteration of the Llama architecture achieves 84.3% accuracy on the DocVQ
+64
+    "model": "meta-llama/llama-3.1-8b-instruct",
+143
+### 9. MiniCPM-Llama3-V 2.6
+165
+| Llama 3.1 8B | 1.8 | 42 | 15 | 1024x1024 |
+186
+processor = AutoProcessor.from_pretrained("meta-llama/llama-3.1-8b-instruct")
+222
+rprise-grade OCR capabilities through models like Llama 3.1 and Qwen2-VL, which achieve near-human text e
+230
+For most applications, the Llama 3.1 8B Instruct model provides the best balance o
+236
+//blog.greenflux.us/image-to-text-extraction-with-llama32-vision-and-python
+246
+[^7]: https://www.reddit.com/r/LocalLLaMA/comments/1cqsha4/best_model_for_ocr/
+254
+[^11]: https://www.reddit.com/r/LocalLLaMA/comments/1f71k60/best_small_vision_llm_for_ocr/
+262
+[^15]: https://www.reddit.com/r/LocalLLaMA/comments/1c966ce/the_best_open_source_multimodal_
+278
+[^23]: https://www.reddit.com/r/LocalLLaMA/comments/1g94jw4/best_open_source_vision_model_fo
+294
+[^31]: https://openrouter.ai/meta-llama/llama-3.2-90b-vision-instruct:free
+Recent advancements in multimodal large language models (LLMs) have enabled robust text extraction from images through direct integration of vision capabilities. OpenRouter, a platform aggregating diverse AI models, offers several free-to-use LLMs capable of optical character recognition (OCR) and structured data extraction from visual inputs. This report identifies the leading open-source and freely accessible models on OpenRouter for image-to-text tasks, analyzing their architectures, performance characteristics, and implementation considerations[^1][^6][^13].
+
+## Evolution of Multimodal OCR Capabilities in Open-Source LLMs
+
+### From Specialized OCR Engines to Integrated Vision-Language Models
+
+Traditional OCR systems like Tesseract relied on computer vision techniques for character recognition but struggled with complex layouts and contextual understanding[^1][^6]. Modern LLMs with vision capabilities (VLMs) combine convolutional neural networks for image processing with transformer architectures for linguistic reasoning, enabling semantic understanding of document structures[^3][^8][^13]. The emergence of models like Llama 3.2 Vision and Qwen2-VL demonstrates how VLMs achieve human-level accuracy on invoice parsing, handwritten note digitization, and table extraction tasks[^14][^24].
+
+### Benchmark Performance Improvements
+
+Comparative studies show VLMs outperforming traditional OCR tools by 18-37% on the ICDAR 2023 document understanding benchmark, particularly in non-Latin scripts and low-quality scans[^9][^11]. Key metrics include:
+
+- **Character Error Rate (CER):** 1.2% vs. 4.7% for Tesseract on printed text
+- **Layout Recognition Accuracy:** 89% vs. 62% for PaddleOCR on financial documents
+- **Handwriting Recognition:** 76% word accuracy vs. 58% for commercial APIs[^7][^9]
+
+
+## Evaluation Methodology
+
+### Selection Criteria
+
+Models were assessed based on:
+
+1. **OCR-Specific Capabilities:** Performance on text extraction, table parsing, and handwriting recognition

@@ -1211,14 +1211,18 @@ Do not add ANY commentary, instructions, or explanations to your response - ONLY
               "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
               "Content-Type": "application/json",
               "HTTP-Referer": "https://property-management.replit.app", // Help OpenRouter track usage
-              "X-Title": "Property Management OCR" // Help OpenRouter track usage
+              "X-Title": "Property Management OCR", // Help OpenRouter track usage
+              "X-Require-Model": selectedModel, // Enforce strict model selection
+              "X-No-Fallbacks": "true", // Prevent fallbacks to other models
+              "X-Provider-Only": "google" // Restrict to Google providers only
             },
             body: JSON.stringify({
               model: selectedModel,
               route: "google/gemini", // Force routing through Google models only
               extra_body: {
                 models: [selectedModel], // Explicitly tell OpenRouter to ONLY use this model
-                providers: ["google"]    // Explicitly tell OpenRouter to ONLY use Google
+                providers: ["google"],   // Explicitly tell OpenRouter to ONLY use Google
+                strict_enforcement: true // *NEW* Explicitly tell OpenRouter to enforce our model selection strictly
               },
               fallbacks: [], // No fallbacks allowed - fail rather than use a different model
               transform_json: true, // Force JSON output
@@ -1405,7 +1409,7 @@ Do not add ANY commentary, instructions, or explanations to your response - ONLY
       if (responseData.model) {
         const modelString = responseData.model;
         
-        // Override ONLY if it's a Google Gemini model
+        // Check if the response is actually from a Google Gemini model
         if (modelString.includes('gemini')) {
           const modelParts = modelString.split('/');
           if (modelParts.length >= 2) {
@@ -1423,14 +1427,38 @@ Do not add ANY commentary, instructions, or explanations to your response - ONLY
               actualModelUsed = modelName; // e.g., "Gemini Flash 1.5"
             }
           }
-        } else if (!modelString.includes('google/gemini')) {
-          // If we got a non-Gemini model despite our safeguards, log a security issue
-          console.error(`SECURITY WARNING: Non-Gemini model used for OCR: ${modelString}`);
-          // Don't reveal this to client - stick with configured model name
+        } else {
+          // STRICT ENFORCEMENT: If we got a non-Gemini model response, reject it entirely
+          const errorMsg = `SECURITY VIOLATION: Non-Gemini model response detected: ${modelString}`;
+          console.error(errorMsg);
+          
+          // Instead of just logging, actually return an error - this prevents any non-Gemini responses from being used
+          return res.status(403).json({ 
+            message: "Security policy violation: Only Google Gemini models are permitted",
+            error: `Attempted use of unauthorized model: ${modelString.split('/')[1] || modelString}`,
+            providerViolation: true
+          });
         }
       }
       
-      // Return the successfully extracted data
+      // Additional validation - double-check for known model signature patterns
+      const metaLlamaSignature = /llama|meta-llama/i;
+      if (
+        // Check for Meta in provider or model
+        (actualProvider && actualProvider.toLowerCase().includes('meta')) ||
+        (actualModelUsed && metaLlamaSignature.test(actualModelUsed)) ||
+        // Also check the raw response for indicators
+        (responseData.model && metaLlamaSignature.test(responseData.model))
+      ) {
+        console.error(`SECURITY VIOLATION: Meta Llama model response detected despite safeguards`);
+        return res.status(403).json({
+          message: "Security policy violation: Meta Llama models are not permitted for document processing",
+          error: "Unauthorized model usage detected",
+          providerViolation: true
+        });
+      }
+      
+      // Return the successfully extracted data, but only if it's from Google Gemini
       return res.json({ 
         data: extractedData,
         modelUsed: actualModelUsed,
@@ -1494,7 +1522,10 @@ Do not add ANY commentary, instructions, or explanations to your response - ONLY
               "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
               "Content-Type": "application/json",
               "HTTP-Referer": "https://property-management.replit.app", // Help OpenRouter track usage
-              "X-Title": "Property Management OCR" // Help OpenRouter track usage 
+              "X-Title": "Property Management OCR", // Help OpenRouter track usage 
+              "X-Require-Model": model.id, // Enforce strict model selection
+              "X-No-Fallbacks": "true", // Prevent fallbacks to other models
+              "X-Provider-Only": "google" // Restrict to Google providers only
             },
             body: JSON.stringify({
               model: model.id,

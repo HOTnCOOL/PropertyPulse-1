@@ -126,7 +126,11 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
         const modelInfo = result.modelUsed && result.provider ? 
           `using ${result.modelUsed} by ${result.provider}` : 
           (result.modelUsed ? `using ${result.modelUsed}` : '');
-          
+        
+        // Verify this is a Google Gemini model
+        const isGeminiModel = (result.modelUsed?.includes('Gemini') || false) && 
+                             (result.provider === 'Google' || false);
+        
         toast({
           title: "Data Extracted Successfully",
           description: `Found ${foundFields.length} fields: ${foundFields.join(', ')}`,
@@ -135,10 +139,15 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
         // Show a separate toast with model info if available
         if (modelInfo) {
           toast({
-            title: "AI Model Information",
+            title: isGeminiModel ? "Google Gemini Processing" : "AI Model Information",
             description: `Document processed ${modelInfo}`,
-            variant: "default"
+            variant: isGeminiModel ? "default" : "destructive"
           });
+          
+          // Log security warning if non-Gemini model was used
+          if (!isGeminiModel) {
+            console.error('SECURITY ALERT: Non-Gemini model used for document processing:', result.modelUsed);
+          }
         }
       } else {
         toast({
@@ -149,11 +158,48 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
       }
     } catch (error) {
       console.error('Analysis Error:', error);
-      toast({
-        title: "Processing Error",
-        description: `Failed to process the image: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again or enter details manually.`,
-        variant: "destructive",
-      });
+      
+      // Check if this is a security policy violation
+      let errorResponse;
+      
+      try {
+        // Try to parse the error response if it's a fetch error
+        if (error instanceof Error && 'cause' in error) {
+          const cause = error.cause as any;
+          if (cause && cause.status >= 400) {
+            errorResponse = await cause.json();
+          }
+        } else if (error instanceof Response) {
+          errorResponse = await error.json();
+        }
+      } catch (e) {
+        // If we can't parse the JSON, just use the original error
+        console.warn('Could not parse error response', e);
+      }
+      
+      // Check if this is a model usage violation
+      if (errorResponse && errorResponse.providerViolation) {
+        // This is a security policy violation
+        toast({
+          title: "Security Policy Violation",
+          description: errorResponse.message || "Unauthorized model detected. Only Google Gemini models are permitted for document processing.",
+          variant: "destructive",
+        });
+        
+        // Show a more technical toast with details
+        toast({
+          title: "Technical Details",
+          description: errorResponse.error || "The request was rejected due to attempted use of an unauthorized model.",
+          variant: "destructive",
+        });
+      } else {
+        // Regular error handling
+        toast({
+          title: "Processing Error",
+          description: `Failed to process the image: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again or enter details manually.`,
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsProcessing(false);
     }
@@ -526,6 +572,20 @@ export default function IdScanner({ onDataExtracted, onImageCaptured }: IdScanne
         <CardDescription>
           Provide front and back images of your ID or passport for automatic data extraction
         </CardDescription>
+        <div className="mt-2 bg-blue-50 border-l-4 border-blue-500 text-blue-700 p-3 rounded" role="alert">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm font-medium">
+                <strong>Google Gemini Models Only</strong> - This application exclusively uses Google Gemini models for document processing
+              </p>
+            </div>
+          </div>
+        </div>
       </CardHeader>
       <CardContent>
         <div className="mb-6">
