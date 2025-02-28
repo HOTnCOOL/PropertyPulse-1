@@ -1,5 +1,5 @@
 import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes.fixed";
+import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
 const app = express();
@@ -43,7 +43,7 @@ app.get("/health", (_req, res) => {
 });
 
 async function startServer() {
-  const port = process.env.PORT || 3001; // Use PORT environment variable or fallback to 3001
+  const port = process.env.PORT || 5000; // Use PORT environment variable or fallback to 5000
 
   try {
     log(`Starting server on port ${port}...`);
@@ -80,16 +80,18 @@ async function startServer() {
 
     // Start server
     await new Promise<void>((resolve, reject) => {
-      server
-        .listen(port, "0.0.0.0")
-        .once("listening", () => {
-          log(`Server started successfully on port ${port}`);
-          resolve();
-        })
-        .once("error", (err: NodeJS.ErrnoException) => {
-          log(`Server startup error: ${err.message}`);
-          reject(err);
-        });
+      // Listen on the numeric port and bind to all interfaces (0.0.0.0)
+      const serverInstance = server.listen(Number(port), '0.0.0.0');
+      
+      serverInstance.once("listening", () => {
+        log(`Server started successfully on port ${port}, bound to 0.0.0.0`);
+        resolve();
+      });
+      
+      serverInstance.once("error", (err: NodeJS.ErrnoException) => {
+        log(`Server startup error: ${err.message}`);
+        reject(err);
+      });
     });
 
   } catch (error) {

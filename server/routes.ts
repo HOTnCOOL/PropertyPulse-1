@@ -1,4 +1,4 @@
-import type { Express, Request, Response } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import multer from "multer";
 import path from "path";
@@ -967,3 +967,7 @@ export function registerRoutes(app: Express): Server {
       res.status(500).json({ message: "Failed to update booking" });
     }
   });
+  
+  // Return the HTTP server instance
+  return createServer(app);
+}
