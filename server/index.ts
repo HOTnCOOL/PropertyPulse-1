@@ -1,5 +1,5 @@
 import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes";
+import { registerRoutes } from "./routes.fixed";
 import { setupVite, serveStatic, log } from "./vite";
 
 const app = express();
@@ -43,7 +43,7 @@ app.get("/health", (_req, res) => {
 });
 
 async function startServer() {
-  const port = process.env.PORT || 3000; // Use PORT environment variable or fallback to 3000
+  const port = process.env.PORT || 3001; // Use PORT environment variable or fallback to 3001
 
   try {
     log(`Starting server on port ${port}...`);
