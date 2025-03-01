@@ -435,14 +435,10 @@ export function registerRoutes(app: Express): Server {
   });
 
   // Guests endpoints
-  app.get("/api/guests", async (_req: Request, res: Response) => {
-    const allGuests = await db.query.guests.findMany({
-      with: { property: true },
-    });
-    res.json(allGuests);
-  });
-
-  // Add endpoint to check if a guest exists by email
+  // IMPORTANT: Route ordering matters in Express!
+  // More specific routes must be defined BEFORE routes with parameters
+  
+  // Check if a guest exists by email
   app.get("/api/guests/check-email", async (req: Request, res: Response) => {
     try {
       const { email } = req.query;
@@ -469,7 +465,7 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Add search endpoint BEFORE the :id endpoint to prevent conflicts
+  // Search endpoint
   app.get("/api/guests/search", async (req: Request, res: Response) => {
     try {
       const { query } = req.query;
@@ -503,8 +499,16 @@ export function registerRoutes(app: Express): Server {
       res.status(500).json({ message: "Failed to search guests" });
     }
   });
+  
+  // Get all guests
+  app.get("/api/guests", async (_req: Request, res: Response) => {
+    const allGuests = await db.query.guests.findMany({
+      with: { property: true },
+    });
+    res.json(allGuests);
+  });
 
-  // Then add the specific guest endpoint
+  // Get specific guest by ID - must come AFTER more specific paths
   app.get("/api/guests/:id", async (req: Request, res: Response) => {
     try {
       const guestId = parseInt(req.params.id);
