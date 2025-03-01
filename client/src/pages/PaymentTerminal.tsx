@@ -200,14 +200,15 @@ export default function PaymentTerminal() {
         description: `Your payment for booking ${bookingReference} has been processed successfully. Invoice #${invoiceNumber} has been generated.`,
       });
       
-      // Redirect to success page or dashboard after 3 seconds
+      // Redirect to success page or dashboard after 30 seconds
+      // Longer delay allows users to view and copy the invoice details
       setTimeout(() => {
         if (guestId) {
           setLocation(`/guest-dashboard?guestId=${guestId}`);
         } else {
           setLocation('/');
         }
-      }, 3000);
+      }, 30000); // 30 seconds delay
     } catch (error) {
       console.error("Payment error:", error);
       setPaymentStatus('error');
@@ -544,11 +545,25 @@ export default function PaymentTerminal() {
 
   // Generate a reference for the success state
   const [invoiceRef, setInvoiceRef] = useState<string>("");
+  const [redirectCountdown, setRedirectCountdown] = useState<number>(30);
   
   useEffect(() => {
     if (paymentStatus === 'success' && !invoiceRef) {
       // Generate a reference for the payment
       setInvoiceRef(`INV-${Date.now().toString().slice(-6)}`);
+      
+      // Setup countdown timer
+      const timer = setInterval(() => {
+        setRedirectCountdown(prev => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      
+      return () => clearInterval(timer);
     }
   }, [paymentStatus, invoiceRef]);
 
@@ -569,17 +584,23 @@ export default function PaymentTerminal() {
           <div className="bg-green-50 border border-green-100 rounded-md p-4 mb-6">
             <div className="text-sm text-green-800 mb-2">
               <div className="font-medium">Booking Reference:</div>
-              <div className="text-lg">{bookingReference}</div>
+              <div className="text-lg select-all cursor-pointer">{bookingReference}</div>
             </div>
             <div className="text-sm text-green-800">
               <div className="font-medium">Invoice Number:</div>
-              <div className="text-lg">{invoiceRef}</div>
+              <div className="text-lg select-all cursor-pointer">{invoiceRef}</div>
             </div>
           </div>
-          <p className="text-muted-foreground mb-8">
+          <p className="text-muted-foreground mb-4">
             Your payment of {totalPaymentAmount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })} has been received. 
             A receipt has been generated and will be sent to your email address.
           </p>
+          
+          {/* Redirect countdown */}
+          <div className="text-xs text-muted-foreground mb-6">
+            Redirecting to dashboard in {redirectCountdown} seconds...
+          </div>
+          
           <Button onClick={() => guestId ? setLocation(`/guest-dashboard?guestId=${guestId}`) : setLocation('/')}>
             Continue to Dashboard
           </Button>
