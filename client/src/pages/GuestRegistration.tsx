@@ -86,7 +86,7 @@ export default function GuestRegistration() {
     form.setValue("homeAddress", guest.homeAddress || "");
     form.setValue("address", guest.address || "Not provided");
     form.setValue("idNumber", guest.idNumber || "");
-    form.setValue("idType", guest.idType);
+    form.setValue("idType", guest.idType as 'passport' | 'national_id' | undefined);
     form.setValue("idImageUrl", guest.idImageUrl || "");
 
     // Trigger form validation
@@ -602,7 +602,7 @@ export default function GuestRegistration() {
                             <FormControl>
                               <Input
                                 type="date"
-                                value={field.value ? format(new Date(field.value), 'yyyy-MM-dd') : ''}
+                                value={field.value instanceof Date ? format(field.value, 'yyyy-MM-dd') : field.value ? format(new Date(field.value), 'yyyy-MM-dd') : ''}
                                 onChange={e => field.onChange(e.target.value ? new Date(e.target.value) : null)}
                               />
                             </FormControl>
