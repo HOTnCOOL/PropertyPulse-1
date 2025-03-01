@@ -113,27 +113,35 @@ export default function GuestRegistration() {
     mutationFn: async (values: FormData) => {
       console.log('Starting guest registration with values:', values);
 
-      // Handle dateOfBirth safely with validation
+      // Handle dateOfBirth safely
       let dateOfBirthISO = null;
       if (values.dateOfBirth) {
         try {
           // Convert to a proper Date object to ensure correctness
           const date = new Date(values.dateOfBirth);
           if (!isNaN(date.getTime())) {
-            // Format as YYYY-MM-DD only to avoid time zone issues
+            // Format as YYYY-MM-DD only to avoid timezone issues
             const year = date.getFullYear();
             const month = String(date.getMonth() + 1).padStart(2, '0');
             const day = String(date.getDate()).padStart(2, '0');
             dateOfBirthISO = `${year}-${month}-${day}`;
+            
+            console.log('Formatted date of birth:', dateOfBirthISO);
+          } else {
+            console.warn('Date of birth is not a valid date');
           }
         } catch (error) {
           console.error('Error parsing date of birth:', error);
         }
       }
 
+      // Create a new object without dateOfBirth
+      const { dateOfBirth, ...otherValues } = values;
+      
+      // Then add our safely formatted date if it exists
       const formattedValues = {
-        ...values,
-        dateOfBirth: dateOfBirthISO,
+        ...otherValues,
+        ...(dateOfBirthISO ? { dateOfBirth: dateOfBirthISO } : {})
       };
 
       console.log('Sending formatted values to API:', formattedValues);
@@ -202,42 +210,9 @@ export default function GuestRegistration() {
         return;
       }
 
-      // Create the guest registration payload with safe date handling
-      let dateOfBirthISO = null;
-      if (values.dateOfBirth) {
-        try {
-          // Convert to a proper Date object to ensure correctness
-          const date = new Date(values.dateOfBirth);
-          if (!isNaN(date.getTime())) {
-            // Format as YYYY-MM-DD only to avoid time zone issues
-            const year = date.getFullYear();
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const day = String(date.getDate()).padStart(2, '0');
-            dateOfBirthISO = `${year}-${month}-${day}`;
-          }
-        } catch (error) {
-          console.error('Error parsing dateOfBirth:', error);
-        }
-      }
-      
-      // Guest data without property or stay details
-      const guestData = {
-        firstName: values.firstName,
-        lastName: values.lastName,
-        email: values.email,
-        phone: values.phone || "",
-        dateOfBirth: dateOfBirthISO,
-        placeOfBirth: values.placeOfBirth || "",
-        homeAddress: values.homeAddress || "",
-        address: values.address || "Not provided", // Required by DB
-        idNumber: values.idNumber,
-        idType: values.idType || undefined,
-        idImageUrl: values.idImageUrl || "",
-      };
-
-      console.log('Submitting guest data:', guestData);
-
-      await registerGuest.mutateAsync(guestData);
+      // We'll let the mutation function handle the date formatting
+      console.log('Submitting form values:', values);
+      await registerGuest.mutateAsync(values);
     } catch (error) {
       console.error('Form submission error:', error);
       toast({

@@ -507,10 +507,6 @@ export function registerRoutes(app: Express): Server {
     try {
       console.log('Received guest registration request:', req.body);
 
-      // Handle dateOfBirth as a string in YYYY-MM-DD format directly
-      // Skip converting to Date object to avoid timezone issues
-      const dateOfBirth = req.body.dateOfBirth || null;
-
       // Ensure required fields are present
       if (!req.body.address) {
         req.body.address = "Not provided"; // Default value for address if not provided
@@ -524,26 +520,50 @@ export function registerRoutes(app: Express): Server {
       const bookingReference = 'BOOK' + Math.random().toString(36).substring(2, 8).toUpperCase();
       const accessCode = Math.floor(100000 + Math.random() * 900000).toString();
 
+      // Create guest values object with all fields EXCEPT dateOfBirth
+      const guestValues = {
+        firstName: req.body.firstName,
+        lastName: req.body.lastName,
+        email: req.body.email,
+        phone: req.body.phone || "Not provided",
+        placeOfBirth: req.body.placeOfBirth || "",
+        address: req.body.address,
+        homeAddress: req.body.homeAddress || "",
+        idNumber: req.body.idNumber,
+        idType: req.body.idType,
+        idImageUrl: req.body.idImageUrl || "",
+        bookingReference,
+        accessCode,
+      };
+
+      // Only add dateOfBirth if it's properly formatted
+      if (req.body.dateOfBirth) {
+        // Try to create a valid date from the string
+        try {
+          const dateParts = req.body.dateOfBirth.split('-');
+          if (dateParts.length === 3) {
+            const year = parseInt(dateParts[0]);
+            const month = parseInt(dateParts[1]) - 1; // Months are 0-indexed in JS
+            const day = parseInt(dateParts[2]);
+            
+            // Check if the date is valid before adding it
+            const date = new Date(year, month, day);
+            if (!isNaN(date.getTime())) {
+              // Make sure we add it as a field directly to the guestValues object
+              (guestValues as any).dateOfBirth = req.body.dateOfBirth;
+            }
+          }
+        } catch (error) {
+          console.warn('Invalid date format for dateOfBirth, skipping field:', req.body.dateOfBirth);
+        }
+      }
+
       // Start a transaction
       const result = await db.transaction(async (tx) => {
-        // Create guest first
+        // Create guest with the prepared values
         const [guest] = await tx
           .insert(guests)
-          .values({
-            firstName: req.body.firstName,
-            lastName: req.body.lastName,
-            email: req.body.email,
-            phone: req.body.phone || "Not provided",
-            dateOfBirth: dateOfBirth,
-            placeOfBirth: req.body.placeOfBirth || "",
-            address: req.body.address,
-            homeAddress: req.body.homeAddress || "",
-            idNumber: req.body.idNumber,
-            idType: req.body.idType,
-            idImageUrl: req.body.idImageUrl || "",
-            bookingReference,
-            accessCode,
-          })
+          .values(guestValues)
           .returning();
 
         console.log('Created guest:', guest);
