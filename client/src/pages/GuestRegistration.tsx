@@ -34,6 +34,7 @@ import { insertGuestSchema, type Property, type Guest, type Payment } from "@db/
 import * as z from "zod";
 import GuestList from "../components/GuestList";
 import PaymentEstimator from "../components/PaymentEstimator";
+import PaymentScheduleCalculator from "../components/PaymentScheduleCalculator";
 import PaymentHistory from "../components/PaymentHistory";
 import IdScanner from "../components/IdScanner";
 import { GuestSearch } from "../components/GuestSearch";
