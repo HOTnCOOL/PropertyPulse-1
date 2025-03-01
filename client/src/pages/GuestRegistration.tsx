@@ -237,6 +237,7 @@ export default function GuestRegistration() {
       
       // Navigate to payment calculator with guest ID after a delay
       setTimeout(() => {
+        // Redirect to payment schedule calculator with the guest ID
         setLocation(`/payment-calculator-demo?guestId=${data.id}`);
       }, 1500);
     },
