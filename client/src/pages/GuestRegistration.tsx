@@ -776,8 +776,8 @@ export default function GuestRegistration() {
 
         <div className="grid gap-6 mt-6 w-full">
           {selectedProperty && (
-            <div className="payment-estimator w-full md:col-span-2">
-              <PaymentEstimator
+            <div className="payment-schedule-calculator w-full md:col-span-2">
+              <PaymentScheduleCalculator
                 property={selectedProperty}
                 checkIn={selectedDates.from}
                 checkOut={selectedDates.to}
