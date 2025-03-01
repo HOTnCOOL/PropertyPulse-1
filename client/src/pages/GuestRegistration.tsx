@@ -235,10 +235,10 @@ export default function GuestRegistration() {
         duration: 5000,
       });
       
-      // Navigate to payment calculator with guest ID after a delay
+      // Navigate to payment schedule page with guest ID after a delay
       setTimeout(() => {
         // Redirect to payment schedule calculator with the guest ID
-        setLocation(`/payment-calculator-demo?guestId=${data.id}`);
+        setLocation(`/payment-schedule?guestId=${data.id}`);
       }, 1500);
     },
     onError: (error) => {
@@ -511,7 +511,7 @@ export default function GuestRegistration() {
         
         // Redirect to the payment page with the guest ID
         setTimeout(() => {
-          setLocation(`/payment-calculator-demo?guestId=${data.guest.id}`);
+          setLocation(`/payment-schedule?guestId=${data.guest.id}`);
         }, 1500);
         
         return true;

@@ -9,6 +9,7 @@ import GuestPayment from "./pages/GuestPayment";
 import Auth from "./pages/Auth";
 import DepositPolicyPage from "./pages/DepositPolicyPage";
 import PaymentCalculatorDemo from "./pages/PaymentCalculatorDemo";
+import PaymentSchedule from "./pages/PaymentSchedule";
 import Sidebar from "./components/Sidebar";
 import React from "react";
 
@@ -90,6 +91,12 @@ function App() {
       <Route path="/payment-demo">
         <PublicLayout>
           <PaymentCalculatorDemo />
+        </PublicLayout>
+      </Route>
+
+      <Route path="/payment-schedule">
+        <PublicLayout>
+          <PaymentSchedule />
         </PublicLayout>
       </Route>
 
