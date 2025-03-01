@@ -116,9 +116,14 @@ export default function GuestRegistration() {
       let dateOfBirthISO = null;
       if (values.dateOfBirth) {
         try {
+          // Convert to a proper Date object to ensure correctness
           const date = new Date(values.dateOfBirth);
           if (!isNaN(date.getTime())) {
-            dateOfBirthISO = date.toISOString();
+            // Format as YYYY-MM-DD only to avoid time zone issues
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            dateOfBirthISO = `${year}-${month}-${day}`;
           }
         } catch (error) {
           console.error('Error parsing date of birth:', error);
@@ -195,9 +200,14 @@ export default function GuestRegistration() {
       let dateOfBirthISO = null;
       if (values.dateOfBirth) {
         try {
+          // Convert to a proper Date object to ensure correctness
           const date = new Date(values.dateOfBirth);
           if (!isNaN(date.getTime())) {
-            dateOfBirthISO = date.toISOString();
+            // Format as YYYY-MM-DD only to avoid time zone issues
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            dateOfBirthISO = `${year}-${month}-${day}`;
           }
         } catch (error) {
           console.error('Error parsing dateOfBirth:', error);
