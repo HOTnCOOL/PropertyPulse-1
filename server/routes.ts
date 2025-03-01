@@ -548,12 +548,23 @@ export function registerRoutes(app: Express): Server {
 
       // Start a transaction
       const result = await db.transaction(async (tx) => {
-        console.log('Inserting guest with values:', guest);
+        console.log('Preparing guest values for insertion...');
         
-        // Create guest with the prepared values
+        // Explicitly set the current date for createdAt and set all other date fields to null
+        const sanitizedGuest = {
+          ...guest,
+          createdAt: new Date(),
+          dateOfBirth: null,
+          checkIn: null, 
+          checkOut: null
+        };
+        
+        console.log('Inserting guest with sanitized values:', sanitizedGuest);
+        
+        // Create guest with the sanitized values
         const [newGuest] = await tx
           .insert(guests)
-          .values(guest)
+          .values(sanitizedGuest)
           .returning();
 
         console.log('Created guest:', newGuest);
