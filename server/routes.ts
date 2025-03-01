@@ -508,36 +508,42 @@ export function registerRoutes(app: Express): Server {
       console.log('Received guest registration request:', req.body);
 
       // Ensure required fields are present
+      if (!req.body.firstName || !req.body.lastName || !req.body.email || !req.body.idNumber) {
+        return res.status(400).json({
+          message: "Missing required fields",
+          details: "First name, last name, email, and ID number are required."
+        });
+      }
+
+      // Apply defaults for optional fields
       if (!req.body.address) {
-        req.body.address = "Not provided"; // Default value for address if not provided
+        req.body.address = "Not provided";
       }
 
       if (!req.body.phone) {
-        req.body.phone = "Not provided"; // Default value for phone if not provided
+        req.body.phone = "Not provided";
       }
 
       // Generate a unique booking reference and access code
       const bookingReference = 'BOOK' + Math.random().toString(36).substring(2, 8).toUpperCase();
       const accessCode = Math.floor(100000 + Math.random() * 900000).toString();
-
-      // Explicitly extract all fields except dates that cause issues
-      const { dateOfBirth, checkIn, checkOut, ...safeFields } = req.body;
       
-      // Create a base guest object with only the safe fields
+      // Create a minimal, guaranteed-safe guest object
       const guest = {
-        ...safeFields,
         firstName: req.body.firstName,
         lastName: req.body.lastName,
         email: req.body.email,
         phone: req.body.phone || "Not provided",
-        placeOfBirth: req.body.placeOfBirth || "",
         address: req.body.address || "Not provided",
-        homeAddress: req.body.homeAddress || "",
         idNumber: req.body.idNumber || "",
-        idType: req.body.idType,
+        idType: req.body.idType || "national_id",
         idImageUrl: req.body.idImageUrl || "",
         bookingReference,
         accessCode,
+        // Optional fields that shouldn't cause issues
+        placeOfBirth: req.body.placeOfBirth || "",
+        homeAddress: req.body.homeAddress || "",
+        // Explicitly omit any date fields that could cause issues
       };
 
       // Start a transaction
