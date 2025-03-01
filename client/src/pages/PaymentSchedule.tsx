@@ -855,6 +855,28 @@ export default function PaymentSchedule() {
                       <div className="font-semibold">20% discount</div>
                     </div>
                   </div>
+                  {/* Payment action button */}
+                  <div className="mt-4 flex justify-center">
+                    <Button 
+                      size="lg" 
+                      className="w-full sm:w-auto font-medium"
+                      onClick={() => {
+                        const queryParams = new URLSearchParams();
+                        if (guestId) queryParams.set('guestId', guestId.toString());
+                        queryParams.set('prepaidAmount', summary.totalPrepaidAmount.toString());
+                        queryParams.set('depositAmount', summary.depositAmount.toString());
+                        queryParams.set('checkIn', selectedDates.from.toISOString());
+                        queryParams.set('checkOut', selectedDates.to.toISOString());
+                        queryParams.set('planType', preferredPackageType);
+                        queryParams.set('totalSavings', summary.totalSavings.toString());
+                        queryParams.set('prepaidPeriods', prepaidPeriods.join(','));
+                        
+                        setLocation(`/payment-terminal?${queryParams.toString()}`);
+                      }}
+                    >
+                      Save & Proceed to Payment
+                    </Button>
+                  </div>
                 </CardFooter>
               </Card>
             )}

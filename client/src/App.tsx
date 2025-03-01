@@ -10,6 +10,7 @@ import Auth from "./pages/Auth";
 import DepositPolicyPage from "./pages/DepositPolicyPage";
 import PaymentCalculatorDemo from "./pages/PaymentCalculatorDemo";
 import PaymentSchedule from "./pages/PaymentSchedule";
+import PaymentTerminal from "./pages/PaymentTerminal";
 import Sidebar from "./components/Sidebar";
 import React from "react";
 
@@ -97,6 +98,12 @@ function App() {
       <Route path="/payment-schedule">
         <PublicLayout>
           <PaymentSchedule />
+        </PublicLayout>
+      </Route>
+      
+      <Route path="/payment-terminal">
+        <PublicLayout>
+          <PaymentTerminal />
         </PublicLayout>
       </Route>
 
