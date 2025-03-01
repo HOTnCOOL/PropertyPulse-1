@@ -861,6 +861,16 @@ export default function PaymentSchedule() {
                       size="lg" 
                       className="w-full sm:w-auto font-medium"
                       onClick={() => {
+                        // Generate a booking reference number
+                        const generateBookingReference = () => {
+                          const prefix = "BK";
+                          const timestamp = Date.now().toString().slice(-6);
+                          const randomChars = Math.random().toString(36).substring(2, 5).toUpperCase();
+                          return `${prefix}-${timestamp}-${randomChars}`;
+                        };
+                        
+                        const bookingReference = generateBookingReference();
+                        
                         const queryParams = new URLSearchParams();
                         if (guestId) queryParams.set('guestId', guestId.toString());
                         queryParams.set('prepaidAmount', summary.totalPrepaidAmount.toString());
@@ -870,6 +880,9 @@ export default function PaymentSchedule() {
                         queryParams.set('planType', preferredPackageType);
                         queryParams.set('totalSavings', summary.totalSavings.toString());
                         queryParams.set('prepaidPeriods', prepaidPeriods.join(','));
+                        queryParams.set('bookingReference', bookingReference);
+                        queryParams.set('propertyId', exampleProperty.id.toString());
+                        queryParams.set('propertyName', exampleProperty.name);
                         
                         setLocation(`/payment-terminal?${queryParams.toString()}`);
                       }}

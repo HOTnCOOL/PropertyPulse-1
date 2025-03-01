@@ -81,6 +81,9 @@ export default function PaymentTerminal() {
   const checkOut = params.get('checkOut') ? parseISO(params.get('checkOut') as string) : new Date();
   const planType = (params.get('planType') || 'weekly') as 'monthly' | 'weekly' | 'daily';
   const totalSavings = params.get('totalSavings') ? parseFloat(params.get('totalSavings')) : 0;
+  const bookingReference = params.get('bookingReference') || `BK-${Date.now().toString().slice(-6)}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
+  const propertyId = params.get('propertyId') ? parseInt(params.get('propertyId') as string) : 1;
+  const propertyName = params.get('propertyName') || 'Property';
   const prepaidPeriods = params.get('prepaidPeriods') ? 
     (params.get('prepaidPeriods') as string).split(',').map(p => parseInt(p)) : 
     [0];
@@ -106,6 +109,53 @@ export default function PaymentTerminal() {
 
   const watchPaymentMethod = form.watch("paymentMethod");
 
+  // Generate invoice
+  const generateInvoice = () => {
+    // In a real application, this would create a real invoice
+    // For this demo, we'll just create a simple object
+    const invoiceNumber = `INV-${Date.now().toString().slice(-6)}`;
+    const today = new Date();
+    
+    const invoice = {
+      invoiceNumber,
+      bookingReference,
+      date: format(today, "yyyy-MM-dd"),
+      dueDate: format(today, "yyyy-MM-dd"),
+      customerInfo: {
+        id: guestId,
+        propertyId,
+        propertyName,
+      },
+      items: [
+        {
+          description: `${planType.charAt(0).toUpperCase() + planType.slice(1)} booking (${format(checkIn, "MMM d, yyyy")} - ${format(checkOut, "MMM d, yyyy")})`,
+          quantity: 1,
+          unitPrice: prepaidAmount,
+          total: prepaidAmount
+        },
+        {
+          description: "Security Deposit",
+          quantity: 1,
+          unitPrice: depositAmount,
+          total: depositAmount
+        }
+      ],
+      subtotal: prepaidAmount + depositAmount,
+      discount: totalSavings,
+      total: prepaidAmount + depositAmount,
+      paymentMethod: form.getValues().paymentMethod,
+      paymentReference: form.getValues().paymentReference || "",
+      notes: form.getValues().notes || "",
+      status: "PAID"
+    };
+    
+    // In a real application, we would save this to a database
+    console.log("Generated invoice:", invoice);
+    
+    // Return the invoice number for reference
+    return invoiceNumber;
+  };
+
   // Process payment
   const handlePayment = async (values: PaymentFormValues) => {
     setIsSubmitting(true);
@@ -125,6 +175,9 @@ export default function PaymentTerminal() {
       formData.append('checkIn', checkIn.toISOString());
       formData.append('checkOut', checkOut.toISOString());
       formData.append('planType', planType);
+      formData.append('bookingReference', bookingReference);
+      formData.append('propertyId', propertyId.toString());
+      formData.append('propertyName', propertyName);
       formData.append('prepaidPeriods', JSON.stringify(prepaidPeriods));
       formData.append('paymentReference', values.paymentReference || '');
       formData.append('notes', values.notes || '');
@@ -134,13 +187,17 @@ export default function PaymentTerminal() {
         formData.append('documents', file);
       });
       
+      // Generate invoice
+      const invoiceNumber = generateInvoice();
+      formData.append('invoiceNumber', invoiceNumber);
+      
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       setPaymentStatus('success');
       toast({
         title: "Payment successful!",
-        description: "Your payment has been processed successfully.",
+        description: `Your payment for booking ${bookingReference} has been processed successfully. Invoice #${invoiceNumber} has been generated.`,
       });
       
       // Redirect to success page or dashboard after 3 seconds
@@ -485,6 +542,16 @@ export default function PaymentTerminal() {
     }
   };
 
+  // Generate a reference for the success state
+  const [invoiceRef, setInvoiceRef] = useState<string>("");
+  
+  useEffect(() => {
+    if (paymentStatus === 'success' && !invoiceRef) {
+      // Generate a reference for the payment
+      setInvoiceRef(`INV-${Date.now().toString().slice(-6)}`);
+    }
+  }, [paymentStatus, invoiceRef]);
+
   // If payment is successful, show success page
   if (paymentStatus === 'success') {
     return (
@@ -499,9 +566,19 @@ export default function PaymentTerminal() {
             <CheckCircle className="h-12 w-12 text-green-600" />
           </div>
           <h1 className="text-2xl font-bold mb-4">Payment Successful!</h1>
+          <div className="bg-green-50 border border-green-100 rounded-md p-4 mb-6">
+            <div className="text-sm text-green-800 mb-2">
+              <div className="font-medium">Booking Reference:</div>
+              <div className="text-lg">{bookingReference}</div>
+            </div>
+            <div className="text-sm text-green-800">
+              <div className="font-medium">Invoice Number:</div>
+              <div className="text-lg">{invoiceRef}</div>
+            </div>
+          </div>
           <p className="text-muted-foreground mb-8">
             Your payment of {totalPaymentAmount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })} has been received. 
-            Thank you for your booking.
+            A receipt has been generated and will be sent to your email address.
           </p>
           <Button onClick={() => guestId ? setLocation(`/guest-dashboard?guestId=${guestId}`) : setLocation('/')}>
             Continue to Dashboard
@@ -529,12 +606,16 @@ export default function PaymentTerminal() {
             <div className="space-y-2">
               <h3 className="font-medium">Booking Details</h3>
               <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="text-muted-foreground">Booking Reference:</div>
+                <div className="font-medium text-primary">{bookingReference}</div>
                 <div className="text-muted-foreground">Check-in:</div>
                 <div>{format(checkIn, "MMM d, yyyy")}</div>
                 <div className="text-muted-foreground">Check-out:</div>
                 <div>{format(checkOut, "MMM d, yyyy")}</div>
                 <div className="text-muted-foreground">Plan Type:</div>
                 <div className="capitalize">{planType} Plan</div>
+                <div className="text-muted-foreground">Property:</div>
+                <div className="truncate">{propertyName}</div>
               </div>
             </div>
             
