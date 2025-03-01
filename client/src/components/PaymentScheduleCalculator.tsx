@@ -50,7 +50,15 @@ export default function PaymentScheduleCalculator({ property, checkIn, checkOut 
   
   // Generate all payment periods based on the check-in and check-out dates
   const allPeriods = useMemo(() => {
-    if (!checkIn || !checkOut) return [];
+    // Safe-guard against invalid dates
+    if (!checkIn || !checkOut || isNaN(checkIn.getTime()) || isNaN(checkOut.getTime())) {
+      return [];
+    }
+    
+    // Ensure checkOut is after checkIn
+    if (checkOut <= checkIn) {
+      return [];
+    }
     
     const periods: PaymentPeriod[] = [];
     const totalDays = differenceInDays(checkOut, checkIn);

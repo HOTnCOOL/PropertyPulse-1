@@ -150,9 +150,22 @@ export default function GuestRegistration() {
     mutationFn: async (values: FormData) => {
       console.log('Starting guest registration with values:', values);
 
+      // Handle dateOfBirth safely with validation
+      let dateOfBirthISO = null;
+      if (values.dateOfBirth) {
+        try {
+          const date = new Date(values.dateOfBirth);
+          if (!isNaN(date.getTime())) {
+            dateOfBirthISO = date.toISOString();
+          }
+        } catch (error) {
+          console.error('Error parsing date of birth:', error);
+        }
+      }
+
       const formattedValues = {
         ...values,
-        dateOfBirth: values.dateOfBirth ? new Date(values.dateOfBirth).toISOString() : null,
+        dateOfBirth: dateOfBirthISO,
       };
 
       console.log('Sending formatted values to API:', formattedValues);
@@ -224,14 +237,26 @@ export default function GuestRegistration() {
         return;
       }
 
-      // Create the guest registration payload
+      // Create the guest registration payload with safe date handling
+      let dateOfBirthISO = null;
+      if (values.dateOfBirth) {
+        try {
+          const date = new Date(values.dateOfBirth);
+          if (!isNaN(date.getTime())) {
+            dateOfBirthISO = date.toISOString();
+          }
+        } catch (error) {
+          console.error('Error parsing dateOfBirth:', error);
+        }
+      }
+      
       const guestData = {
         firstName: values.firstName,
         lastName: values.lastName,
         email: values.email,
         phone: values.phone || "",
         propertyId: values.propertyId,
-        dateOfBirth: values.dateOfBirth ? new Date(values.dateOfBirth).toISOString() : null,
+        dateOfBirth: dateOfBirthISO,
         placeOfBirth: values.placeOfBirth || "",
         homeAddress: values.homeAddress || "",
         // Include address field for database compatibility
