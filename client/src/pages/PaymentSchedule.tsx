@@ -62,17 +62,21 @@ function getDiscountPercentage(prepaidPeriodIndex: number): number {
 }
 
 const calculateDepositAmount = (plan: 'monthly' | 'weekly' | 'daily', prepaidPeriodsCount: number, stayDurationDays: number): number => {
+  // Calculate base deposit amount based on the selected plan
   let baseDeposit;
-
-  // Calculate base deposit
-  if (plan === 'daily') {
-    baseDeposit = DAILY_RATE; // Always one daily rate for daily plans
-  } else if (stayDurationDays > 60) {
-    baseDeposit = MONTHLY_RATE;
-  } else if (stayDurationDays > 14) {
-    baseDeposit = WEEKLY_RATE;
-  } else {
-    baseDeposit = DAILY_RATE;
+  
+  switch (plan) {
+    case 'daily':
+      baseDeposit = DAILY_RATE; // One day's rate for daily plan
+      break;
+    case 'weekly':
+      baseDeposit = WEEKLY_RATE; // One week's rate for weekly plan
+      break;
+    case 'monthly':
+      baseDeposit = MONTHLY_RATE; // One month's rate for monthly plan
+      break;
+    default:
+      baseDeposit = DAILY_RATE;
   }
 
   // Apply deposit reductions based on prepaid periods
@@ -82,15 +86,7 @@ const calculateDepositAmount = (plan: 'monthly' | 'weekly' | 'daily', prepaidPer
     baseDeposit *= 0.5; // 50% deposit reduction for 2 prepaid periods
   }
 
-  // Apply plan-specific maximum deposit limits
-  switch (plan) {
-    case 'daily':
-      return Math.min(baseDeposit, DAILY_RATE);
-    case 'weekly':
-      return Math.min(baseDeposit, WEEKLY_RATE);
-    case 'monthly':
-      return Math.min(baseDeposit, MONTHLY_RATE);
-  }
+  return baseDeposit;
 };
 
 // Check if stay duration meets plan eligibility
@@ -298,16 +294,34 @@ export default function PaymentSchedule() {
         remainingDays -= 7;
         periodIndex++;
       }
+    } else if (preferredPackageType === 'daily') {
+      // Handle daily plan - create individual day periods
+      for (let i = 0; i < totalDays; i++) {
+        const dayStartDate = addDays(selectedDates.from, i);
+        const dayEndDate = addDays(dayStartDate, 1);
+        
+        periods.push({
+          type: 'daily',
+          startDate: dayStartDate,
+          endDate: dayEndDate,
+          baseAmount: DAILY_RATE,
+          amount: DAILY_RATE, // Will be recalculated with discounts
+          discountPercentage: 0, // Will be recalculated
+          isPrepaid: i === 0, // First day is always prepaid
+          index: i
+        });
+      }
+      
+      // No remaining days to handle since we've created periods for each day
+      remainingDays = 0;
     }
     
-    // Add remaining days as a daily period if needed
-    if (remainingDays > 0) {
+    // Add remaining days as a daily period if needed (for monthly/weekly plans)
+    if (remainingDays > 0 && preferredPackageType !== 'daily') {
       const periodEndDate = addDays(currentDate, remainingDays);
       const dailyRate = preferredPackageType === 'monthly' ? 
                        MONTHLY_RATE / 30 : 
-                       preferredPackageType === 'weekly' ? 
-                       WEEKLY_RATE / 7 : 
-                       DAILY_RATE;
+                       WEEKLY_RATE / 7;
       
       periods.push({
         type: 'daily',
