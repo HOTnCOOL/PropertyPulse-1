@@ -5,7 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { UserPlus, CheckCircle, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { useLocation } from "wouter";
+import { useLocation, useNavigate } from "wouter";
 import {
   Form,
   FormControl,

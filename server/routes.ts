@@ -507,17 +507,9 @@ export function registerRoutes(app: Express): Server {
     try {
       console.log('Received guest registration request:', req.body);
 
-      // Parse date of birth if provided
-      const dateOfBirth = req.body.dateOfBirth ? new Date(req.body.dateOfBirth) : null;
-
-      // Validate date of birth if provided
-      if (dateOfBirth && isNaN(dateOfBirth.getTime())) {
-        console.error('Invalid date of birth format:', req.body.dateOfBirth);
-        return res.status(400).json({
-          message: "Invalid date format for date of birth",
-          details: { dateOfBirth: req.body.dateOfBirth }
-        });
-      }
+      // Handle dateOfBirth as a string in YYYY-MM-DD format directly
+      // Skip converting to Date object to avoid timezone issues
+      const dateOfBirth = req.body.dateOfBirth || null;
 
       // Ensure required fields are present
       if (!req.body.address) {
@@ -528,8 +520,9 @@ export function registerRoutes(app: Express): Server {
         req.body.phone = "Not provided"; // Default value for phone if not provided
       }
 
-      // Generate a unique booking reference
+      // Generate a unique booking reference and access code
       const bookingReference = 'BOOK' + Math.random().toString(36).substring(2, 8).toUpperCase();
+      const accessCode = Math.floor(100000 + Math.random() * 900000).toString();
 
       // Start a transaction
       const result = await db.transaction(async (tx) => {
@@ -537,41 +530,31 @@ export function registerRoutes(app: Express): Server {
         const [guest] = await tx
           .insert(guests)
           .values({
-            ...req.body,
+            firstName: req.body.firstName,
+            lastName: req.body.lastName,
+            email: req.body.email,
+            phone: req.body.phone || "Not provided",
             dateOfBirth: dateOfBirth,
+            placeOfBirth: req.body.placeOfBirth || "",
+            address: req.body.address,
+            homeAddress: req.body.homeAddress || "",
+            idNumber: req.body.idNumber,
+            idType: req.body.idType,
+            idImageUrl: req.body.idImageUrl || "",
             bookingReference,
+            accessCode,
           })
           .returning();
 
         console.log('Created guest:', guest);
 
-        // Get property details
-        const property = await tx.query.properties.findFirst({
-          where: eq(properties.id, guest.propertyId),
-        });
-
-        if (!property) {
-          throw new Error("Property not found");
-        }
-
-        // Create initial booking without dates
-        const [booking] = await tx
-          .insert(bookings)
-          .values({
-            propertyId: guest.propertyId,
-            guestId: guest.id,
-            status: 'pending',
-            totalAmount: 0, // Will be updated when dates are selected
-            bookingReference,
-            notes: `Booking for ${guest.firstName} ${guest.lastName}`,
-          })
-          .returning();
-
-        console.log('Created booking:', booking);
-        return { guest, booking };
+        // Just return the guest - we don't create a booking automatically anymore
+        // This allows guests to be created separately from bookings
+        
+        return { guest };
       });
 
-      res.json(result);
+      res.status(201).json(result.guest);
     } catch (error) {
       console.error('Error creating guest:', error);
       res.status(500).json({
