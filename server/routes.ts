@@ -520,58 +520,39 @@ export function registerRoutes(app: Express): Server {
       const bookingReference = 'BOOK' + Math.random().toString(36).substring(2, 8).toUpperCase();
       const accessCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-      // Create guest values object with all fields EXCEPT dateOfBirth
-      const guestValues = {
+      // Create a base guest object without any dates
+      const guest = {
         firstName: req.body.firstName,
         lastName: req.body.lastName,
         email: req.body.email,
         phone: req.body.phone || "Not provided",
         placeOfBirth: req.body.placeOfBirth || "",
-        address: req.body.address,
+        address: req.body.address || "Not provided",
         homeAddress: req.body.homeAddress || "",
-        idNumber: req.body.idNumber,
+        idNumber: req.body.idNumber || "",
         idType: req.body.idType,
         idImageUrl: req.body.idImageUrl || "",
         bookingReference,
         accessCode,
+        // No dateOfBirth or check dates at this stage
       };
-
-      // Only add dateOfBirth if it's properly formatted
-      if (req.body.dateOfBirth) {
-        // Try to create a valid date from the string
-        try {
-          const dateParts = req.body.dateOfBirth.split('-');
-          if (dateParts.length === 3) {
-            const year = parseInt(dateParts[0]);
-            const month = parseInt(dateParts[1]) - 1; // Months are 0-indexed in JS
-            const day = parseInt(dateParts[2]);
-            
-            // Check if the date is valid before adding it
-            const date = new Date(year, month, day);
-            if (!isNaN(date.getTime())) {
-              // Make sure we add it as a field directly to the guestValues object
-              (guestValues as any).dateOfBirth = req.body.dateOfBirth;
-            }
-          }
-        } catch (error) {
-          console.warn('Invalid date format for dateOfBirth, skipping field:', req.body.dateOfBirth);
-        }
-      }
 
       // Start a transaction
       const result = await db.transaction(async (tx) => {
+        console.log('Inserting guest with values:', guest);
+        
         // Create guest with the prepared values
-        const [guest] = await tx
+        const [newGuest] = await tx
           .insert(guests)
-          .values(guestValues)
+          .values(guest)
           .returning();
 
-        console.log('Created guest:', guest);
+        console.log('Created guest:', newGuest);
 
         // Just return the guest - we don't create a booking automatically anymore
         // This allows guests to be created separately from bookings
         
-        return { guest };
+        return { guest: newGuest };
       });
 
       res.status(201).json(result.guest);
