@@ -520,8 +520,12 @@ export function registerRoutes(app: Express): Server {
       const bookingReference = 'BOOK' + Math.random().toString(36).substring(2, 8).toUpperCase();
       const accessCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-      // Create a base guest object without any dates
+      // Explicitly extract all fields except dates that cause issues
+      const { dateOfBirth, checkIn, checkOut, ...safeFields } = req.body;
+      
+      // Create a base guest object with only the safe fields
       const guest = {
+        ...safeFields,
         firstName: req.body.firstName,
         lastName: req.body.lastName,
         email: req.body.email,
@@ -534,7 +538,6 @@ export function registerRoutes(app: Express): Server {
         idImageUrl: req.body.idImageUrl || "",
         bookingReference,
         accessCode,
-        // No dateOfBirth or check dates at this stage
       };
 
       // Start a transaction

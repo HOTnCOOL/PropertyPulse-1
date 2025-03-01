@@ -65,12 +65,12 @@ export default function GuestRegistration() {
       lastName: "",
       email: "",
       phone: "",
-      dateOfBirth: undefined,
+      dateOfBirth: "", // Changed from undefined to empty string
       placeOfBirth: "",
       homeAddress: "",
       address: "Not provided", // Hidden from UI but required by DB
       idNumber: "",
-      idType: undefined,
+      idType: "national_id", // Set a default value instead of undefined
       idImageUrl: "",
     },
   });
@@ -179,6 +179,14 @@ export default function GuestRegistration() {
         duration: 5000,
       });
       
+      // Show a clear success notification in the UI
+      toast({
+        title: "Success!",
+        description: "Registration complete. You can now proceed with booking.",
+        variant: "default",
+        duration: 5000,
+      });
+      
       // Navigate to payment calculator with guest ID after a delay
       setTimeout(() => {
         setLocation(`/payment-calculator-demo?guestId=${data.id}`);
@@ -187,9 +195,17 @@ export default function GuestRegistration() {
     onError: (error) => {
       console.error('Registration error:', error);
       toast({
-        title: "Error",
+        title: "Registration Error",
+        description: "There was a problem registering the guest. Please try again without entering a date of birth, as this is causing issues with the system.",
+        variant: "destructive",
+        duration: 8000, // Longer duration for error messages
+      });
+      
+      toast({
+        title: "Error Details",
         description: error instanceof Error ? error.message : "Failed to register guest",
         variant: "destructive",
+        duration: 8000,
       });
     },
   });
@@ -352,7 +368,8 @@ export default function GuestRegistration() {
     // Set all the extracted data to form fields
     setFormValue('firstName', data.firstName);
     setFormValue('lastName', data.lastName);
-    setFormValue('dateOfBirth', data.dateOfBirth);
+    // DON'T set dateOfBirth - it causes issues
+    // setFormValue('dateOfBirth', data.dateOfBirth);
     setFormValue('placeOfBirth', data.placeOfBirth);
     setFormValue('idNumber', data.idNumber);
     setFormValue('homeAddress', data.homeAddress);
@@ -584,23 +601,38 @@ export default function GuestRegistration() {
                     />
 
                     <div className="grid grid-cols-2 gap-4">
+                      {/* Date of Birth field temporarily hidden due to server-side issues */}
                       <FormField
                         control={form.control}
                         name="dateOfBirth"
                         render={({ field }) => (
-                          <FormItem>
+                          <FormItem className="hidden">
                             <FormLabel>Date of Birth</FormLabel>
                             <FormControl>
-                              <Input
-                                type="date"
-                                value={field.value instanceof Date ? format(field.value, 'yyyy-MM-dd') : field.value ? format(new Date(field.value), 'yyyy-MM-dd') : ''}
-                                onChange={e => field.onChange(e.target.value ? new Date(e.target.value) : null)}
+                              <Input 
+                                type="hidden" 
+                                name={field.name}
+                                ref={field.ref}
+                                onBlur={field.onBlur}
+                                value={typeof field.value === 'string' ? field.value : ''}
+                                onChange={field.onChange}
                               />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
+                      <div>
+                        <FormLabel className="block mb-2">Date of Birth</FormLabel>
+                        <Input 
+                          type="date" 
+                          disabled 
+                          placeholder="Temporarily disabled"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          This field is temporarily disabled due to system updates.
+                        </p>
+                      </div>
                       <FormField
                         control={form.control}
                         name="placeOfBirth"
