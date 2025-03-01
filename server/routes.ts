@@ -503,11 +503,12 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  app.post("/api/guests", async (req: Request, res: Response) => {
+  // New simpler endpoint for guest registration without any date fields
+  app.post("/api/guests/register", async (req: Request, res: Response) => {
     try {
-      console.log('Received guest registration request:', req.body);
+      console.log('Received simplified guest registration request:', req.body);
 
-      // Ensure required fields are present
+      // Validate required fields
       if (!req.body.firstName || !req.body.lastName || !req.body.email || !req.body.idNumber) {
         return res.status(400).json({
           message: "Missing required fields",
@@ -515,71 +516,83 @@ export function registerRoutes(app: Express): Server {
         });
       }
 
-      // Apply defaults for optional fields
-      if (!req.body.address) {
-        req.body.address = "Not provided";
-      }
-
-      if (!req.body.phone) {
-        req.body.phone = "Not provided";
-      }
-
       // Generate a unique booking reference and access code
       const bookingReference = 'BOOK' + Math.random().toString(36).substring(2, 8).toUpperCase();
       const accessCode = Math.floor(100000 + Math.random() * 900000).toString();
       
-      // Create a minimal, guaranteed-safe guest object
-      const guest = {
-        firstName: req.body.firstName,
-        lastName: req.body.lastName,
-        email: req.body.email,
-        phone: req.body.phone || "Not provided",
-        address: req.body.address || "Not provided",
-        idNumber: req.body.idNumber || "",
-        idType: req.body.idType || "national_id",
-        idImageUrl: req.body.idImageUrl || "",
-        bookingReference,
-        accessCode,
-        // Optional fields that shouldn't cause issues
-        placeOfBirth: req.body.placeOfBirth || "",
-        homeAddress: req.body.homeAddress || "",
-        // Explicitly omit any date fields that could cause issues
+      // Insert directly with SQL to bypass Drizzle ORM that's causing issues
+      const result = await pool.query(
+        `INSERT INTO guests 
+        (first_name, last_name, email, phone, address, id_number, id_type, booking_reference, access_code, place_of_birth, home_address) 
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) 
+        RETURNING id, first_name, last_name, email, phone, address, id_number, id_type, booking_reference, access_code`,
+        [
+          req.body.firstName,
+          req.body.lastName,
+          req.body.email,
+          req.body.phone || "Not provided",
+          req.body.address || "Not provided",
+          req.body.idNumber || "",
+          req.body.idType || "national_id",
+          bookingReference,
+          accessCode,
+          req.body.placeOfBirth || "",
+          req.body.homeAddress || ""
+        ]
+      );
+
+      // Format the response to match our API structure
+      const newGuest = {
+        id: result.rows[0].id,
+        firstName: result.rows[0].first_name,
+        lastName: result.rows[0].last_name,
+        email: result.rows[0].email,
+        phone: result.rows[0].phone,
+        address: result.rows[0].address,
+        idNumber: result.rows[0].id_number, 
+        idType: result.rows[0].id_type,
+        bookingReference: result.rows[0].booking_reference,
+        accessCode: result.rows[0].access_code
       };
 
-      // Start a transaction
-      const result = await db.transaction(async (tx) => {
-        console.log('Preparing guest values for insertion...');
-        
-        // Explicitly set the current date for createdAt and set all other date fields to null
-        const sanitizedGuest = {
-          ...guest,
-          createdAt: new Date(),
-          dateOfBirth: null,
-          checkIn: null, 
-          checkOut: null
-        };
-        
-        console.log('Inserting guest with sanitized values:', sanitizedGuest);
-        
-        // Create guest with the sanitized values
-        const [newGuest] = await tx
-          .insert(guests)
-          .values(sanitizedGuest)
-          .returning();
-
-        console.log('Created guest:', newGuest);
-
-        // Just return the guest - we don't create a booking automatically anymore
-        // This allows guests to be created separately from bookings
-        
-        return { guest: newGuest };
-      });
-
-      res.status(201).json(result.guest);
+      console.log('Created guest with direct SQL:', newGuest);
+      res.status(201).json(newGuest);
     } catch (error) {
-      console.error('Error creating guest:', error);
+      console.error('Error in simplified guest registration:', error);
       res.status(500).json({
-        message: "Failed to create guest",
+        message: "Failed to register guest",
+        details: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  });
+  
+  // Keep the original but modify it to avoid date issues
+  app.post("/api/guests", async (req: Request, res: Response) => {
+    try {
+      // Just redirect to our new simplified endpoint
+      const redirectUrl = "/api/guests/register";
+      console.log(`Redirecting original guest registration to ${redirectUrl}`);
+      
+      // Forward the request to the new endpoint
+      const response = await fetch(`http://localhost:${process.env.PORT || 5000}${redirectUrl}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(req.body)
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        return res.status(response.status).json(errorData);
+      }
+      
+      const data = await response.json();
+      res.status(201).json(data);
+    } catch (error) {
+      console.error('Error in guest registration redirect:', error);
+      res.status(500).json({
+        message: "Failed to register guest",
         details: error instanceof Error ? error.message : "Unknown error",
       });
     }

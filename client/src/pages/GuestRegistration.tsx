@@ -111,45 +111,28 @@ export default function GuestRegistration() {
 
   const registerGuest = useMutation({
     mutationFn: async (values: FormData) => {
-      console.log('Starting guest registration with values:', values);
+      console.log('Starting guest registration with simplified endpoint');
 
-      // Handle dateOfBirth safely
-      let dateOfBirthISO = null;
-      if (values.dateOfBirth) {
-        try {
-          // Convert to a proper Date object to ensure correctness
-          const date = new Date(values.dateOfBirth);
-          if (!isNaN(date.getTime())) {
-            // Format as YYYY-MM-DD only to avoid timezone issues
-            const year = date.getFullYear();
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const day = String(date.getDate()).padStart(2, '0');
-            dateOfBirthISO = `${year}-${month}-${day}`;
-            
-            console.log('Formatted date of birth:', dateOfBirthISO);
-          } else {
-            console.warn('Date of birth is not a valid date');
-          }
-        } catch (error) {
-          console.error('Error parsing date of birth:', error);
-        }
-      }
-
-      // Create a new object without dateOfBirth
-      const { dateOfBirth, ...otherValues } = values;
-      
-      // Then add our safely formatted date if it exists
-      const formattedValues = {
-        ...otherValues,
-        ...(dateOfBirthISO ? { dateOfBirth: dateOfBirthISO } : {})
+      // Create a clean object with just the fields we need
+      const safeValues = {
+        firstName: values.firstName,
+        lastName: values.lastName,
+        email: values.email,
+        phone: values.phone || "",
+        idNumber: values.idNumber || "",
+        idType: values.idType || "national_id",
+        placeOfBirth: values.placeOfBirth || "",
+        homeAddress: values.homeAddress || "",
+        address: values.address || "Not provided",
+        idImageUrl: values.idImageUrl || "",
       };
 
-      console.log('Sending formatted values to API:', formattedValues);
+      console.log('Sending safe values to API:', safeValues);
 
-      const response = await fetch("/api/guests", {
+      const response = await fetch("/api/guests/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formattedValues),
+        body: JSON.stringify(safeValues),
       });
 
       if (!response.ok) {
