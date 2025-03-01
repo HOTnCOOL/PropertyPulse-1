@@ -224,14 +224,24 @@ export default function PaymentSchedule() {
     };
   }, [selectedDates]);
 
-  // Update preferred package type based on eligibility if current selection becomes ineligible
+  // Auto-select the appropriate plan based on stay duration
   useEffect(() => {
-    if (!eligibility[preferredPackageType]) {
-      if (eligibility.monthly) setPreferredPackageType('monthly');
-      else if (eligibility.weekly) setPreferredPackageType('weekly');
-      else setPreferredPackageType('daily');
+    if (!selectedDates.from || !selectedDates.to) return;
+    
+    const stayDuration = differenceInDays(selectedDates.to, selectedDates.from);
+    
+    // Select plan based on stay duration rules:
+    // - 60+ days: Monthly plan (if eligible)
+    // - 15-60 days: Weekly plan (if eligible)
+    // - <14 days: Daily plan
+    if (stayDuration > 60 && eligibility.monthly) {
+      setPreferredPackageType('monthly');
+    } else if (stayDuration >= 15 && eligibility.weekly) {
+      setPreferredPackageType('weekly');
+    } else {
+      setPreferredPackageType('daily');
     }
-  }, [eligibility, preferredPackageType]);
+  }, [selectedDates, eligibility]);
   
   // Generate all payment periods based on the check-in and check-out dates
   const allPeriods = useMemo(() => {
