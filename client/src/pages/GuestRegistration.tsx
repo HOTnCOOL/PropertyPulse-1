@@ -2,9 +2,9 @@ import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { UserPlus, CheckCircle, Users } from "lucide-react";
+import { UserPlus, CheckCircle, Users, Mail, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from "@/components/ui/card";
 import { useLocation } from "wouter";
 import {
   Form,
@@ -40,7 +40,13 @@ const guestFormSchema = insertGuestSchema.omit({
   accessCode: true 
 });
 
+// Create a simple email check form schema
+const emailCheckSchema = z.object({
+  email: z.string().email("Please enter a valid email address")
+});
+
 type FormData = z.infer<typeof guestFormSchema>;
+type EmailCheckFormData = z.infer<typeof emailCheckSchema>;
 
 export default function GuestRegistration() {
   const { toast } = useToast();
@@ -50,6 +56,16 @@ export default function GuestRegistration() {
   const idScannerRef = useRef<HTMLDivElement>(null);
   const [registeredGuest, setRegisteredGuest] = useState<Guest | null>(null);
   const [activeTab, setActiveTab] = useState<string>("register");
+  const [emailCheckStep, setEmailCheckStep] = useState(true);
+  const [isCheckingEmail, setIsCheckingEmail] = useState(false);
+  
+  // Form for email check
+  const emailCheckForm = useForm<EmailCheckFormData>({
+    resolver: zodResolver(emailCheckSchema),
+    defaultValues: {
+      email: ""
+    }
+  });
 
   // Scroll to ID Scanner on page load
   useEffect(() => {
@@ -471,6 +487,56 @@ export default function GuestRegistration() {
       });
     }
   };
+  
+  // Function to check if a guest with the provided email already exists
+  const checkGuestEmail = async (emailData: EmailCheckFormData) => {
+    setIsCheckingEmail(true);
+    try {
+      const response = await fetch(`/api/guests/check-email?email=${encodeURIComponent(emailData.email)}`);
+      
+      if (!response.ok) {
+        throw new Error("Failed to check guest email");
+      }
+      
+      const data = await response.json();
+      
+      if (data.exists && data.guest) {
+        // Guest already exists, skip to payment page
+        toast({
+          title: "Guest Already Registered",
+          description: `Welcome back ${data.guest.firstName}! Redirecting to payment...`,
+          duration: 3000,
+        });
+        
+        // Redirect to the payment page with the guest ID
+        setTimeout(() => {
+          setLocation(`/payment-calculator-demo?guestId=${data.guest.id}`);
+        }, 1500);
+        
+        return true;
+      } else {
+        // Guest doesn't exist, show the registration form
+        // Pre-fill the email in the registration form
+        form.setValue("email", emailData.email);
+        setEmailCheckStep(false);
+        return false;
+      }
+    } catch (error) {
+      console.error("Error checking guest email:", error);
+      toast({
+        title: "Error",
+        description: "Failed to check if the guest exists. Please try again.",
+        variant: "destructive",
+      });
+      return false;
+    } finally {
+      setIsCheckingEmail(false);
+    }
+  };
+
+  const onEmailCheckSubmit = async (values: EmailCheckFormData) => {
+    await checkGuestEmail(values);
+  };
 
   return (
     <div className="space-y-6">
@@ -490,220 +556,258 @@ export default function GuestRegistration() {
           <Card>
             <CardHeader>
               <CardTitle>Guest Registration</CardTitle>
+              {emailCheckStep && (
+                <CardDescription>
+                  Please enter your email to check if you're already registered
+                </CardDescription>
+              )}
             </CardHeader>
             <CardContent>
-              <div className="mb-6">
-                <GuestSearch onGuestSelect={handleGuestSelect} />
-              </div>
-
-              {/* ID Scanner section */}
-              <div className="mb-6" ref={idScannerRef}>
-                <h3 className="text-lg font-medium mb-3">Scan ID/Passport</h3>
-                <IdScanner
-                  onDataExtracted={handleExtractedData}
-                  onImageCaptured={handleIdImageCaptured}
-                />
-              </div>
-
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-medium">Personal Information</h3>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <FormField
-                        control={form.control}
-                        name="firstName"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>First Name *</FormLabel>
-                            <FormControl>
-                              <Input {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="lastName"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Last Name *</FormLabel>
-                            <FormControl>
-                              <Input {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <FormField
-                        control={form.control}
-                        name="email"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Email *</FormLabel>
-                            <FormControl>
-                              <Input type="email" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="phone"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Phone</FormLabel>
-                            <FormControl>
-                              <Input {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-
-                    {/* Required by DB but hidden from UI */}
+              {emailCheckStep ? (
+                // Email check form
+                <Form {...emailCheckForm}>
+                  <form onSubmit={emailCheckForm.handleSubmit(onEmailCheckSubmit)} className="space-y-6">
                     <FormField
-                      control={form.control}
-                      name="address"
+                      control={emailCheckForm.control}
+                      name="email"
                       render={({ field }) => (
-                        <FormItem className="hidden">
+                        <FormItem>
+                          <FormLabel>Email Address</FormLabel>
                           <FormControl>
-                            <Input {...field} />
+                            <Input placeholder="you@example.com" type="email" {...field} />
                           </FormControl>
+                          <FormMessage />
                         </FormItem>
                       )}
                     />
-
-                    {/* Personal Number field - just UI, not connected to DB yet */}
-                    <FormItem>
-                      <FormLabel>Personal Number</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Enter personal number" />
-                      </FormControl>
-                    </FormItem>
+                    <Button type="submit" className="w-full" disabled={isCheckingEmail}>
+                      {isCheckingEmail ? (
+                        "Checking..."
+                      ) : (
+                        <>
+                          Continue <ArrowRight className="ml-2 h-4 w-4" />
+                        </>
+                      )}
+                    </Button>
+                  </form>
+                </Form>
+              ) : (
+                // Registration form - only shown if email check didn't find an existing guest
+                <>
+                  <div className="mb-6">
+                    <GuestSearch onGuestSelect={handleGuestSelect} />
                   </div>
 
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-medium">ID/Passport Information</h3>
-
-                    <FormField
-                      control={form.control}
-                      name="idType"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>ID Type</FormLabel>
-                          <Select
-                            onValueChange={field.onChange}
-                            value={field.value}
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select ID type" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="passport">Passport</SelectItem>
-                              <SelectItem value="national_id">National ID</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
+                  {/* ID Scanner section */}
+                  <div className="mb-6" ref={idScannerRef}>
+                    <h3 className="text-lg font-medium mb-3">Scan ID/Passport</h3>
+                    <IdScanner
+                      onDataExtracted={handleExtractedData}
+                      onImageCaptured={handleIdImageCaptured}
                     />
+                  </div>
 
-                    <FormField
-                      control={form.control}
-                      name="idNumber"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>ID/Passport Number *</FormLabel>
-                          <FormControl>
-                            <Input {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                  <Form {...form}>
+                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                      <div className="space-y-4">
+                        <h3 className="text-lg font-medium">Personal Information</h3>
 
-                    <div className="grid grid-cols-2 gap-4">
-                      {/* Date of Birth field temporarily hidden due to server-side issues */}
-                      <FormField
-                        control={form.control}
-                        name="dateOfBirth"
-                        render={({ field }) => (
-                          <FormItem className="hidden">
-                            <FormLabel>Date of Birth</FormLabel>
-                            <FormControl>
-                              <Input 
-                                type="hidden" 
-                                name={field.name}
-                                ref={field.ref}
-                                onBlur={field.onBlur}
-                                value={typeof field.value === 'string' ? field.value : ''}
-                                onChange={field.onChange}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <div>
-                        <FormLabel className="block mb-2">Date of Birth</FormLabel>
-                        <Input 
-                          type="date" 
-                          disabled 
-                          placeholder="Temporarily disabled"
+                        <div className="grid grid-cols-2 gap-4">
+                          <FormField
+                            control={form.control}
+                            name="firstName"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>First Name *</FormLabel>
+                                <FormControl>
+                                  <Input {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={form.control}
+                            name="lastName"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Last Name *</FormLabel>
+                                <FormControl>
+                                  <Input {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <FormField
+                            control={form.control}
+                            name="email"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Email *</FormLabel>
+                                <FormControl>
+                                  <Input type="email" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={form.control}
+                            name="phone"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Phone</FormLabel>
+                                <FormControl>
+                                  <Input {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+
+                        {/* Required by DB but hidden from UI */}
+                        <FormField
+                          control={form.control}
+                          name="address"
+                          render={({ field }) => (
+                            <FormItem className="hidden">
+                              <FormControl>
+                                <Input {...field} />
+                              </FormControl>
+                            </FormItem>
+                          )}
                         />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          This field is temporarily disabled due to system updates.
-                        </p>
-                      </div>
-                      <FormField
-                        control={form.control}
-                        name="placeOfBirth"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Place of Birth</FormLabel>
-                            <FormControl>
-                              <Input {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
 
-                    <FormField
-                      control={form.control}
-                      name="homeAddress"
-                      render={({ field }) => (
+                        {/* Personal Number field - just UI, not connected to DB yet */}
                         <FormItem>
-                          <FormLabel>Home Address</FormLabel>
+                          <FormLabel>Personal Number</FormLabel>
                           <FormControl>
-                            <Input {...field} />
+                            <Input placeholder="Enter personal number" />
                           </FormControl>
-                          <FormMessage />
                         </FormItem>
-                      )}
-                    />
-                  </div>
+                      </div>
 
-                  <Button
-                    type="submit"
-                    className="w-full"
-                    disabled={registerGuest.isPending}
-                  >
-                    {registerGuest.isPending ? "Registering..." : "Register Guest"}
-                  </Button>
-                </form>
-              </Form>
+                      <div className="space-y-4">
+                        <h3 className="text-lg font-medium">ID/Passport Information</h3>
+
+                        <FormField
+                          control={form.control}
+                          name="idType"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>ID Type</FormLabel>
+                              <Select
+                                onValueChange={field.onChange}
+                                value={field.value}
+                              >
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select ID type" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="passport">Passport</SelectItem>
+                                  <SelectItem value="national_id">National ID</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="idNumber"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>ID/Passport Number *</FormLabel>
+                              <FormControl>
+                                <Input {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <div className="grid grid-cols-2 gap-4">
+                          {/* Date of Birth field temporarily hidden due to server-side issues */}
+                          <FormField
+                            control={form.control}
+                            name="dateOfBirth"
+                            render={({ field }) => (
+                              <FormItem className="hidden">
+                                <FormLabel>Date of Birth</FormLabel>
+                                <FormControl>
+                                  <Input 
+                                    type="hidden" 
+                                    name={field.name}
+                                    ref={field.ref}
+                                    onBlur={field.onBlur}
+                                    value={typeof field.value === 'string' ? field.value : ''}
+                                    onChange={field.onChange}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <div>
+                            <FormLabel className="block mb-2">Date of Birth</FormLabel>
+                            <Input 
+                              type="date" 
+                              disabled 
+                              placeholder="Temporarily disabled"
+                            />
+                            <p className="text-xs text-muted-foreground mt-1">
+                              This field is temporarily disabled due to system updates.
+                            </p>
+                          </div>
+                          <FormField
+                            control={form.control}
+                            name="placeOfBirth"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Place of Birth</FormLabel>
+                                <FormControl>
+                                  <Input {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+
+                        <FormField
+                          control={form.control}
+                          name="homeAddress"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Home Address</FormLabel>
+                              <FormControl>
+                                <Input {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+
+                      <Button
+                        type="submit"
+                        className="w-full"
+                        disabled={registerGuest.isPending}
+                      >
+                        {registerGuest.isPending ? "Registering..." : "Register Guest"}
+                      </Button>
+                    </form>
+                  </Form>
+                </>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
