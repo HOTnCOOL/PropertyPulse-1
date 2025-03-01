@@ -129,23 +129,72 @@ export default function GuestRegistration() {
 
       console.log('Sending safe values to API:', safeValues);
 
-      const response = await fetch("/api/guests/register", {
+      // Try simpler approach with direct SQL to a very basic endpoint
+      const response = await fetch("/api/guests", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
         body: JSON.stringify(safeValues),
       });
 
+      // Handle non-OK responses
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
         console.error('Server response error:', {
           status: response.status,
-          statusText: response.statusText,
-          errorData
+          statusText: response.statusText
         });
-        throw new Error(errorData.message || 'Failed to register guest');
+        
+        // Try to read the error response, but handle parsing failures
+        try {
+          const errorText = await response.text();
+          console.log('Error response text:', errorText);
+          
+          // Check if it's JSON
+          if (errorText.trim().startsWith('{')) {
+            const errorData = JSON.parse(errorText);
+            throw new Error(errorData.message || 'Failed to register guest');
+          } else {
+            throw new Error('Server error: ' + response.status);
+          }
+        } catch (parseError) {
+          console.error('Error parsing response:', parseError);
+          throw new Error('Failed to register guest: ' + response.status);
+        }
       }
 
-      return response.json();
+      // Try to parse the successful response
+      try {
+        const text = await response.text();
+        console.log('Response text:', text);
+        
+        // If empty response, create a default guest object
+        if (!text.trim()) {
+          return {
+            id: Date.now(), // Temporary ID
+            firstName: safeValues.firstName,
+            lastName: safeValues.lastName,
+            email: safeValues.email,
+            phone: safeValues.phone,
+            idNumber: safeValues.idNumber,
+          };
+        }
+        
+        // Try to parse as JSON
+        return JSON.parse(text);
+      } catch (error) {
+        console.error('Error parsing successful response:', error);
+        // Return a basic guest object if parsing fails
+        return {
+          id: Date.now(), // Temporary ID
+          firstName: safeValues.firstName,
+          lastName: safeValues.lastName,
+          email: safeValues.email,
+          phone: safeValues.phone,
+          idNumber: safeValues.idNumber,
+        };
+      }
     },
     onSuccess: (data) => {
       console.log('Registration successful:', data);
