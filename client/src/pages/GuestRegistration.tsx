@@ -5,7 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { UserPlus, CheckCircle, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { useLocation, useNavigate } from "wouter";
+import { useLocation } from "wouter";
 import {
   Form,
   FormControl,
@@ -45,6 +45,7 @@ type FormData = z.infer<typeof guestFormSchema>;
 export default function GuestRegistration() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+
   const queryClient = useQueryClient();
   const idScannerRef = useRef<HTMLDivElement>(null);
   const [registeredGuest, setRegisteredGuest] = useState<Guest | null>(null);
@@ -166,9 +167,14 @@ export default function GuestRegistration() {
 
       toast({
         title: "Guest Registration Successful",
-        description: `Guest ${data.firstName} ${data.lastName} has been registered successfully.`,
+        description: `Guest ${data.firstName} ${data.lastName} has been registered successfully. Redirecting to payment calculator...`,
         duration: 5000,
       });
+      
+      // Navigate to payment calculator with guest ID after a delay
+      setTimeout(() => {
+        setLocation(`/payment-calculator-demo?guestId=${data.id}`);
+      }, 1500);
     },
     onError: (error) => {
       console.error('Registration error:', error);
