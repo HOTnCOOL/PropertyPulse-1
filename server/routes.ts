@@ -541,6 +541,11 @@ export function registerRoutes(app: Express): Server {
         ]
       );
 
+      // Make sure we have a valid result
+      if (!result.rows || result.rows.length === 0) {
+        throw new Error("No data returned from database insert");
+      }
+
       // Format the response to match our API structure
       const newGuest = {
         id: result.rows[0].id,
@@ -556,9 +561,15 @@ export function registerRoutes(app: Express): Server {
       };
 
       console.log('Created guest with direct SQL:', newGuest);
+      
+      // Make sure we're sending only JSON
+      res.setHeader('Content-Type', 'application/json');
       res.status(201).json(newGuest);
     } catch (error) {
       console.error('Error in simplified guest registration:', error);
+      
+      // Make sure we're sending only JSON
+      res.setHeader('Content-Type', 'application/json');
       res.status(500).json({
         message: "Failed to register guest",
         details: error instanceof Error ? error.message : "Unknown error",
@@ -566,31 +577,74 @@ export function registerRoutes(app: Express): Server {
     }
   });
   
-  // Keep the original but modify it to avoid date issues
+  // Keep the original but implement it directly to avoid fetch issues
   app.post("/api/guests", async (req: Request, res: Response) => {
     try {
-      // Just redirect to our new simplified endpoint
-      const redirectUrl = "/api/guests/register";
-      console.log(`Redirecting original guest registration to ${redirectUrl}`);
-      
-      // Forward the request to the new endpoint
-      const response = await fetch(`http://localhost:${process.env.PORT || 5000}${redirectUrl}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(req.body)
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        return res.status(response.status).json(errorData);
+      // Use the same implementation as our simplified endpoint, don't redirect
+      console.log('Received request to original guest endpoint, processing directly');
+
+      // Validate required fields
+      if (!req.body.firstName || !req.body.lastName || !req.body.email || !req.body.idNumber) {
+        return res.status(400).json({
+          message: "Missing required fields",
+          details: "First name, last name, email, and ID number are required."
+        });
       }
+
+      // Generate a unique booking reference and access code
+      const bookingReference = 'BOOK' + Math.random().toString(36).substring(2, 8).toUpperCase();
+      const accessCode = Math.floor(100000 + Math.random() * 900000).toString();
       
-      const data = await response.json();
-      res.status(201).json(data);
+      // Insert directly with SQL to bypass Drizzle ORM that's causing issues
+      const result = await pool.query(
+        `INSERT INTO guests 
+        (first_name, last_name, email, phone, address, id_number, id_type, booking_reference, access_code, place_of_birth, home_address) 
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) 
+        RETURNING id, first_name, last_name, email, phone, address, id_number, id_type, booking_reference, access_code`,
+        [
+          req.body.firstName,
+          req.body.lastName,
+          req.body.email,
+          req.body.phone || "Not provided",
+          req.body.address || "Not provided",
+          req.body.idNumber || "",
+          req.body.idType || "national_id",
+          bookingReference,
+          accessCode,
+          req.body.placeOfBirth || "",
+          req.body.homeAddress || ""
+        ]
+      );
+
+      // Make sure we have a valid result
+      if (!result.rows || result.rows.length === 0) {
+        throw new Error("No data returned from database insert");
+      }
+
+      // Format the response to match our API structure
+      const newGuest = {
+        id: result.rows[0].id,
+        firstName: result.rows[0].first_name,
+        lastName: result.rows[0].last_name,
+        email: result.rows[0].email,
+        phone: result.rows[0].phone,
+        address: result.rows[0].address,
+        idNumber: result.rows[0].id_number, 
+        idType: result.rows[0].id_type,
+        bookingReference: result.rows[0].booking_reference,
+        accessCode: result.rows[0].access_code
+      };
+
+      console.log('Created guest with direct SQL (original endpoint):', newGuest);
+      
+      // Make sure we're sending only JSON
+      res.setHeader('Content-Type', 'application/json');
+      res.status(201).json(newGuest);
     } catch (error) {
-      console.error('Error in guest registration redirect:', error);
+      console.error('Error in original guest registration endpoint:', error);
+      
+      // Make sure we're sending only JSON
+      res.setHeader('Content-Type', 'application/json');
       res.status(500).json({
         message: "Failed to register guest",
         details: error instanceof Error ? error.message : "Unknown error",
