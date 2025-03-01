@@ -1,11 +1,10 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { format } from "date-fns";
-import { CalendarIcon } from "lucide-react";
+import { UserPlus, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { useLocation } from "wouter";
 import {
   Form,
@@ -16,7 +15,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Calendar } from "@/components/ui/calendar";
 import {
   Select,
   SelectContent,
@@ -24,17 +22,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
-import { insertGuestSchema, type Property, type Guest, type Payment } from "@db/schema";
+import { insertGuestSchema, type Guest, type Payment, type Property } from "@db/schema";
 import * as z from "zod";
 import GuestList from "../components/GuestList";
-import PaymentEstimator from "../components/PaymentEstimator";
-import PaymentScheduleCalculator from "../components/PaymentScheduleCalculator";
 import PaymentHistory from "../components/PaymentHistory";
 import IdScanner from "../components/IdScanner";
 import { GuestSearch } from "../components/GuestSearch";
