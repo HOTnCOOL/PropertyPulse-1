@@ -5,14 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Calendar } from "@/components/ui/calendar";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import PaymentScheduleCalculator from "@/components/PaymentScheduleCalculator";
 import { useQuery } from "@tanstack/react-query";
+import PaymentScheduleCalculator from "@/components/PaymentScheduleCalculator";
 
 export default function PaymentSchedule() {
   const { toast } = useToast();
   const [_, setLocation] = useLocation();
-  // Parse query params manually since we don't have useQueryParams
-  const [location] = useLocation();
+  // Parse query params manually
   const params = new URLSearchParams(window.location.search);
   const guestId = params.get('guestId') ? parseInt(params.get('guestId') as string) : undefined;
   
@@ -26,7 +25,7 @@ export default function PaymentSchedule() {
     to: addDays(today, 23) // 23-night stay as default
   });
 
-  // Example property data matching expected schema
+  // Property data
   const exampleProperty = {
     id: 1,
     name: "Modern Downtown Apartment",
@@ -43,7 +42,7 @@ export default function PaymentSchedule() {
     amenities: "WiFi, Kitchen, Parking",
     status: "active",
     bedType: "Queen",
-    bathrooms: "2",
+    bathrooms: 2, // Number, not string to match schema
     isActive: true,
     reservedDates: null,
     createdAt: new Date(),
@@ -102,59 +101,61 @@ export default function PaymentSchedule() {
         </div>
       ) : (
         <div className="flex flex-col md:flex-row gap-8">
-          {/* Guest information if available */}
-          {guest && (
-            <Card className="w-full md:w-1/3">
+          <div className="w-full md:w-1/3 space-y-6">
+            {/* Guest information if available */}
+            {guest && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Guest Information</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <dl className="space-y-4">
+                    <div>
+                      <dt className="text-sm font-medium text-muted-foreground">Name</dt>
+                      <dd className="font-medium">{guest.firstName} {guest.lastName}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-sm font-medium text-muted-foreground">Email</dt>
+                      <dd>{guest.email}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-sm font-medium text-muted-foreground">Phone</dt>
+                      <dd>{guest.phone || "Not provided"}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-sm font-medium text-muted-foreground">ID/Passport</dt>
+                      <dd>{guest.idNumber || "Not provided"}</dd>
+                    </div>
+                  </dl>
+                </CardContent>
+              </Card>
+            )}
+            
+            {/* Date selection card */}
+            <Card>
               <CardHeader>
-                <CardTitle>Guest Information</CardTitle>
+                <CardTitle>Select Dates</CardTitle>
               </CardHeader>
               <CardContent>
-                <dl className="space-y-4">
-                  <div>
-                    <dt className="text-sm font-medium text-muted-foreground">Name</dt>
-                    <dd className="font-medium">{guest.firstName} {guest.lastName}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-sm font-medium text-muted-foreground">Email</dt>
-                    <dd>{guest.email}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-sm font-medium text-muted-foreground">Phone</dt>
-                    <dd>{guest.phone || "Not provided"}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-sm font-medium text-muted-foreground">ID/Passport</dt>
-                    <dd>{guest.idNumber || "Not provided"}</dd>
-                  </div>
-                </dl>
+                <Calendar
+                  mode="range"
+                  selected={{
+                    from: selectedDates.from,
+                    to: selectedDates.to
+                  }}
+                  onSelect={(range: any) => {
+                    if (range?.from && range?.to) {
+                      setSelectedDates({
+                        from: range.from,
+                        to: range.to
+                      });
+                    }
+                  }}
+                  numberOfMonths={2}
+                />
               </CardContent>
             </Card>
-          )}
-          
-          {/* Date selection card */}
-          <Card className="w-full md:w-1/3">
-            <CardHeader>
-              <CardTitle>Select Dates</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Calendar
-                mode="range"
-                selected={{
-                  from: selectedDates.from,
-                  to: selectedDates.to
-                }}
-                onSelect={(range: any) => {
-                  if (range?.from && range?.to) {
-                    setSelectedDates({
-                      from: range.from,
-                      to: range.to
-                    });
-                  }
-                }}
-                numberOfMonths={2}
-              />
-            </CardContent>
-          </Card>
+          </div>
           
           {/* Payment calculator card */}
           <div className="w-full md:w-2/3">
