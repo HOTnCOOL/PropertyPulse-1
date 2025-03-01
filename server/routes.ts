@@ -442,6 +442,33 @@ export function registerRoutes(app: Express): Server {
     res.json(allGuests);
   });
 
+  // Add endpoint to check if a guest exists by email
+  app.get("/api/guests/check-email", async (req: Request, res: Response) => {
+    try {
+      const { email } = req.query;
+
+      if (!email || typeof email !== 'string') {
+        return res.status(400).json({
+          message: "Email parameter is required"
+        });
+      }
+
+      console.log('Checking if guest exists with email:', email);
+
+      const guest = await db.query.guests.findFirst({
+        where: eq(guests.email, email)
+      });
+
+      res.json({ 
+        exists: !!guest,
+        guest: guest || null
+      });
+    } catch (error) {
+      console.error('Error checking guest email:', error);
+      res.status(500).json({ message: "Failed to check guest email" });
+    }
+  });
+
   // Add search endpoint BEFORE the :id endpoint to prevent conflicts
   app.get("/api/guests/search", async (req: Request, res: Response) => {
     try {
