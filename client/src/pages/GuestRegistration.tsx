@@ -28,6 +28,7 @@ import { insertGuestSchema, type Guest } from "@db/schema";
 import * as z from "zod";
 import GuestList from "../components/GuestList";
 import IdScanner from "../components/IdScanner";
+import AdvancedIdScanner from "../components/AdvancedIdScanner";
 import { GuestSearch } from "../components/GuestSearch";
 import { format } from "date-fns";
 
@@ -601,10 +602,11 @@ export default function GuestRegistration() {
 
                   {/* ID Scanner section */}
                   <div className="mb-6" ref={idScannerRef}>
-                    <h3 className="text-lg font-medium mb-3">Scan ID/Passport</h3>
-                    <IdScanner
+                    <h3 className="text-lg font-medium mb-3">AI-Powered ID/Passport Scanner</h3>
+                    <AdvancedIdScanner
                       onDataExtracted={handleExtractedData}
                       onImageCaptured={handleIdImageCaptured}
+                      guestId={registeredGuest?.id}
                     />
                   </div>
 
