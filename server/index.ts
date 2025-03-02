@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes.fixed"; // Changed to use fixed routes
 import { setupVite, serveStatic, log } from "./vite";
 import { registerOCRRoutes } from "./routes/ocr";
+import { pool } from "../db";
 
 const app = express();
 app.use(express.json());
@@ -43,10 +44,72 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 
+// Function to create necessary database tables
+async function setupDatabase() {
+  try {
+    log('Running database migrations...');
+    // Create enums - use correct PostgreSQL syntax
+    await pool.query(`
+      DO $$ 
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'document_type') THEN
+          CREATE TYPE document_type AS ENUM (
+            'id_card', 'passport', 'residence_permit', 'invoice', 'payment_receipt', 'booking_confirmation'
+          );
+        END IF;
+      END $$;
+    `);
+    
+    await pool.query(`
+      DO $$ 
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'document_status') THEN
+          CREATE TYPE document_status AS ENUM (
+            'active', 'retention_period', 'pending_deletion', 'deleted'
+          );
+        END IF;
+      END $$;
+    `);
+    
+    // Create documents table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS documents (
+        id SERIAL PRIMARY KEY,
+        guest_id INTEGER REFERENCES guests(id),
+        booking_id INTEGER REFERENCES bookings(id),
+        payment_id INTEGER REFERENCES payments(id),
+        type document_type NOT NULL,
+        filename TEXT NOT NULL,
+        file_url TEXT NOT NULL,
+        original_filename TEXT,
+        file_size INTEGER,
+        mime_type TEXT,
+        status document_status NOT NULL DEFAULT 'active',
+        extracted_data JSONB,
+        metadata JSONB,
+        uploaded_by TEXT,
+        retention_expiry TIMESTAMP,
+        gdpr_consent BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        deleted_at TIMESTAMP
+      );
+    `);
+    
+    log('Database migrations completed successfully');
+  } catch (error) {
+    log(`Database migration error: ${error}`);
+    throw error;
+  }
+}
+
 async function startServer() {
   const port = process.env.PORT || 5000; // Use PORT environment variable or fallback to 5000
 
   try {
+    // Set up database schema first
+    await setupDatabase();
+    
     log(`Starting server on port ${port}...`);
     const server = registerRoutes(app);
     
