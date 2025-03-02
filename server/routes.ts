@@ -1,84 +1,60 @@
-import type { Express, Request, Response, NextFunction } from "express";
-import { createServer, type Server } from "http";
-import multer from "multer";
-import path from "path";
-import { db } from "@db";
-import bcrypt from "bcrypt";
+import { Request, Response, Express } from "express";
+import { createServer, Server } from "http";
+import { log } from "./vite";
+import { db } from "../db";
 import {
   properties,
   guests,
-  payments,
-  todos,
-  assets,
   bookings,
-  insertBookingSchema,
+  payments,
+  assets,
   admins,
+  todos,
+  insertAdminSchema,
+  insertPropertySchema,
+  insertGuestSchema,
+  loginGuestSchema,
   loginAdminSchema,
-  loginGuestSchema
-} from "@db/schema";
-import { eq, and, gte, lte, or, asc, desc, sql, gt, lt } from "drizzle-orm";
-import express from "express";
-import { addDays, addMonths, addWeeks, differenceInDays, differenceInCalendarMonths, startOfDay } from "date-fns";
-import session from "express-session";
-import connectPgSimple from "connect-pg-simple";
-import { pool } from "@db";
+  insertBookingSchema,
+  insertTodoSchema,
+  insertPaymentSchema,
+  selectGuestSchema,
+} from "../db/schema";
+import { eq, and, desc, gt, lt, gte, lte, ne, or, ilike } from "drizzle-orm";
+import bcrypt from "bcrypt";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
+import { z } from "zod";
 
-// Add custom session type
-declare module 'express-session' {
+// Define session data type for express-session
+declare module "express-session" {
   interface SessionData {
     adminId?: number;
     guestId?: number;
   }
 }
 
-// Update Multer configurations with proper types
-const storage = multer.diskStorage({
-  destination: (
-    _req: Express.Request,
-    _file: Express.Multer.File,
-    cb: (error: Error | null, destination: string) => void
-  ) => {
-    cb(null, path.join(process.cwd(), "uploads"));
-  },
-  filename: (
-    _req: Express.Request,
-    file: Express.Multer.File,
-    cb: (error: Error | null, filename: string) => void
-  ) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
-const upload = multer({
-  storage: storage,
-  limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB limit
-  },
-  fileFilter: (_req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
-    if (!allowedTypes.includes(file.mimetype)) {
-      cb(new Error('Invalid file type. Only JPEG, PNG and WebP are allowed'));
-      return;
-    }
-    cb(null, true);
-  }
-});
-
-// Add these helper functions after the existing imports
+// Payment calculation functions
 function calculateNightlyRate(periodType: 'monthly' | 'weekly' | 'daily'): number {
   switch (periodType) {
-    case 'monthly': return 50; // BGN per night for monthly plan
-    case 'weekly': return 60;  // BGN per night for weekly plan
-    case 'daily': return 70;   // BGN per night for daily plan
+    case 'monthly':
+      return 40; // $40 per night when booking monthly
+    case 'weekly':
+      return 50; // $50 per night when booking weekly
+    case 'daily':
+      return 70; // $70 per night for daily bookings
+    default:
+      return 70;
   }
 }
 
 function calculateDepositAmount(plan: 'monthly' | 'weekly' | 'daily', prepaidPeriodsCount: number): number {
-  if (prepaidPeriodsCount >= 3) return 0; // No deposit for 3+ prepaid periods
-
-  const baseDeposit = calculateNightlyRate(plan) * (plan === 'monthly' ? 30 : plan === 'weekly' ? 7 : 1);
-  return prepaidPeriodsCount >= 2 ? baseDeposit * 0.5 : baseDeposit; // 50% off for 2+ prepaid periods
+  // Deposit is 50% of the first period's total
+  const periodLengthDays = plan === 'monthly' ? 30 : plan === 'weekly' ? 7 : 1;
+  const nightlyRate = calculateNightlyRate(plan);
+  const firstPeriodTotal = nightlyRate * periodLengthDays;
+  return firstPeriodTotal * 0.5;
 }
 
 interface PricePeriod {
@@ -90,437 +66,494 @@ interface PricePeriod {
   duration: number;
 }
 
+// This function calculates the optimal pricing periods for a stay
+// It tries to maximize the number of complete months and weeks to get the best rates
 function calculatePricePeriods(checkIn: Date, checkOut: Date, preferredType: 'monthly' | 'weekly' | 'daily'): PricePeriod[] {
-  const periods: PricePeriod[] = [];
-  let currentDate = startOfDay(new Date(checkIn));
-  const endDate = startOfDay(new Date(checkOut));
-  const totalDays = differenceInDays(endDate, currentDate);
-
-  const nightlyRate = calculateNightlyRate(preferredType);
-
-  if (preferredType === 'monthly' && differenceInCalendarMonths(endDate, currentDate) >= 1) {
-    // Handle monthly periods
-    while (differenceInCalendarMonths(endDate, currentDate) >= 1) {
-      const monthEnd = addMonths(currentDate, 1);
-      const daysInMonth = differenceInDays(monthEnd, currentDate);
-
-      periods.push({
-        type: 'monthly',
-        startDate: currentDate,
-        endDate: monthEnd,
-        amount: nightlyRate * daysInMonth,
-        baseRate: nightlyRate,
-        duration: daysInMonth
-      });
-
-      currentDate = monthEnd;
-    }
-  } else if (preferredType === 'weekly' && totalDays >= 7) {
-    // Handle weekly periods
-    while (differenceInDays(endDate, currentDate) >= 7) {
-      const weekEnd = addWeeks(currentDate, 1);
-
-      periods.push({
-        type: 'weekly',
-        startDate: currentDate,
-        endDate: weekEnd,
-        amount: nightlyRate * 7,
-        baseRate: nightlyRate,
-        duration: 7
-      });
-
-      currentDate = weekEnd;
-    }
+  const result: PricePeriod[] = [];
+  let currentDate = new Date(checkIn);
+  const end = new Date(checkOut);
+  
+  // Calculate total days
+  const totalDays = Math.ceil((end.getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24));
+  
+  // Based on preferred type, try to optimize the pricing
+  switch (preferredType) {
+    case 'monthly':
+      // Try to get as many complete months as possible
+      while (true) {
+        const nextMonth = new Date(currentDate);
+        nextMonth.setMonth(nextMonth.getMonth() + 1);
+        
+        // If next month would exceed checkout date, break
+        if (nextMonth > end) break;
+        
+        const duration = Math.ceil((nextMonth.getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24));
+        result.push({
+          type: 'monthly',
+          startDate: new Date(currentDate),
+          endDate: new Date(nextMonth),
+          amount: calculateNightlyRate('monthly') * duration,
+          baseRate: calculateNightlyRate('monthly'),
+          duration
+        });
+        
+        currentDate = nextMonth;
+      }
+      break;
+      
+    case 'weekly':
+      // Try to get as many complete weeks as possible
+      while (true) {
+        const nextWeek = new Date(currentDate);
+        nextWeek.setDate(nextWeek.getDate() + 7);
+        
+        // If next week would exceed checkout date, break
+        if (nextWeek > end) break;
+        
+        const duration = Math.ceil((nextWeek.getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24));
+        result.push({
+          type: 'weekly',
+          startDate: new Date(currentDate),
+          endDate: new Date(nextWeek),
+          amount: calculateNightlyRate('weekly') * duration,
+          baseRate: calculateNightlyRate('weekly'),
+          duration
+        });
+        
+        currentDate = nextWeek;
+      }
+      break;
+      
+    case 'daily':
+      // Just calculate on a daily basis
+      break;
   }
-
-  // Handle remaining days with daily rate
-  const remainingDays = differenceInDays(endDate, currentDate);
-  if (remainingDays > 0) {
-    periods.push({
+  
+  // Add remaining days as daily rate
+  if (currentDate < end) {
+    const remainingDays = Math.ceil((end.getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24));
+    result.push({
       type: 'daily',
-      startDate: currentDate,
-      endDate: endDate,
+      startDate: new Date(currentDate),
+      endDate: new Date(end),
       amount: calculateNightlyRate('daily') * remainingDays,
       baseRate: calculateNightlyRate('daily'),
       duration: remainingDays
     });
   }
-
-  return periods;
+  
+  return result;
 }
 
-// Add this near the multer configuration
-const paymentDocsStorage = multer.diskStorage({
+// Common type for query results
+type QueryResult = Awaited<ReturnType<typeof db.select>>;
+
+// Configure storage for property images
+const uploadDirectory = path.join(process.cwd(), 'uploads');
+if (!fs.existsSync(uploadDirectory)) {
+  fs.mkdirSync(uploadDirectory, { recursive: true });
+}
+
+// Configure storage for ID documents
+const idImagesDirectory = path.join(process.cwd(), 'uploads/id-images');
+if (!fs.existsSync(idImagesDirectory)) {
+  fs.mkdirSync(idImagesDirectory, { recursive: true });
+}
+
+// Configure storage for payment documents
+const paymentDocsDirectory = path.join(process.cwd(), 'uploads/payment-docs');
+if (!fs.existsSync(paymentDocsDirectory)) {
+  fs.mkdirSync(paymentDocsDirectory, { recursive: true });
+}
+
+// Configure multer storage
+const storage = multer.diskStorage({
   destination: function (_req, _file, cb) {
-    cb(null, path.join(process.cwd(), "uploads/payment-docs"));
+    cb(null, uploadDirectory);
   },
   filename: function (_req, file, cb) {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, 'payment-' + uniqueSuffix + path.extname(file.originalname));
+    cb(null, uniqueSuffix + path.extname(file.originalname));
   }
 });
 
-const uploadPaymentDocs = multer({
-  storage: paymentDocsStorage,
-  limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB limit
-  },
-  fileFilter: (_req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
-    const allowedTypes = [
-      'image/jpeg',
-      'image/png',
-      'image/webp',
-      'application/pdf',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-    ];
-    if (!allowedTypes.includes(file.mimetype)) {
-      cb(new Error('Invalid file type. Only JPEG, PNG, WebP, PDF and DOC files are allowed'));
-      return;
-    }
-    cb(null, true);
-  }
-});
+const upload = multer({ storage });
 
-// Add ID image upload configuration
-const idImageStorage = multer.diskStorage({
-  destination: (
-    _req: Express.Request,
-    _file: Express.Multer.File,
-    cb: (error: Error | null, destination: string) => void
-  ) => {
-    cb(null, path.join(process.cwd(), "uploads/id-images"));
+// Configure multer storage for ID documents
+const idImagesStorage = multer.diskStorage({
+  destination: function (_req, _file, cb) {
+    cb(null, idImagesDirectory);
   },
-  filename: (
-    _req: Express.Request,
-    file: Express.Multer.File,
-    cb: (error: Error | null, filename: string) => void
-  ) => {
+  filename: function (_req, file, cb) {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     cb(null, 'id-' + uniqueSuffix + path.extname(file.originalname));
   }
 });
 
-const uploadIdImage = multer({
-  storage: idImageStorage,
-  limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB limit
+const uploadIdImages = multer({ storage: idImagesStorage });
+
+// Configure multer storage for payment documents
+const paymentDocsStorage = multer.diskStorage({
+  destination: function (_req, _file, cb) {
+    cb(null, paymentDocsDirectory);
   },
-  fileFilter: (
-    _req: Express.Request,
-    file: Express.Multer.File,
-    cb: multer.FileFilterCallback
-  ) => {
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
-    if (!allowedTypes.includes(file.mimetype)) {
-      cb(new Error('Invalid file type. Only JPEG, PNG and WebP are allowed'));
-      return;
-    }
-    cb(null, true);
+  filename: function (_req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, 'payment-doc-' + uniqueSuffix + path.extname(file.originalname));
   }
 });
 
-// Fix the database queries with proper types
-type QueryResult = Awaited<ReturnType<typeof db.select>>;
+const uploadPaymentDocs = multer({ storage: paymentDocsStorage });
 
+// Register all API routes
 export function registerRoutes(app: Express): Server {
-  // Set up session middleware
-  const PostgresStore = connectPgSimple(session);
-  app.use(
-    session({
-      store: new PostgresStore({
-        pool: pool, // Use the imported pool
-        tableName: 'session'
-      }),
-      secret: process.env.REPL_ID || 'your-secret-key',
-      resave: false,
-      saveUninitialized: false,
-      cookie: {
-        secure: process.env.NODE_ENV === 'production',
-        maxAge: 24 * 60 * 60 * 1000 // 24 hours
-      }
-    })
-  );
+  const server = createServer(app);
 
-  // Serve static files from uploads directory
-  app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
-
-  // Authentication endpoints
+  // Admin authentication
   app.post("/api/auth/admin", async (req: Request, res: Response) => {
+    const result = loginAdminSchema.safeParse(req.body);
+    if (!result.success) {
+      return res.status(400).json({
+        message: "Invalid login data",
+        details: result.error.errors,
+      });
+    }
+
+    const admin = await db.query.admins.findFirst({
+      where: eq(admins.email, result.data.email),
+    });
+
+    if (!admin) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
+
+    const passwordMatch = await bcrypt.compare(
+      result.data.password,
+      admin.passwordHash || ''
+    );
+
+    if (!passwordMatch) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
+
+    req.session.adminId = admin.id;
+    return res.status(200).json({
+      message: "Logged in successfully",
+      email: admin.email,
+    });
+  });
+
+  // Guest authentication
+  app.post("/api/auth/guest", async (req: Request, res: Response) => {
+    const result = loginGuestSchema.safeParse(req.body);
+    if (!result.success) {
+      return res.status(400).json({
+        message: "Invalid login data",
+        details: result.error.errors,
+      });
+    }
+
+    const guest = await db.query.guests.findFirst({
+      where: and(
+        eq(guests.email, result.data.email),
+        eq(guests.bookingReference, result.data.bookingReference)
+      ),
+    });
+
+    if (!guest) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
+
+    req.session.guestId = guest.id;
+    return res.status(200).json({
+      message: "Logged in successfully",
+      email: guest.email,
+    });
+  });
+
+  // Get all properties
+  app.get("/api/properties", async (_req: Request, res: Response) => {
     try {
-      console.log('Admin login attempt:', req.body);
-      const result = loginAdminSchema.safeParse(req.body);
-      if (!result.success) {
-        console.log('Admin validation failed:', result.error);
-        return res.status(400).json({ message: "Invalid credentials" });
-      }
-
-      const [admin] = await db
-        .select()
-        .from(admins)
-        .where(eq(admins.email, result.data.email))
-        .limit(1);
-
-      console.log('Admin found:', admin);
-
-      if (!admin || !admin.id) {
-        return res.status(401).json({ message: "Invalid credentials" });
-      }
-
-      // Use bcrypt to compare passwords
-      const passwordMatch = await bcrypt.compare(result.data.password, admin.password);
-      if (!passwordMatch) {
-        console.log('Password does not match');
-        return res.status(401).json({ message: "Invalid credentials" });
-      }
-
-      // Set session
-      if (req.session) {
-        req.session.adminId = admin.id;
-      }
-      res.json({ admin: { id: admin.id, email: admin.email, name: admin.name } });
+      const propertyList = await db.query.properties.findMany({
+        with: {
+          bookings: true,
+        }
+      });
+      
+      res.json(propertyList);
     } catch (error) {
-      console.error('Admin login error:', error);
-      res.status(500).json({ message: "Login failed" });
+      log(`Error fetching properties: ${error}`);
+      res.status(500).json({ message: "Error fetching properties" });
     }
   });
 
-  app.post("/api/auth/guest", async (req: Request, res: Response) => {
+  // Create a new property
+  app.post("/api/properties", async (req: Request, res: Response) => {
+    const result = insertPropertySchema.safeParse(req.body);
+    if (!result.success) {
+      return res.status(400).json({
+        message: "Invalid property data",
+        details: result.error.errors,
+      });
+    }
+
     try {
-      console.log('Guest login attempt:', req.body);
-      const result = loginGuestSchema.safeParse(req.body);
-      if (!result.success) {
-        console.log('Guest validation failed:', result.error);
-        return res.status(400).json({ message: "Invalid credentials" });
+      const newProperty = await db.insert(properties).values({
+        name: result.data.name,
+        description: result.data.description,
+        type: result.data.type,
+        rate: result.data.rate,
+        address: result.data.address,
+        amenities: result.data.amenities || {},
+        bedType: result.data.bedType,
+        bathrooms: result.data.bathrooms,
+        status: result.data.status,
+        capacity: result.data.capacity,
+        weeklyRate: result.data.weeklyRate,
+        monthlyRate: result.data.monthlyRate,
+        hourlyRate: result.data.hourlyRate,
+        imageUrls: []
+      }).returning();
+
+      res.status(201).json(newProperty[0]);
+    } catch (error) {
+      log(`Error creating property: ${error}`);
+      res.status(500).json({ message: "Error creating property" });
+    }
+  });
+
+  // Update a property
+  app.patch("/api/properties/:id", async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const propertyId = parseInt(id);
+
+    try {
+      const updatedProperty = await db.update(properties)
+        .set(req.body)
+        .where(eq(properties.id, propertyId))
+        .returning();
+
+      if (updatedProperty.length === 0) {
+        return res.status(404).json({ message: "Property not found" });
       }
 
-      const booking = await db.query.bookings.findFirst({
-        where: and(
-          eq(bookings.bookingReference, result.data.bookingReference),
-        ),
-        with: {
-          guest: true,
-        },
+      res.json(updatedProperty[0]);
+    } catch (error) {
+      log(`Error updating property: ${error}`);
+      res.status(500).json({ message: "Error updating property" });
+    }
+  });
+
+  // Delete a property
+  app.delete("/api/properties/:id", async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const propertyId = parseInt(id);
+
+    try {
+      const deletedProperty = await db.delete(properties)
+        .where(eq(properties.id, propertyId))
+        .returning();
+
+      if (deletedProperty.length === 0) {
+        return res.status(404).json({ message: "Property not found" });
+      }
+
+      res.json({ message: "Property deleted successfully" });
+    } catch (error) {
+      log(`Error deleting property: ${error}`);
+      res.status(500).json({ message: "Error deleting property" });
+    }
+  });
+
+  // Upload property images
+  app.post("/api/properties/:id/images", upload.array("images", 5), async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const propertyId = parseInt(id);
+
+    try {
+      const property = await db.query.properties.findFirst({
+        where: eq(properties.id, propertyId),
       });
 
-      console.log('Guest booking found:', booking);
-
-      if (!booking || !booking.guest || booking.guest.email !== result.data.email) {
-        return res.status(401).json({ message: "Invalid credentials" });
-      }
-
-      // Set session
-      if (req.session) {
-        req.session.guestId = booking.guest.id;
-      }
-      res.json({ guest: booking.guest });
-    } catch (error) {
-      console.error('Guest login error:', error);
-      res.status(500).json({ message: "Login failed" });
-    }
-  });
-
-  // Properties endpoints
-  app.get("/api/properties", async (_req: Request, res: Response) => {
-    const allProperties = await db.query.properties.findMany();
-    res.json(allProperties);
-  });
-
-  app.post("/api/properties", async (req: Request, res: Response) => {
-    const property = await db.insert(properties).values(req.body).returning();
-    res.json(property[0]);
-  });
-
-  app.patch("/api/properties/:id", async (req: Request, res: Response) => {
-    const propertyId = parseInt(req.params.id);
-    const updatedProperty = await db
-      .update(properties)
-      .set(req.body)
-      .where(eq(properties.id, propertyId))
-      .returning();
-
-    if (!updatedProperty.length) {
-      return res.status(404).send("Property not found");
-    }
-
-    res.json(updatedProperty[0]);
-  });
-
-  app.delete("/api/properties/:id", async (req: Request, res: Response) => {
-    const propertyId = parseInt(req.params.id);
-    const deletedProperty = await db
-      .delete(properties)
-      .where(eq(properties.id, propertyId))
-      .returning();
-
-    if (!deletedProperty.length) {
-      return res.status(404).send("Property not found");
-    }
-
-    res.json(deletedProperty[0]);
-  });
-
-  // New endpoint for uploading property images
-  app.post("/api/properties/:id/images", upload.array("images", 5), async (req: Request, res: Response) => {
-    const propertyId = parseInt(req.params.id);
-    const files = req.files as Express.Multer.File[];
-
-    if (!files || files.length === 0) {
-      return res.status(400).send("No files uploaded");
-    }
-
-    try {
-      // Get current property
-      const [property] = await db
-        .select()
-        .from(properties)
-        .where(eq(properties.id, propertyId))
-        .limit(1);
-
       if (!property) {
-        return res.status(404).send("Property not found");
+        return res.status(404).json({ message: "Property not found" });
       }
+
+      const files = req.files as Express.Multer.File[];
+      const imageUrls = files.map(file => `/uploads/${file.filename}`);
 
       // Update property with new image URLs
-      const imageUrls = files.map(file => `/uploads/${file.filename}`);
-      const currentUrls = property.imageUrls as string[] || []; // Handle case where imageUrls is null
-
-      const updatedProperty = await db
-        .update(properties)
+      const updatedProperty = await db.update(properties)
         .set({
-          imageUrls: [...currentUrls, ...imageUrls]
+          imageUrls: [...(property.imageUrls as string[] || []), ...imageUrls],
         })
         .where(eq(properties.id, propertyId))
         .returning();
 
-      res.json(updatedProperty[0]);
+      res.status(200).json(updatedProperty[0]);
     } catch (error) {
-      console.error(error);
-      res.status(500).send("Failed to upload images");
+      log(`Error uploading images: ${error}`);
+      res.status(500).json({ message: "Error uploading images" });
     }
   });
 
-  // New endpoint for checking property availability
+  // Check property availability and calculate price
   app.post("/api/properties/:id/check-availability", async (req: Request, res: Response) => {
-    const propertyId = parseInt(req.params.id);
-    const { checkIn, checkOut } = req.body;
+    const { id } = req.params;
+    const propertyId = parseInt(id);
+    const { checkIn, checkOut, periodType = 'daily' } = req.body;
+
+    if (!checkIn || !checkOut) {
+      return res.status(400).json({ message: "Check-in and check-out dates are required" });
+    }
 
     try {
-      // Find any overlapping bookings
-      const overlappingBookings = await db.query.guests.findFirst({
+      // Check if property exists
+      const property = await db.query.properties.findFirst({
+        where: eq(properties.id, propertyId),
+      });
+
+      if (!property) {
+        return res.status(404).json({ message: "Property not found" });
+      }
+
+      // Parse dates
+      const checkInDate = new Date(checkIn);
+      const checkOutDate = new Date(checkOut);
+
+      // Check if dates are valid
+      if (checkInDate >= checkOutDate) {
+        return res.status(400).json({ message: "Check-out date must be after check-in date" });
+      }
+
+      // Check if there are any overlapping bookings
+      const overlappingBookings = await db.query.bookings.findMany({
         where: and(
-          eq(guests.propertyId, propertyId),
+          eq(bookings.propertyId, propertyId),
           or(
             and(
-              lte(guests.checkIn, new Date(checkIn)),
-              gte(guests.checkOut, new Date(checkIn))
+              lte(bookings.checkIn, checkInDate),
+              gte(bookings.checkOut, checkInDate)
             ),
             and(
-              lte(guests.checkIn, new Date(checkOut)),
-              gte(guests.checkOut, new Date(checkOut))
+              lte(bookings.checkIn, checkOutDate),
+              gte(bookings.checkOut, checkOutDate)
             ),
             and(
-              gte(guests.checkIn, new Date(checkIn)),
-              lte(guests.checkOut, new Date(checkOut))
+              gte(bookings.checkIn, checkInDate),
+              lte(bookings.checkOut, checkOutDate)
             )
           )
-        )
-      });
-
-      res.json({ available: !overlappingBookings });
-    } catch (error) {
-      console.error('Error checking availability:', error);
-      res.status(500).send("Failed to check availability");
-    }
-  });
-
-  // Guests endpoints
-  // IMPORTANT: Route ordering matters in Express!
-  // More specific routes must be defined BEFORE routes with parameters
-  
-  // Check if a guest exists by email
-  app.get("/api/guests/check-email", async (req: Request, res: Response) => {
-    try {
-      const { email } = req.query;
-
-      if (!email || typeof email !== 'string') {
-        return res.status(400).json({
-          message: "Email parameter is required"
-        });
-      }
-
-      console.log('Checking if guest exists with email:', email);
-
-      const guest = await db.query.guests.findFirst({
-        where: eq(guests.email, email)
-      });
-
-      res.json({ 
-        exists: !!guest,
-        guest: guest || null
-      });
-    } catch (error) {
-      console.error('Error checking guest email:', error);
-      res.status(500).json({ message: "Failed to check guest email" });
-    }
-  });
-
-  // Search endpoint
-  app.get("/api/guests/search", async (req: Request, res: Response) => {
-    try {
-      const { query } = req.query;
-
-      if (!query || typeof query !== 'string' || query.length < 2) {
-        return res.status(400).json({
-          message: "Search query must be at least 2 characters long"
-        });
-      }
-
-      console.log('Searching guests with query:', query);
-
-      const searchResult = await db.query.guests.findMany({
-        where: or(
-          sql`LOWER(${guests.firstName}) LIKE ${`%${query.toLowerCase()}%`}`,
-          sql`LOWER(${guests.lastName}) LIKE ${`%${query.toLowerCase()}%`}`,
-          sql`LOWER(${guests.email}) LIKE ${`%${query.toLowerCase()}%`}`,
-          sql`${guests.phone} LIKE ${`%${query}%`}`,
-          sql`${guests.idNumber} LIKE ${`%${query}%`}`
         ),
-        limit: 5,
-        with: {
-          property: true
-        }
       });
 
-      console.log('Search results:', searchResult);
-      res.json(searchResult);
+      if (overlappingBookings.length > 0) {
+        return res.status(409).json({
+          available: false,
+          message: "Property is not available for the selected dates",
+          conflictingBookings: overlappingBookings,
+        });
+      }
+
+      // Calculate price
+      const days = Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24));
+      
+      // Calculate price based on preferred period type
+      const pricePeriods = calculatePricePeriods(checkInDate, checkOutDate, periodType as 'monthly' | 'weekly' | 'daily');
+      
+      const totalAmount = pricePeriods.reduce((total, period) => total + period.amount, 0);
+      const depositAmount = calculateDepositAmount(periodType as 'monthly' | 'weekly' | 'daily', 1);
+
+      res.status(200).json({
+        available: true,
+        property,
+        pricePeriods,
+        days,
+        totalAmount,
+        depositAmount,
+        preferredType: periodType,
+      });
     } catch (error) {
-      console.error('Error searching guests:', error);
-      res.status(500).json({ message: "Failed to search guests" });
+      log(`Error checking availability: ${error}`);
+      res.status(500).json({ message: "Error checking availability" });
     }
   });
-  
+
+  // Check if guest email exists
+  app.get("/api/guests/check-email", async (req: Request, res: Response) => {
+    const { email } = req.query;
+    if (!email) {
+      return res.status(400).json({ message: "Email is required" });
+    }
+
+    try {
+      const existingGuest = await db.query.guests.findFirst({
+        where: eq(guests.email, email as string),
+      });
+
+      res.json({ exists: !!existingGuest, guest: existingGuest });
+    } catch (error) {
+      log(`Error checking guest email: ${error}`);
+      res.status(500).json({ message: "Error checking guest email" });
+    }
+  });
+
+  // Search for guests
+  app.get("/api/guests/search", async (req: Request, res: Response) => {
+    const { query } = req.query;
+    if (!query) {
+      return res.status(400).json({ message: "Search query is required" });
+    }
+
+    try {
+      const searchResults = await db.query.guests.findMany({
+        where: or(
+          ilike(guests.firstName, `%${query}%`),
+          ilike(guests.lastName, `%${query}%`),
+          ilike(guests.email, `%${query}%`),
+          ilike(guests.phone, `%${query}%`),
+          ilike(guests.bookingReference, `%${query}%`)
+        ),
+        orderBy: desc(guests.createdAt),
+      });
+
+      res.json(searchResults);
+    } catch (error) {
+      log(`Error searching guests: ${error}`);
+      res.status(500).json({ message: "Error searching guests" });
+    }
+  });
+
   // Get all guests
   app.get("/api/guests", async (_req: Request, res: Response) => {
-    const allGuests = await db.query.guests.findMany({
-      with: { property: true },
-    });
-    res.json(allGuests);
+    try {
+      const guestList = await db.query.guests.findMany({
+        orderBy: desc(guests.createdAt),
+      });
+      
+      res.json(guestList);
+    } catch (error) {
+      log(`Error fetching guests: ${error}`);
+      res.status(500).json({ message: "Error fetching guests" });
+    }
   });
 
-  // Get specific guest by ID - must come AFTER more specific paths
+  // Get specific guest
   app.get("/api/guests/:id", async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const guestId = parseInt(id);
+
     try {
-      const guestId = parseInt(req.params.id);
-
-      // Validate the ID is a proper number
-      if (isNaN(guestId)) {
-        return res.status(400).json({ message: "Invalid guest ID format" });
-      }
-
       const guest = await db.query.guests.findFirst({
         where: eq(guests.id, guestId),
-        with: { property: true },
+        with: {
+          bookings: {
+            with: {
+              property: true,
+              payments: true,
+            }
+          }
+        }
       });
 
       if (!guest) {
@@ -529,315 +562,295 @@ export function registerRoutes(app: Express): Server {
 
       res.json(guest);
     } catch (error) {
-      console.error('Error fetching guest:', error);
-      res.status(500).json({ message: "Internal server error" });
+      log(`Error fetching guest: ${error}`);
+      res.status(500).json({ message: "Error fetching guest" });
     }
   });
 
-  // New simpler endpoint for guest registration without any date fields
+  // Register a new guest
   app.post("/api/guests/register", async (req: Request, res: Response) => {
-    try {
-      console.log('Received simplified guest registration request:', req.body);
+    const result = insertGuestSchema.safeParse(req.body);
+    if (!result.success) {
+      return res.status(400).json({
+        message: "Invalid guest data",
+        details: result.error.errors,
+      });
+    }
 
-      // Validate required fields
-      if (!req.body.firstName || !req.body.lastName || !req.body.email || !req.body.idNumber) {
-        return res.status(400).json({
-          message: "Missing required fields",
-          details: "First name, last name, email, and ID number are required."
+    try {
+      // Generate booking reference if not provided
+      const bookingReference = result.data.bookingReference || 
+        Math.random().toString(36).substring(2, 8).toUpperCase();
+      
+      // Check if email already exists
+      const existingGuest = await db.query.guests.findFirst({
+        where: eq(guests.email, result.data.email),
+      });
+
+      if (existingGuest) {
+        return res.status(409).json({ 
+          message: "Guest with this email already exists",
+          guestId: existingGuest.id
         });
       }
 
-      // Generate a unique booking reference and access code
-      const bookingReference = 'BOOK' + Math.random().toString(36).substring(2, 8).toUpperCase();
-      const accessCode = Math.floor(100000 + Math.random() * 900000).toString();
-      
-      // Insert directly with SQL to bypass Drizzle ORM that's causing issues
-      const result = await pool.query(
-        `INSERT INTO guests 
-        (first_name, last_name, email, phone, address, id_number, id_type, booking_reference, access_code, place_of_birth, home_address) 
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) 
-        RETURNING id, first_name, last_name, email, phone, address, id_number, id_type, booking_reference, access_code`,
-        [
-          req.body.firstName,
-          req.body.lastName,
-          req.body.email,
-          req.body.phone || "Not provided",
-          req.body.address || "Not provided",
-          req.body.idNumber || "",
-          req.body.idType || "national_id",
-          bookingReference,
-          accessCode,
-          req.body.placeOfBirth || "",
-          req.body.homeAddress || ""
-        ]
-      );
+      // Create new guest
+      const newGuest = await db.insert(guests).values({
+        firstName: result.data.firstName,
+        lastName: result.data.lastName,
+        email: result.data.email,
+        phone: result.data.phone,
+        dateOfBirth: result.data.dateOfBirth ? new Date(result.data.dateOfBirth) : null,
+        nationality: result.data.nationality || null,
+        idType: result.data.idType || null,
+        idNumber: result.data.idNumber || null,
+        idImage: result.data.idImage || null,
+        homeAddress: result.data.homeAddress || null,
+        placeOfBirth: result.data.placeOfBirth || null,
+        personalNumber: result.data.personalNumber || null,
+        accessCode: result.data.accessCode || null,
+        idExpiryDate: result.data.idExpiryDate ? new Date(result.data.idExpiryDate) : null,
+        bookingReference,
+        passcode: result.data.passcode || null,
+      }).returning();
 
-      // Make sure we have a valid result
-      if (!result.rows || result.rows.length === 0) {
-        throw new Error("No data returned from database insert");
-      }
+      // Set session
+      req.session.guestId = newGuest[0].id;
 
-      // Format the response to match our API structure
-      const newGuest = {
-        id: result.rows[0].id,
-        firstName: result.rows[0].first_name,
-        lastName: result.rows[0].last_name,
-        email: result.rows[0].email,
-        phone: result.rows[0].phone,
-        address: result.rows[0].address,
-        idNumber: result.rows[0].id_number, 
-        idType: result.rows[0].id_type,
-        bookingReference: result.rows[0].booking_reference,
-        accessCode: result.rows[0].access_code
-      };
-
-      console.log('Created guest with direct SQL:', newGuest);
-      
-      // Make sure we're sending only JSON
-      res.setHeader('Content-Type', 'application/json');
-      res.status(201).json(newGuest);
+      res.status(201).json(newGuest[0]);
     } catch (error) {
-      console.error('Error in simplified guest registration:', error);
-      
-      // Make sure we're sending only JSON
-      res.setHeader('Content-Type', 'application/json');
-      res.status(500).json({
-        message: "Failed to register guest",
-        details: error instanceof Error ? error.message : "Unknown error",
-      });
+      log(`Error creating guest: ${error}`);
+      res.status(500).json({ message: "Error creating guest" });
     }
   });
-  
-  // Keep the original but implement it directly to avoid fetch issues
+
+  // Create a new guest (admin route)
   app.post("/api/guests", async (req: Request, res: Response) => {
-    try {
-      // Use the same implementation as our simplified endpoint, don't redirect
-      console.log('Received request to original guest endpoint, processing directly');
-
-      // Validate required fields
-      if (!req.body.firstName || !req.body.lastName || !req.body.email || !req.body.idNumber) {
-        return res.status(400).json({
-          message: "Missing required fields",
-          details: "First name, last name, email, and ID number are required."
-        });
-      }
-
-      // Generate a unique booking reference and access code
-      const bookingReference = 'BOOK' + Math.random().toString(36).substring(2, 8).toUpperCase();
-      const accessCode = Math.floor(100000 + Math.random() * 900000).toString();
-      
-      // Insert directly with SQL to bypass Drizzle ORM that's causing issues
-      const result = await pool.query(
-        `INSERT INTO guests 
-        (first_name, last_name, email, phone, address, id_number, id_type, booking_reference, access_code, place_of_birth, home_address) 
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) 
-        RETURNING id, first_name, last_name, email, phone, address, id_number, id_type, booking_reference, access_code`,
-        [
-          req.body.firstName,
-          req.body.lastName,
-          req.body.email,
-          req.body.phone || "Not provided",
-          req.body.address || "Not provided",
-          req.body.idNumber || "",
-          req.body.idType || "national_id",
-          bookingReference,
-          accessCode,
-          req.body.placeOfBirth || "",
-          req.body.homeAddress || ""
-        ]
-      );
-
-      // Make sure we have a valid result
-      if (!result.rows || result.rows.length === 0) {
-        throw new Error("No data returned from database insert");
-      }
-
-      // Format the response to match our API structure
-      const newGuest = {
-        id: result.rows[0].id,
-        firstName: result.rows[0].first_name,
-        lastName: result.rows[0].last_name,
-        email: result.rows[0].email,
-        phone: result.rows[0].phone,
-        address: result.rows[0].address,
-        idNumber: result.rows[0].id_number, 
-        idType: result.rows[0].id_type,
-        bookingReference: result.rows[0].booking_reference,
-        accessCode: result.rows[0].access_code
-      };
-
-      console.log('Created guest with direct SQL (original endpoint):', newGuest);
-      
-      // Make sure we're sending only JSON
-      res.setHeader('Content-Type', 'application/json');
-      res.status(201).json(newGuest);
-    } catch (error) {
-      console.error('Error in original guest registration endpoint:', error);
-      
-      // Make sure we're sending only JSON
-      res.setHeader('Content-Type', 'application/json');
-      res.status(500).json({
-        message: "Failed to register guest",
-        details: error instanceof Error ? error.message : "Unknown error",
+    const result = insertGuestSchema.safeParse(req.body);
+    if (!result.success) {
+      return res.status(400).json({
+        message: "Invalid guest data",
+        details: result.error.errors,
       });
+    }
+
+    try {
+      // Generate booking reference if not provided
+      const bookingReference = result.data.bookingReference || 
+        Math.random().toString(36).substring(2, 8).toUpperCase();
+      
+      // Create new guest
+      const newGuest = await db.insert(guests).values({
+        firstName: result.data.firstName,
+        lastName: result.data.lastName,
+        email: result.data.email,
+        phone: result.data.phone,
+        dateOfBirth: result.data.dateOfBirth ? new Date(result.data.dateOfBirth) : null,
+        nationality: result.data.nationality || null,
+        idType: result.data.idType || null,
+        idNumber: result.data.idNumber || null,
+        idImage: result.data.idImage || null,
+        homeAddress: result.data.homeAddress || null,
+        placeOfBirth: result.data.placeOfBirth || null,
+        personalNumber: result.data.personalNumber || null,
+        accessCode: result.data.accessCode || null,
+        idExpiryDate: result.data.idExpiryDate ? new Date(result.data.idExpiryDate) : null,
+        bookingReference,
+        passcode: result.data.passcode || null,
+      }).returning();
+
+      res.status(201).json(newGuest[0]);
+    } catch (error) {
+      log(`Error creating guest: ${error}`);
+      res.status(500).json({ message: "Error creating guest" });
     }
   });
 
+  // Get today's check-ins and check-outs
   app.get("/api/guests/today", async (_req: Request, res: Response) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-
-    const checkIns = await db.query.guests.findMany({
-      where: and(
-        gte(guests.checkIn, today),
-        lte(guests.checkIn, tomorrow)
-      ),
-      with: { property: true },
-    });
-
-    const checkOuts = await db.query.guests.findMany({
-      where: and(
-        gte(guests.checkOut, today),
-        lte(guests.checkOut, tomorrow)
-      ),
-      with: { property: true },
-    });
-
-    res.json({ checkIns, checkOuts });
-  });
-
-
-  // Payments endpoints
-  app.get("/api/payments", async (req: Request, res: Response) => {
     try {
-      const { startDate, endDate, status, guestId } = req.query;
-      let queryConditions = [];
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
 
-      if (startDate && endDate) {
-        queryConditions.push(
-          and(
-            gte(payments.date, new Date(String(startDate))),
-            lte(payments.date, new Date(String(endDate)))
-          )
-        );
-      }
+      const checkIns = await db.query.bookings.findMany({
+        where: and(
+          gte(bookings.checkIn, today),
+          lt(bookings.checkIn, tomorrow)
+        ),
+        with: {
+          guest: true,
+          property: true,
+        },
+        orderBy: bookings.checkIn
+      });
 
-      if (status) {
-        queryConditions.push(eq(payments.status, String(status)));
-      }
+      const checkOuts = await db.query.bookings.findMany({
+        where: and(
+          gte(bookings.checkOut, today),
+          lt(bookings.checkOut, tomorrow)
+        ),
+        with: {
+          guest: true,
+          property: true,
+        },
+        orderBy: bookings.checkOut
+      });
 
-      if (guestId) {
-        queryConditions.push(eq(payments.guestId, Number(guestId)));
-      }
-
-      const query = db.select().from(payments);
-      if (queryConditions.length > 0) {
-        query.where(and(...queryConditions));
-      }
-
-      const result = await query;
-      res.json(result);
+      res.json({
+        checkIns,
+        checkOuts,
+        date: today.toISOString()
+      });
     } catch (error) {
-      console.error('Error fetching payments:', error);
-      res.status(500).json({ message: 'Failed to fetch payments' });
+      log(`Error fetching today's guests: ${error}`);
+      res.status(500).json({ message: "Error fetching today's guests" });
     }
   });
 
+  // Get all payments
+  app.get("/api/payments", async (req: Request, res: Response) => {
+    const { guestId, status } = req.query;
+    
+    try {
+      let conditions = [];
+      
+      if (guestId) {
+        conditions.push(eq(payments.guestId, parseInt(guestId as string)));
+      }
+      
+      if (status) {
+        conditions.push(eq(payments.status, status as string));
+      }
+      
+      const paymentList = await db.query.payments.findMany({
+        where: conditions.length > 0 ? and(...conditions) : undefined,
+        with: {
+          guest: true,
+          booking: {
+            with: {
+              property: true
+            }
+          }
+        },
+        orderBy: desc(payments.createdAt),
+      });
+      
+      res.json(paymentList);
+    } catch (error) {
+      log(`Error fetching payments: ${error}`);
+      res.status(500).json({ message: "Error fetching payments" });
+    }
+  });
+
+  // Create a new payment
   app.post("/api/payments", async (req: Request, res: Response) => {
-    const payment = await db.insert(payments).values({
-      ...req.body,
-      confirmedAt: req.body.status === 'confirmed' ? new Date() : null,
-    }).returning();
-
-    // Update assets if payment is confirmed
-    if (req.body.status === 'confirmed') {
-      await db.insert(assets).values({
-        type: req.body.method === 'cash' ? 'cash' : 'bank',
-        amount: req.body.amount,
-        date: new Date(),
-        description: `Payment from guest ${req.body.guestId}`,
-        paymentId: payment[0].id,
+    const result = insertPaymentSchema.safeParse(req.body);
+    if (!result.success) {
+      return res.status(400).json({
+        message: "Invalid payment data",
+        details: result.error.errors,
       });
-    }
-
-    res.json(payment[0]);
-  });
-
-  app.patch("/api/payments/:id/confirm", async (req: Request, res: Response) => {
-    const payment = await db.transaction(async (tx) => {
-      // Update payment status
-      const [updatedPayment] = await tx
-        .update(payments)
-        .set({
-          status: 'confirmed',
-          confirmedBy: req.body.confirmedBy,
-          confirmedAt: new Date(),
-        })
-        .where(eq(payments.id, parseInt(req.params.id)))
-        .returning();
-
-      // Add to assets
-      await tx.insert(assets).values({
-        type: updatedPayment.method === 'cash' ? 'cash' : 'bank',
-        amount: updatedPayment.amount,
-        date: new Date(),
-        description: `Payment from guest ${updatedPayment.guestId}`,
-        paymentId: updatedPayment.id,
-      });
-
-      return updatedPayment;
-    });
-
-    res.json(payment);
-  });
-
-  // Update payment document URLs with proper SQL array handling
-  app.post("/api/payments/:id/documents", uploadPaymentDocs.array("documents", 5), async (req: Request, res: Response) => {
-    const paymentId = parseInt(req.params.id);
-    const files = (req.files as Express.Multer.File[]) || [];
-
-    if (!files.length) {
-      return res.status(400).send("No files uploaded");
     }
 
     try {
-      const [payment] = await db
-        .select()
-        .from(payments)
-        .where(eq(payments.id, paymentId))
-        .limit(1);
+      const newPayment = await db.insert(payments).values({
+        amount: result.data.amount,
+        method: result.data.method,
+        status: result.data.status,
+        type: result.data.type,
+        dueDate: result.data.dueDate ? new Date(result.data.dueDate) : null,
+        paymentDate: result.data.paymentDate ? new Date(result.data.paymentDate) : null,
+        notes: result.data.notes || null,
+        guestId: result.data.guestId,
+        bookingId: result.data.bookingId,
+        documents: result.data.documents || [],
+        referenceNumber: result.data.referenceNumber || `PMT-${Date.now().toString(36).toUpperCase()}`,
+      }).returning();
 
-      if (!payment) {
-        return res.status(404).send("Payment not found");
-      }
+      res.status(201).json(newPayment[0]);
+    } catch (error) {
+      log(`Error creating payment: ${error}`);
+      res.status(500).json({ message: "Error creating payment" });
+    }
+  });
 
-      // Store file references in description field as a JSON string since there's no documentUrls field
-      const documentUrls = files.map(file => `/uploads/payment-docs/${file.filename}`);
-      const updatedPayment = await db
-        .update(payments)
+  // Confirm a payment
+  app.patch("/api/payments/:id/confirm", async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const paymentId = parseInt(id);
+    const { paymentDate, method, referenceNumber } = req.body;
+
+    if (!paymentDate) {
+      return res.status(400).json({ message: "Payment date is required" });
+    }
+
+    try {
+      const updatedPayment = await db.update(payments)
         .set({
-          description: JSON.stringify({ documentUrls })
+          status: "paid",
+          paymentDate: new Date(paymentDate),
+          method: method || "cash",
+          referenceNumber: referenceNumber || `REF-${Date.now().toString(36).toUpperCase()}`,
         })
         .where(eq(payments.id, paymentId))
         .returning();
+
+      if (updatedPayment.length === 0) {
+        return res.status(404).json({ message: "Payment not found" });
+      }
 
       res.json(updatedPayment[0]);
     } catch (error) {
-      console.error(error);
-      res.status(500).send("Failed to upload documents");
+      log(`Error confirming payment: ${error}`);
+      res.status(500).json({ message: "Error confirming payment" });
     }
   });
 
-  // Add this new endpoint after the existing payments endpoints
-  app.get("/api/payments/:id/details", async (req: Request, res: Response) => {
+  // Upload payment documents
+  app.post("/api/payments/:id/documents", uploadPaymentDocs.array("documents", 5), async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const paymentId = parseInt(id);
+
     try {
-      const paymentId = parseInt(req.params.id);
+      const payment = await db.query.payments.findFirst({
+        where: eq(payments.id, paymentId),
+      });
+
+      if (!payment) {
+        return res.status(404).json({ message: "Payment not found" });
+      }
+
+      const files = req.files as Express.Multer.File[];
+      const docUrls = files.map(file => `/uploads/payment-docs/${file.filename}`);
+
+      // Update payment with new document URLs
+      const updatedPayment = await db.update(payments)
+        .set({
+          documents: [...(payment.documents as string[] || []), ...docUrls],
+        })
+        .where(eq(payments.id, paymentId))
+        .returning();
+
+      res.status(200).json(updatedPayment[0]);
+    } catch (error) {
+      log(`Error uploading payment documents: ${error}`);
+      res.status(500).json({ message: "Error uploading payment documents" });
+    }
+  });
+
+  // Get payment details
+  app.get("/api/payments/:id/details", async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const paymentId = parseInt(id);
+
+    try {
       const payment = await db.query.payments.findFirst({
         where: eq(payments.id, paymentId),
         with: {
-          guest: {
+          guest: true,
+          booking: {
             with: {
               property: true
             }
@@ -846,68 +859,44 @@ export function registerRoutes(app: Express): Server {
       });
 
       if (!payment) {
-        return res.status(404).send("Payment not found");
+        return res.status(404).json({ message: "Payment not found" });
       }
 
-      // Get next payment due
-      const nextPayment = await db.query.payments.findFirst({
-        where: (payment.guestId ? 
-          and(
-            eq(payments.guestId, payment.guestId),
-            gt(payments.dueDate, new Date()),
-            eq(payments.status, 'pending')
-          ) : 
-          and(
-            gt(payments.dueDate, new Date()),
-            eq(payments.status, 'pending')
-          )
-        ),
-        orderBy: asc(payments.dueDate)
-      });
-
-      // Get payment history
-      const paymentHistory = await db.query.payments.findMany({
-        where: (payment.guestId ? 
-          and(
-            eq(payments.guestId, payment.guestId),
-            lt(payments.dueDate, new Date())
-          ) :
-          lt(payments.dueDate, new Date())
-        ),
-        orderBy: desc(payments.dueDate),
-        limit: 5
-      });
-
-      res.json({
-        current: payment,
-        next: nextPayment,
-        history: paymentHistory
-      });
+      res.json(payment);
     } catch (error) {
-      console.error('Error fetching payment details:', error);
-      res.status(500).send("Failed to fetch payment details");
+      log(`Error fetching payment details: ${error}`);
+      res.status(500).json({ message: "Error fetching payment details" });
     }
   });
 
-
-  // Assets endpoints
+  // Get all assets
   app.get("/api/assets", async (req: Request, res: Response) => {
-    const { type } = req.query;
-    let query = db.select().from(assets);
-
-    if (type) {
-      query = query.where(eq(assets.type, String(type)));
+    const { propertyId } = req.query;
+    
+    try {
+      let assetList;
+      
+      if (propertyId) {
+        assetList = await db.query.assets.findMany({
+          where: eq(assets.propertyId, parseInt(propertyId as string)),
+        });
+      } else {
+        assetList = await db.query.assets.findMany({});
+      }
+      
+      res.json(assetList);
+    } catch (error) {
+      log(`Error fetching assets: ${error}`);
+      res.status(500).json({ message: "Error fetching assets" });
     }
-
-    const allAssets = await query;
-    res.json(allAssets);
   });
 
-  // Guest dashboard info endpoints
+  // Get guest information for public dashboard
   app.get("/api/guest-info", async (_req: Request, res: Response) => {
     try {
-      // This endpoint provides generic information that doesn't require authentication
-      const info = {
+      // This endpoint provides general information for the guest dashboard
+      // that doesn't require authentication
+      const guestInfo = {
         location: {
           title: "Our Location",
           address: "123 Ocean Drive, Beachside, CA 90210",
@@ -970,332 +959,441 @@ export function registerRoutes(app: Express): Server {
         }
       };
       
-      res.json(info);
+      res.json(guestInfo);
     } catch (error) {
-      console.error('Error fetching guest info:', error);
-      res.status(500).json({ message: "Failed to fetch guest information" });
+      log(`Error fetching guest info: ${error}`);
+      res.status(500).json({ message: "Error fetching guest information" });
     }
   });
 
+  // Get guest dashboard data for a specific guest
   app.get("/api/guest-dashboard/:guestId", async (req: Request, res: Response) => {
+    const { guestId } = req.params;
+    const id = parseInt(guestId);
+
     try {
-      const guestId = parseInt(req.params.guestId);
-      
-      // Verify session authorization (guest can only access their own data)
-      if (req.session.guestId !== guestId) {
-        return res.status(403).json({ message: "Unauthorized access" });
-      }
-      
-      // Get guest information with booking and property details
+      // Verify guest exists
       const guest = await db.query.guests.findFirst({
-        where: eq(guests.id, guestId),
-        with: { property: true }
+        where: eq(guests.id, id),
       });
-      
+
       if (!guest) {
         return res.status(404).json({ message: "Guest not found" });
       }
-      
-      // Get all bookings for this guest
-      const guestBookings = await db.query.bookings.findMany({
-        where: eq(bookings.guestId, guestId),
+
+      // Get guest's bookings with property and payment info
+      const bookings = await db.query.bookings.findMany({
+        where: eq(bookings.guestId, id),
         with: {
-          property: true
-        }
+          property: true,
+          payments: true
+        },
+        orderBy: desc(bookings.createdAt)
       });
-      
-      // Get payment history for this guest
-      const paymentHistory = await db.query.payments.findMany({
-        where: eq(payments.guestId, guestId),
-        orderBy: desc(payments.dueDate)
-      });
-      
-      // Get upcoming payments
-      const upcomingPayments = paymentHistory.filter(
-        payment => payment.status === 'pending' && new Date(payment.dueDate) > new Date()
-      ).sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
-      
-      // Compile response with all guest dashboard data
+
+      // Find current or upcoming booking
+      const now = new Date();
+      const currentBooking = bookings.find(b => 
+        (new Date(b.checkIn) <= now && new Date(b.checkOut) >= now) || 
+        new Date(b.checkIn) > now
+      );
+
       const dashboardData = {
         guest,
-        bookings: guestBookings,
-        payments: {
-          history: paymentHistory,
-          upcoming: upcomingPayments
-        },
-        messages: [] // Placeholder for message board functionality
+        bookings,
+        currentBooking,
+        // Add property-specific information for the current booking
+        propertyInfo: currentBooking ? {
+          name: currentBooking.property?.name,
+          location: {
+            address: currentBooking.property?.address || "123 Default Street",
+            // More location details would come from property data
+          }
+        } : null,
+        // Messages system would integrate here
+        messages: [
+          {
+            id: 1,
+            sender: "Property Manager",
+            content: "Welcome to your stay! Let us know if you need anything.",
+            timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000)
+          },
+          {
+            id: 2, 
+            sender: "Maintenance",
+            content: "The pool will be closed for cleaning tomorrow from 10am-12pm.",
+            timestamp: new Date(Date.now() - 12 * 60 * 60 * 1000)
+          }
+        ]
       };
-      
+
       res.json(dashboardData);
     } catch (error) {
-      console.error('Error fetching guest dashboard:', error);
-      res.status(500).json({ message: "Failed to fetch guest dashboard" });
+      log(`Error fetching guest dashboard: ${error}`);
+      res.status(500).json({ message: "Error fetching guest dashboard data" });
     }
   });
 
-  // API endpoint for bookings by reference - used for guest dashboard access
+  // Get booking data for a guest using booking reference and email
   app.get("/api/bookings/guest", async (req: Request, res: Response) => {
+    const { ref, email } = req.query;
+
+    if (!ref || !email) {
+      return res.status(400).json({ message: "Booking reference and email are required" });
+    }
+
     try {
-      const { ref, email } = req.query;
-      
-      if (!ref || !email) {
-        return res.status(400).json({ message: "Booking reference and email are required" });
-      }
-      
-      // Find the guest by email and booking reference
+      // Find the guest with matching email and booking reference
       const guest = await db.query.guests.findFirst({
         where: and(
-          eq(guests.email, String(email)),
-          eq(guests.bookingReference, String(ref))
+          eq(guests.email, email as string),
+          eq(guests.bookingReference, ref as string)
         )
       });
-      
+
       if (!guest) {
-        return res.status(404).json({ message: "Guest not found with the provided details" });
+        return res.status(404).json({ message: "Guest not found with provided credentials" });
       }
-      
-      // Find the booking
+
+      // Find the booking for this guest
       const booking = await db.query.bookings.findFirst({
-        where: eq(bookings.bookingReference, String(ref)),
+        where: eq(bookings.guestId, guest.id),
         with: {
-          guest: true,
-          property: true
-        }
+          property: true,
+          payments: true,
+          guest: true
+        },
+        orderBy: desc(bookings.createdAt)
       });
-      
+
       if (!booking) {
-        return res.status(404).json({ message: "Booking not found" });
+        return res.status(404).json({ message: "No booking found for this guest" });
       }
-      
-      // Get payment information
-      const paymentInfo = await db.query.payments.findMany({
-        where: eq(payments.guestId, guest.id)
-      });
-      
-      // Return booking with payments
-      const bookingWithPayments = {
-        ...booking,
-        payments: paymentInfo
-      };
-      
-      // Store guest ID in session for future authenticated requests
-      if (req.session) {
-        req.session.guestId = guest.id;
-      }
-      
-      res.json(bookingWithPayments);
+
+      res.json(booking);
     } catch (error) {
-      console.error('Error fetching guest booking:', error);
-      res.status(500).json({ message: "Failed to fetch booking details" });
+      log(`Error fetching guest booking: ${error}`);
+      res.status(500).json({ message: "Error fetching booking data" });
     }
   });
 
-  // Message board functionality
+  // Get messages for a guest
   app.get("/api/messages/:guestId", async (req: Request, res: Response) => {
+    const { guestId } = req.params;
+    const id = parseInt(guestId);
+
     try {
-      const guestId = parseInt(req.params.guestId);
-      
-      // Verify session authorization (guest can only access their own messages)
-      if (req.session.guestId !== guestId) {
-        return res.status(403).json({ message: "Unauthorized access" });
-      }
-      
-      // For now, return empty array as placeholder
-      // In a real implementation, this would fetch from a messages table
-      const messages: Array<{
-        id: number;
-        guestId: number;
-        content: string;
-        sender: string;
-        timestamp: Date;
-        read: boolean;
-      }> = [];
-      
+      // In a real application, this would fetch from a messages table
+      // For demo purposes, returning mock messages
+      const messages = [
+        {
+          id: 1,
+          guestId: id,
+          sender: "Property Manager",
+          content: "Welcome to your stay! Let us know if you need anything.",
+          timestamp: new Date(Date.now() - 48 * 60 * 60 * 1000)
+        },
+        {
+          id: 2,
+          guestId: id,
+          sender: "Maintenance",
+          content: "The pool will be closed for cleaning tomorrow from 10am-12pm.",
+          timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000)
+        },
+        {
+          id: 3,
+          guestId: id,
+          sender: "Reception",
+          content: "We've left a welcome basket at your door. Enjoy!",
+          timestamp: new Date(Date.now() - 12 * 60 * 60 * 1000)
+        }
+      ];
+
       res.json(messages);
     } catch (error) {
-      console.error('Error fetching messages:', error);
-      res.status(500).json({ message: "Failed to fetch messages" });
+      log(`Error fetching messages: ${error}`);
+      res.status(500).json({ message: "Error fetching messages" });
     }
   });
 
-  // Todos endpoints
+  // Get all todos
   app.get("/api/todos", async (_req: Request, res: Response) => {
-    const allTodos = await db.select().from(todos);
-    res.json(allTodos);
-  });
-
-  app.post("/api/todos", async (req: Request, res: Response) => {
-    const todo = await db.insert(todos).values(req.body).returning();
-    res.json(todo[0]);
-  });
-
-  app.patch("/api/todos/:id", async (req: Request, res: Response) => {
-    const todo = await db
-      .update(todos)
-      .set(req.body)
-      .where(eq(todos.id, parseInt(req.params.id)))
-      .returning();
-    res.json(todo[0]);
-  });
-
-  // Bookings endpoints
-  app.post("/api/bookings", async (req: Request, res: Response) => {
     try {
-      console.log('Received booking request:', req.body);
+      const todoList = await db.query.todos.findMany({
+        orderBy: [
+          desc(todos.isCompleted),
+          desc(todos.dueDate)
+        ],
+      });
+      
+      res.json(todoList);
+    } catch (error) {
+      log(`Error fetching todos: ${error}`);
+      res.status(500).json({ message: "Error fetching todos" });
+    }
+  });
 
-      const result = insertBookingSchema.safeParse(req.body);
-      if (!result.success) {
-        console.error('Validation error:', result.error);
-        return res.status(400).json({
-          message: "Invalid booking data",
-          details: result.error.errors,
-        });
+  // Create a new todo
+  app.post("/api/todos", async (req: Request, res: Response) => {
+    const result = insertTodoSchema.safeParse(req.body);
+    if (!result.success) {
+      return res.status(400).json({
+        message: "Invalid todo data",
+        details: result.error.errors,
+      });
+    }
+
+    try {
+      const newTodo = await db.insert(todos).values({
+        title: result.data.title,
+        description: result.data.description,
+        dueDate: result.data.dueDate ? new Date(result.data.dueDate) : null,
+        priority: result.data.priority || "medium",
+        isCompleted: result.data.isCompleted || false,
+        assignedTo: result.data.assignedTo || null,
+      }).returning();
+
+      res.status(201).json(newTodo[0]);
+    } catch (error) {
+      log(`Error creating todo: ${error}`);
+      res.status(500).json({ message: "Error creating todo" });
+    }
+  });
+
+  // Update a todo
+  app.patch("/api/todos/:id", async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const todoId = parseInt(id);
+
+    try {
+      const updatedTodo = await db.update(todos)
+        .set(req.body)
+        .where(eq(todos.id, todoId))
+        .returning();
+
+      if (updatedTodo.length === 0) {
+        return res.status(404).json({ message: "Todo not found" });
       }
 
-      // Ensure dates are properly converted to Date objects
+      res.json(updatedTodo[0]);
+    } catch (error) {
+      log(`Error updating todo: ${error}`);
+      res.status(500).json({ message: "Error updating todo" });
+    }
+  });
+
+  // Create a new booking
+  app.post("/api/bookings", async (req: Request, res: Response) => {
+    const result = insertBookingSchema.safeParse(req.body);
+    if (!result.success) {
+      return res.status(400).json({
+        message: "Invalid booking data",
+        details: result.error.errors,
+      });
+    }
+
+    try {
+      // Check if property exists
+      const property = await db.query.properties.findFirst({
+        where: eq(properties.id, result.data.propertyId),
+      });
+
+      if (!property) {
+        return res.status(404).json({ message: "Property not found" });
+      }
+
+      // Check if guest exists
+      const guest = await db.query.guests.findFirst({
+        where: eq(guests.id, result.data.guestId),
+      });
+
+      if (!guest) {
+        return res.status(404).json({ message: "Guest not found" });
+      }
+
+      // Parse dates
       const checkInDate = new Date(result.data.checkIn);
       const checkOutDate = new Date(result.data.checkOut);
 
-      // Validate dates
-      if (isNaN(checkInDate.getTime()) || isNaN(checkOutDate.getTime())) {
-        return res.status(400).json({
-          message: "Invalid date format",
-        });
-      }
+      // Create new booking
+      const newBooking = await db.insert(bookings).values({
+        checkIn: checkInDate,
+        checkOut: checkOutDate,
+        status: result.data.status,
+        guestId: result.data.guestId,
+        propertyId: result.data.propertyId,
+        totalAmount: result.data.totalAmount,
+        depositAmount: result.data.depositAmount,
+        bookingReference: result.data.bookingReference || 
+          `BK-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+        notes: result.data.notes || null,
+        paymentStatus: result.data.paymentStatus || "pending",
+        guests: result.data.guests || 1,
+      }).returning();
 
-      if (checkInDate >= checkOutDate) {
-        return res.status(400).json({
-          message: "Check-out date must be after check-in date",
-        });
-      }
-
-      // Create the booking
-      const [booking] = await db.insert(bookings)
-        .values({
-          propertyId: result.data.propertyId,
+      // Check if we need to create a deposit payment
+      if (result.data.createDeposit && result.data.depositAmount > 0) {
+        const depositPayment = await db.insert(payments).values({
+          amount: result.data.depositAmount,
+          method: "cash", // Default method
+          status: "pending",
+          type: "deposit",
+          dueDate: new Date(), // Due immediately
           guestId: result.data.guestId,
-          status: result.data.status,
-          totalAmount: result.data.totalAmount,
-          notes: result.data.notes,
-          checkIn: checkInDate,
-          checkOut: checkOutDate,
-        })
-        .returning();
+          bookingId: newBooking[0].id,
+          referenceNumber: `DEP-${Date.now().toString(36).toUpperCase()}`,
+        }).returning();
 
-      console.log('Created booking:', booking);
-      res.json(booking);
+        return res.status(201).json({
+          booking: newBooking[0],
+          deposit: depositPayment[0],
+        });
+      }
+
+      res.status(201).json(newBooking[0]);
     } catch (error) {
-      console.error('Error creating booking:', error);
-      res.status(500).json({
-        message: "Failed to create booking",
-        details: error instanceof Error ? error.message : "Unknown error",
-      });
+      log(`Error creating booking: ${error}`);
+      res.status(500).json({ message: "Error creating booking" });
     }
   });
 
+  // Get all bookings
   app.get("/api/bookings", async (req: Request, res: Response) => {
+    const { propertyId, guestId, status } = req.query;
+    
     try {
-      const { propertyId, status } = req.query;
-      let queryBuilder = db.select().from(bookings);
-
+      let conditions = [];
+      
       if (propertyId) {
-        queryBuilder = queryBuilder.where(
-          eq(bookings.propertyId, Number(propertyId))
-        );
+        conditions.push(eq(bookings.propertyId, parseInt(propertyId as string)));
       }
-
+      
+      if (guestId) {
+        conditions.push(eq(bookings.guestId, parseInt(guestId as string)));
+      }
+      
       if (status) {
-        queryBuilder = queryBuilder.where(
-          eq(bookings.status, String(status))
-        );
+        conditions.push(eq(bookings.status, status as string));
       }
-
-      const allBookings = await queryBuilder;
-      res.json(allBookings);
+      
+      const bookingList = await db.query.bookings.findMany({
+        where: conditions.length > 0 ? and(...conditions) : undefined,
+        with: {
+          guest: true,
+          property: true,
+          payments: true,
+        },
+        orderBy: desc(bookings.createdAt),
+      });
+      
+      res.json(bookingList);
     } catch (error) {
-      console.error('Error fetching bookings:', error);
-      res.status(500).send("Failed to fetch bookings");
+      log(`Error fetching bookings: ${error}`);
+      res.status(500).json({ message: "Error fetching bookings" });
     }
   });
 
+  // Get property availability
   app.get("/api/properties/:id/availability", async (req: Request, res: Response) => {
-    try {
-      const propertyId = parseInt(req.params.id);
-      const { start, end } = req.query;
+    const { id } = req.params;
+    const propertyId = parseInt(id);
+    const { startDate, endDate } = req.query;
 
-      if (!start || !end) {
-        return res.status(400).send("Start and end dates are required");
+    if (!startDate || !endDate) {
+      return res.status(400).json({ message: "Start date and end date are required" });
+    }
+
+    try {
+      // Check if property exists
+      const property = await db.query.properties.findFirst({
+        where: eq(properties.id, propertyId),
+      });
+
+      if (!property) {
+        return res.status(404).json({ message: "Property not found" });
       }
 
-      const startDate = new Date(String(start));
-      const endDate = new Date(String(end));
+      // Parse dates
+      const start = new Date(startDate as string);
+      const end = new Date(endDate as string);
 
-      // Get all confirmed bookings for this property within the date range
-      const existingBookings = await db.query.bookings.findMany({
+      // Get all bookings for this property that overlap with the requested period
+      const overlappingBookings = await db.query.bookings.findMany({
         where: and(
           eq(bookings.propertyId, propertyId),
-          eq(bookings.status, "confirmed"),
           or(
-            and(
-              lte(bookings.checkIn, startDate),
-              gte(bookings.checkOut, startDate)
-            ),
-            and(
-              lte(bookings.checkIn, endDate),
-              gte(bookings.checkOut, endDate)
-            ),
-            and(
-              gte(bookings.checkIn, startDate),
-              lte(bookings.checkOut, endDate)
-            )
-          )
+            and(lte(bookings.checkIn, start), gte(bookings.checkOut, start)),
+            and(lte(bookings.checkIn, end), gte(bookings.checkOut, end)),
+            and(gte(bookings.checkIn, start), lte(bookings.checkOut, end))
+          ),
+          ne(bookings.status, "cancelled") // Ignore cancelled bookings
         ),
       });
 
-      // Create an array of dates within the range
-      const dates = [];
-      let currentDate = startDate;
-      while (currentDate <= endDate) {
-        const isBooked = existingBookings.some(booking => 
-          booking.checkIn && booking.checkOut && 
-          currentDate >= booking.checkIn && currentDate < booking.checkOut
-        );
+      // Build availability array (true = available, false = booked)
+      const availability = [];
+      const currentDate = new Date(start);
+      while (currentDate <= end) {
+        const dateString = currentDate.toISOString().split('T')[0];
+        const isBooked = overlappingBookings.some(booking => {
+          const bookingStart = new Date(booking.checkIn);
+          const bookingEnd = new Date(booking.checkOut);
+          return currentDate >= bookingStart && currentDate < bookingEnd;
+        });
 
-        dates.push({
-          date: currentDate.toISOString(),
+        availability.push({
+          date: dateString,
           available: !isBooked,
         });
 
-        currentDate = addDays(currentDate, 1);
+        // Move to next day
+        currentDate.setDate(currentDate.getDate() + 1);
       }
 
-      res.json(dates);
+      res.json({
+        propertyId,
+        startDate: start.toISOString(),
+        endDate: end.toISOString(),
+        availability,
+        overlappingBookings,
+      });
     } catch (error) {
-      console.error('Error checking availability:', error);
-      res.status(500).send("Failed to check availability");
+      log(`Error checking availability: ${error}`);
+      res.status(500).json({ message: "Error checking availability" });
     }
   });
 
+  // Update a booking
   app.patch("/api/bookings/:id", async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const bookingId = parseInt(id);
+
     try {
-      const bookingId = parseInt(req.params.id);
-      const updatedBooking = await db
-        .update(bookings)
+      const updatedBooking = await db.update(bookings)
         .set(req.body)
         .where(eq(bookings.id, bookingId))
         .returning();
 
-      if (!updatedBooking.length) {
+      if (updatedBooking.length === 0) {
         return res.status(404).json({ message: "Booking not found" });
       }
 
       res.json(updatedBooking[0]);
     } catch (error) {
-      console.error('Error updating booking:', error);
-      res.status(500).json({ message: "Failed to update booking" });
+      log(`Error updating booking: ${error}`);
+      res.status(500).json({ message: "Error updating booking" });
     }
   });
-  
-  // Return the HTTP server instance
-  return createServer(app);
+
+  // To support file uploads for guest ID
+  app.post("/api/upload/id", uploadIdImages.single("idImage"), (req: Request, res: Response) => {
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
+    
+    const filePath = `/uploads/id-images/${req.file.filename}`;
+    res.json({ path: filePath });
+  });
+
+  return server;
 }
