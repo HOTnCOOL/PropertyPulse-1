@@ -128,6 +128,48 @@ export const assets = pgTable("assets", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Table for tracking staff expenses
+export const expenses = pgTable("expenses", {
+  id: serial("id").primaryKey(),
+  amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
+  date: timestamp("date").notNull(),
+  description: text("description").notNull(),
+  category: text("category").notNull(), // e.g., 'office', 'maintenance', 'cleaning'
+  staffId: integer("staff_id").references(() => admins.id).notNull(),
+  approved: boolean("approved").default(false),
+  approvedBy: integer("approved_by").references(() => admins.id),
+  approvedAt: timestamp("approved_at"),
+  receiptDocumentId: integer("receipt_document_id").references(() => documents.id),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Table for tracking cash management
+export const cashTransactions = pgTable("cash_transactions", {
+  id: serial("id").primaryKey(),
+  staffId: integer("staff_id").references(() => admins.id).notNull(),
+  amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
+  type: text("type").notNull(), // 'deposit', 'withdrawal', 'payment', 'expense'
+  relatedId: integer("related_id"), // Could be payment_id, expense_id, etc.
+  relatedType: text("related_type"), // 'payment', 'expense', etc.
+  balanceBefore: numeric("balance_before", { precision: 10, scale: 2 }).notNull(),
+  balanceAfter: numeric("balance_after", { precision: 10, scale: 2 }).notNull(),
+  notes: text("notes"),
+  date: timestamp("date").notNull().defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Table for tracking all financial activity
+export const activityLogs = pgTable("activity_logs", {
+  id: serial("id").primaryKey(),
+  adminId: integer("admin_id").references(() => admins.id),
+  action: text("action").notNull(), // 'create', 'update', 'delete', 'approve', etc.
+  entityType: text("entity_type").notNull(), // 'payment', 'booking', 'expense', etc.
+  entityId: integer("entity_id").notNull(),
+  details: jsonb("details"), // Store additional details as needed
+  createdAt: timestamp("created_at").defaultNow(),
+  ipAddress: text("ip_address"),
+});
+
 export const todos = pgTable("todos", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
@@ -261,10 +303,18 @@ export type Admin = typeof admins.$inferSelect;
 export type NewAdmin = z.infer<typeof insertAdminSchema>;
 export type LoginGuest = z.infer<typeof loginGuestSchema>;
 export type LoginAdmin = z.infer<typeof loginAdminSchema>;
+// Define admin roles
+export type AdminRole = 'manager' | 'staff' | 'admin';
+
 export const admins = pgTable("admins", {
   id: serial("id").primaryKey(),
   email: text("email").notNull().unique(),
   password: text("password").notNull(),
   name: text("name").notNull(),
+  role: text("role").notNull().default('staff'),
+  active: boolean("active").notNull().default(true),
+  cashBalance: numeric("cash_balance", { precision: 10, scale: 2 }).default("0.00"),
+  lastActivity: timestamp("last_activity"),
   createdAt: timestamp("created_at").defaultNow(),
+  createdBy: integer("created_by"),
 });
