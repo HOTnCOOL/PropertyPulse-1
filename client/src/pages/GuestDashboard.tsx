@@ -678,7 +678,7 @@ export default function GuestDashboard() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {messages.map(message => (
+                {dashboardMessages.map((message: Message) => (
                   <div key={message.id} className="border rounded-lg p-4 hover:bg-gray-50">
                     <div className="flex justify-between text-sm text-gray-500 mb-1">
                       <span className="font-medium">{message.sender}</span>
