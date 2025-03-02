@@ -1,0 +1,16 @@
+Failed to fetch
+at window.fetch (https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:218642)
+at processImages (https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/src/components/IdScanner.tsx:49:33)
+at HTMLUnknownElement.callCallback2 (https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=95a33466:3674:22)
+at Object.invokeGuardedCallbackDev (https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=95a33466:3699:24)
+at invokeGuardedCallback (https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=95a33466:3733:39)
+at invokeGuardedCallbackAndCatchFirstError (https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=95a33466:3736:33)
+at executeDispatch (https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=95a33466:7014:11)
+at processDispatchQueueItemsInOrder (https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=95a33466:7034:15)
+at processDispatchQueue (https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=95a33466:7043:13)
+at dispatchEventsForPlugins (https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=95a33466:7051:11)
+Failed to fetch
+at window.fetch (https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:218642)
+at uploadIdImage (https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/src/pages/GuestRegistration.tsx:260:28)
+at handleIdImageCaptured (https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/src/pages/GuestRegistration.tsx:378:30)
+at handleFileUpload (https://8a9092c9-ac73-4e4a-ae42-3ccb09bc1dbf-00-1lf9qh69b1ez0.picard.replit.dev/src/components/IdScanner.tsx:411:9)
