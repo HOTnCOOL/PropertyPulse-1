@@ -238,8 +238,8 @@ export class DocumentService {
         .set({
           status: 'deleted',
           deletedAt: new Date(),
-          fileUrl: null, // Remove the URL
-          extractedData: {}, // Clear extracted data
+          fileUrl: '', // Remove the URL (empty string instead of null)
+          extractedData: {} // Clear extracted data
         })
         .where(eq(documents.id, documentId));
       

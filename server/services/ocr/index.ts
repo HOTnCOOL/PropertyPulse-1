@@ -228,7 +228,11 @@ export class OCRService {
       for (const regex of regexList) {
         const match = normalizedText.match(regex);
         if (match && match[1]) {
-          data[key as keyof IDCardData] = match[1].trim();
+          // Handle the special case for string fields
+          if (typeof data[key as keyof IDCardData] === 'undefined' || 
+              typeof data[key as keyof IDCardData] === 'string') {
+            data[key as keyof IDCardData] = match[1].trim() as any;
+          }
           break;
         }
       }

@@ -30,7 +30,7 @@ interface IdScanResult {
 }
 
 interface AdvancedIdScannerProps {
-  onDataExtracted: (data: IdScanResult['data']) => void;
+  onDataExtracted: (data: IdScanResult['data'] | undefined) => void;
   onImageCaptured: (file: File, documentId?: number) => void;
   guestId?: number;
   bookingId?: number;

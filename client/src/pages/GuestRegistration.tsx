@@ -314,7 +314,10 @@ export default function GuestRegistration() {
     nationality?: string;
     idType?: 'passport' | 'national_id';
     expiryDate?: string;
-  }) => {
+    orientation?: 'portrait' | 'landscape';
+  } | undefined) => {
+    // Early return if no data
+    if (!data) return;
     console.log('Received extracted data from OCR:', data);
 
     const setFormValue = (key: keyof FormData, value: any) => {
