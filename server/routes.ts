@@ -893,6 +893,214 @@ export function registerRoutes(app: Express): Server {
     res.json(allAssets);
   });
 
+  // Guest dashboard info endpoints
+  app.get("/api/guest-info", async (_req: Request, res: Response) => {
+    try {
+      // This endpoint provides generic information that doesn't require authentication
+      const info = {
+        location: {
+          title: "Our Location",
+          address: "123 Ocean Drive, Beachside, CA 90210",
+          coordinates: { lat: 34.0522, lng: -118.2437 },
+          directions: [
+            "From the airport, take the Airport Express Bus to Central Station",
+            "From Central Station, you can take a taxi directly to our property",
+            "If driving, follow GPS directions to '123 Ocean Drive' and look for our blue entrance"
+          ],
+          parkingInfo: "Free parking available on premises. Please park only in designated spots.",
+          publicTransport: "Bus routes 10, 15, and 22 stop within a 5-minute walk from our property."
+        },
+        checkInOutInfo: {
+          checkInTime: "3:00 PM - 8:00 PM",
+          checkOutTime: "11:00 AM",
+          lateCheckIn: "Late check-in after 8:00 PM is available with prior arrangement. Additional $25 fee applies.",
+          earlyCheckIn: "Early check-in (from 1:00 PM) is subject to availability for an additional $20 fee.",
+          lateCheckOut: "Late checkout (until 1:00 PM) can be arranged for an additional $20 fee, subject to availability.",
+          procedures: [
+            "Please have your ID and booking confirmation ready upon arrival",
+            "Our staff will provide keys/access codes and a brief orientation of the property",
+            "For contactless check-in, download our mobile app or request the door code in advance"
+          ],
+          specialRequests: "Please inform us of any special requirements at least 48 hours in advance."
+        },
+        nearbyAttractions: {
+          restaurants: [
+            { name: "Oceanview Grill", distance: "0.3 miles", description: "Seafood restaurant with stunning views" },
+            { name: "Luigi's Pizzeria", distance: "0.5 miles", description: "Authentic Italian pizza and pasta" },
+            { name: "The Green Cafe", distance: "0.2 miles", description: "Vegan and vegetarian options" }
+          ],
+          shops: [
+            { name: "Beachside Market", distance: "0.1 miles", description: "Convenience store with essentials" },
+            { name: "Ocean Mall", distance: "1.2 miles", description: "Shopping center with various stores" },
+            { name: "Farmers Market", distance: "0.8 miles", description: "Local produce, open Wednesdays & Saturdays" }
+          ],
+          attractions: [
+            { name: "Sunset Beach", distance: "0.4 miles", description: "Beautiful beach with surfing and swimming" },
+            { name: "City Museum", distance: "1.5 miles", description: "Historical and art exhibits" },
+            { name: "Hillside Park", distance: "0.7 miles", description: "Hiking trails and picnic areas" }
+          ],
+          services: [
+            { name: "City Hospital", distance: "2.1 miles", description: "24/7 emergency services" },
+            { name: "Pharmacy", distance: "0.3 miles", description: "Open daily 8 AM - 10 PM" },
+            { name: "Police Station", distance: "1.0 mile", description: "Local police department" }
+          ]
+        },
+        houseRules: {
+          generalRules: [
+            "No smoking inside the property",
+            "No parties or events without prior approval",
+            "Quiet hours from 10:00 PM to 8:00 AM",
+            "Pets allowed only in designated pet-friendly units with prior approval"
+          ],
+          emergencyContacts: [
+            { name: "Property Manager", phone: "555-123-4567" },
+            { name: "Maintenance", phone: "555-765-4321" },
+            { name: "Emergency Services", phone: "911" }
+          ]
+        }
+      };
+      
+      res.json(info);
+    } catch (error) {
+      console.error('Error fetching guest info:', error);
+      res.status(500).json({ message: "Failed to fetch guest information" });
+    }
+  });
+
+  app.get("/api/guest-dashboard/:guestId", async (req: Request, res: Response) => {
+    try {
+      const guestId = parseInt(req.params.guestId);
+      
+      // Verify session authorization (guest can only access their own data)
+      if (req.session.guestId !== guestId) {
+        return res.status(403).json({ message: "Unauthorized access" });
+      }
+      
+      // Get guest information with booking and property details
+      const guest = await db.query.guests.findFirst({
+        where: eq(guests.id, guestId),
+        with: { property: true }
+      });
+      
+      if (!guest) {
+        return res.status(404).json({ message: "Guest not found" });
+      }
+      
+      // Get all bookings for this guest
+      const guestBookings = await db.query.bookings.findMany({
+        where: eq(bookings.guestId, guestId),
+        with: {
+          property: true
+        }
+      });
+      
+      // Get payment history for this guest
+      const paymentHistory = await db.query.payments.findMany({
+        where: eq(payments.guestId, guestId),
+        orderBy: desc(payments.dueDate)
+      });
+      
+      // Get upcoming payments
+      const upcomingPayments = paymentHistory.filter(
+        payment => payment.status === 'pending' && new Date(payment.dueDate) > new Date()
+      ).sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+      
+      // Compile response with all guest dashboard data
+      const dashboardData = {
+        guest,
+        bookings: guestBookings,
+        payments: {
+          history: paymentHistory,
+          upcoming: upcomingPayments
+        },
+        messages: [] // Placeholder for message board functionality
+      };
+      
+      res.json(dashboardData);
+    } catch (error) {
+      console.error('Error fetching guest dashboard:', error);
+      res.status(500).json({ message: "Failed to fetch guest dashboard" });
+    }
+  });
+
+  // API endpoint for bookings by reference - used for guest dashboard access
+  app.get("/api/bookings/guest", async (req: Request, res: Response) => {
+    try {
+      const { ref, email } = req.query;
+      
+      if (!ref || !email) {
+        return res.status(400).json({ message: "Booking reference and email are required" });
+      }
+      
+      // Find the guest by email and booking reference
+      const guest = await db.query.guests.findFirst({
+        where: and(
+          eq(guests.email, String(email)),
+          eq(guests.bookingReference, String(ref))
+        )
+      });
+      
+      if (!guest) {
+        return res.status(404).json({ message: "Guest not found with the provided details" });
+      }
+      
+      // Find the booking
+      const booking = await db.query.bookings.findFirst({
+        where: eq(bookings.bookingReference, String(ref)),
+        with: {
+          guest: true,
+          property: true
+        }
+      });
+      
+      if (!booking) {
+        return res.status(404).json({ message: "Booking not found" });
+      }
+      
+      // Get payment information
+      const paymentInfo = await db.query.payments.findMany({
+        where: eq(payments.guestId, guest.id)
+      });
+      
+      // Return booking with payments
+      const bookingWithPayments = {
+        ...booking,
+        payments: paymentInfo
+      };
+      
+      // Store guest ID in session for future authenticated requests
+      if (req.session) {
+        req.session.guestId = guest.id;
+      }
+      
+      res.json(bookingWithPayments);
+    } catch (error) {
+      console.error('Error fetching guest booking:', error);
+      res.status(500).json({ message: "Failed to fetch booking details" });
+    }
+  });
+
+  // Message board functionality
+  app.get("/api/messages/:guestId", async (req: Request, res: Response) => {
+    try {
+      const guestId = parseInt(req.params.guestId);
+      
+      // Verify session authorization (guest can only access their own messages)
+      if (req.session.guestId !== guestId) {
+        return res.status(403).json({ message: "Unauthorized access" });
+      }
+      
+      // For now, return empty array as placeholder
+      // In a real implementation, this would fetch from a messages table
+      const messages = [];
+      
+      res.json(messages);
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+      res.status(500).json({ message: "Failed to fetch messages" });
+    }
+  });
+
   // Todos endpoints
   app.get("/api/todos", async (_req: Request, res: Response) => {
     const allTodos = await db.select().from(todos);
