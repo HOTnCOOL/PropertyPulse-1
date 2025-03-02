@@ -307,17 +307,27 @@ export const loginAdminSchema = z.object({
   password: z.string().min(1, "Password is required"),
 });
 
-export type Property = typeof properties.$inferSelect;
-export type Guest = typeof guests.$inferSelect;
-export type Payment = typeof payments.$inferSelect;
-export type Todo = typeof todos.$inferSelect;
-export type Asset = typeof assets.$inferSelect;
-export type Booking = typeof bookings.$inferSelect;
-export type NewBooking = z.infer<typeof insertBookingSchema>;
-export type Admin = typeof admins.$inferSelect;
-export type NewAdmin = z.infer<typeof insertAdminSchema>;
-export type LoginGuest = z.infer<typeof loginGuestSchema>;
-export type LoginAdmin = z.infer<typeof loginAdminSchema>;
+// Document schemas
+export const insertDocumentSchema = z.object({
+  guestId: z.number().optional(),
+  bookingId: z.number().optional(),
+  paymentId: z.number().optional(),
+  type: z.enum(['id_card', 'passport', 'residence_permit', 'invoice', 'payment_receipt', 'booking_confirmation']),
+  filename: z.string().min(1, "Filename is required"),
+  fileUrl: z.string().min(1, "File URL is required"),
+  originalFilename: z.string().optional(),
+  fileSize: z.number().optional(),
+  mimeType: z.string().optional(),
+  extractedData: z.record(z.any()).optional(),
+  metadata: z.record(z.any()).optional(),
+  uploadedBy: z.string().optional(),
+  gdprConsent: z.boolean().default(true),
+  retentionExpiry: z.date().optional(),
+});
+
+export const selectDocumentSchema = createSelectSchema(documents);
+
+// Admins table defined before using its type
 export const admins = pgTable("admins", {
   id: serial("id").primaryKey(),
   email: text("email").notNull().unique(),
@@ -325,3 +335,18 @@ export const admins = pgTable("admins", {
   name: text("name").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+// Export types for all entities
+export type Property = typeof properties.$inferSelect;
+export type Guest = typeof guests.$inferSelect;
+export type Payment = typeof payments.$inferSelect;
+export type Todo = typeof todos.$inferSelect;
+export type Asset = typeof assets.$inferSelect;
+export type Booking = typeof bookings.$inferSelect;
+export type Document = typeof documents.$inferSelect;
+export type Admin = typeof admins.$inferSelect;
+export type NewBooking = z.infer<typeof insertBookingSchema>;
+export type NewDocument = z.infer<typeof insertDocumentSchema>;
+export type NewAdmin = z.infer<typeof insertAdminSchema>;
+export type LoginGuest = z.infer<typeof loginGuestSchema>;
+export type LoginAdmin = z.infer<typeof loginAdminSchema>;
