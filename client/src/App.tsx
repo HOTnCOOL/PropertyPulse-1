@@ -89,6 +89,21 @@ function App() {
         </PublicLayout>
       </Route>
       
+      {/* Simple test route for guest dashboard */}
+      <Route path="/guest-info">
+        <PublicLayout>
+          <div className="container mx-auto p-8">
+            <h1 className="text-3xl font-bold mb-4">Guest Information Portal</h1>
+            <p className="mb-4">This is a simple static page to verify routing works correctly.</p>
+            <div className="p-4 border rounded bg-gray-50">
+              <h2 className="text-xl font-semibold mb-2">Contact Information</h2>
+              <p>Property Manager: 555-123-4567</p>
+              <p>Address: 123 Ocean Drive, Beachside, CA 90210</p>
+            </div>
+          </div>
+        </PublicLayout>
+      </Route>
+      
       <Route path="/payment-demo">
         <PublicLayout>
           <PaymentCalculatorDemo />
