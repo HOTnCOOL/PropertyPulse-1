@@ -41,7 +41,7 @@ export default function AdvancedIdScanner({
   onImageCaptured,
   guestId,
   bookingId
-}: AdvancedIdScannerProps) {
+}: AdvancedIdScannerProps): JSX.Element {
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -146,7 +146,7 @@ export default function AdvancedIdScanner({
   };
 
   // Process the image with OCR
-  const processImage = async () => {
+  const processImage = async (): Promise<void> => {
     if (!uploadedFile && !capturedImage) {
       toast({
         title: "No image to process",
@@ -192,12 +192,20 @@ export default function AdvancedIdScanner({
         return newProgress >= 90 ? 90 : newProgress;
       });
     }, 200);
-
+    
+    // First test if the OCR service is available
+    let statusCheck = false;
+    
     try {
-      // First test if the OCR service is available
-      const statusCheck = await fetch('/api/ocr/status')
-        .then(res => res.ok)
-        .catch(() => false);
+      // Check the OCR service status
+      try {
+        const statusResponse = await fetch('/api/ocr/status');
+        statusCheck = statusResponse.ok;
+        console.log('OCR status check:', statusCheck);
+      } catch (error) {
+        console.error('Error checking OCR status:', error);
+        statusCheck = false;
+      }
       
       if (!statusCheck) {
         clearInterval(interval);
@@ -212,14 +220,18 @@ export default function AdvancedIdScanner({
           description: "The document scanning service is currently unavailable. Please try again later or enter your information manually.",
           variant: "destructive"
         });
+        setIsProcessing(false);
         return;
       }
 
+      console.log('Sending OCR request with form data:', formData);
+      
+      // Send the scan request
       const response = await fetch('/api/ocr/scan-id', {
         method: 'POST',
         body: formData,
       });
-
+      
       clearInterval(interval);
 
       if (!response.ok) {
