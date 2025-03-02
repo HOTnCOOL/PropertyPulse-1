@@ -194,6 +194,27 @@ export default function AdvancedIdScanner({
     }, 200);
 
     try {
+      // First test if the OCR service is available
+      const statusCheck = await fetch('/api/ocr/status')
+        .then(res => res.ok)
+        .catch(() => false);
+      
+      if (!statusCheck) {
+        clearInterval(interval);
+        setScanProgress(100);
+        setScanResult({
+          success: false,
+          error: 'OCR service is not available. Please try again later.'
+        });
+        
+        toast({
+          title: "OCR Service Unavailable",
+          description: "The document scanning service is currently unavailable. Please try again later or enter your information manually.",
+          variant: "destructive"
+        });
+        return;
+      }
+
       const response = await fetch('/api/ocr/scan-id', {
         method: 'POST',
         body: formData,
@@ -202,16 +223,23 @@ export default function AdvancedIdScanner({
       clearInterval(interval);
 
       if (!response.ok) {
-        const errorData = await response.json();
+        let errorMessage = 'Failed to process image';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+          errorMessage = `Error ${response.status}: ${response.statusText || errorMessage}`;
+        }
+        
         setScanProgress(100);
         setScanResult({
           success: false,
-          error: errorData.error || 'Failed to process image'
+          error: errorMessage
         });
         
         toast({
           title: "ID Scanning Failed",
-          description: errorData.error || 'Failed to process image',
+          description: errorMessage,
           variant: "destructive"
         });
       } else {

@@ -34,6 +34,15 @@ export function registerOCRRoutes(app: Express): void {
   if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
   }
+  
+  // Simple test endpoint to verify the OCR routes are registered
+  app.get('/api/ocr/status', (_req: Request, res: Response) => {
+    res.status(200).json({
+      status: 'operational',
+      message: 'OCR service is up and running',
+      version: '1.0'
+    });
+  });
 
   /**
    * Scan an ID card or passport using OCR

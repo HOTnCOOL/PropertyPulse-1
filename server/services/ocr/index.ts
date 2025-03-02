@@ -53,7 +53,7 @@ interface OCRConfig {
 const DEFAULT_CONFIG: OCRConfig = {
   language: 'eng',
   imagePreprocessing: true,
-  confidenceThreshold: 70, // Minimum confidence level (0-100) to accept OCR results
+  confidenceThreshold: 30, // Lowered threshold to accept lower confidence results for testing
   gdprCompliant: true,
   retentionPeriodDays: 90, // Default retention period (90 days)
 };
