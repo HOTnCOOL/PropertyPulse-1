@@ -813,11 +813,12 @@ export function registerRoutes(app: Express): Server {
         return res.status(404).send("Payment not found");
       }
 
+      // Store file references in description field as a JSON string since there's no documentUrls field
       const documentUrls = files.map(file => `/uploads/payment-docs/${file.filename}`);
       const updatedPayment = await db
         .update(payments)
         .set({
-          documentUrls: documentUrls
+          description: JSON.stringify({ documentUrls })
         })
         .where(eq(payments.id, paymentId))
         .returning();
@@ -850,18 +851,27 @@ export function registerRoutes(app: Express): Server {
 
       // Get next payment due
       const nextPayment = await db.query.payments.findFirst({
-        where: and(
-          eq(payments.guestId, payment.guestId),
-          gt(payments.dueDate, new Date()),
-          eq(payments.status, 'pending')
+        where: (payment.guestId ? 
+          and(
+            eq(payments.guestId, payment.guestId),
+            gt(payments.dueDate, new Date()),
+            eq(payments.status, 'pending')
+          ) : 
+          and(
+            gt(payments.dueDate, new Date()),
+            eq(payments.status, 'pending')
+          )
         ),
         orderBy: asc(payments.dueDate)
       });
 
       // Get payment history
       const paymentHistory = await db.query.payments.findMany({
-        where: and(
-          eq(payments.guestId, payment.guestId),
+        where: (payment.guestId ? 
+          and(
+            eq(payments.guestId, payment.guestId),
+            lt(payments.dueDate, new Date())
+          ) :
           lt(payments.dueDate, new Date())
         ),
         orderBy: desc(payments.dueDate),
@@ -1092,7 +1102,14 @@ export function registerRoutes(app: Express): Server {
       
       // For now, return empty array as placeholder
       // In a real implementation, this would fetch from a messages table
-      const messages = [];
+      const messages: Array<{
+        id: number;
+        guestId: number;
+        content: string;
+        sender: string;
+        timestamp: Date;
+        read: boolean;
+      }> = [];
       
       res.json(messages);
     } catch (error) {
@@ -1239,7 +1256,8 @@ export function registerRoutes(app: Express): Server {
       const dates = [];
       let currentDate = startDate;
       while (currentDate <= endDate) {
-        const isBooked = existingBookings.some(booking =>
+        const isBooked = existingBookings.some(booking => 
+          booking.checkIn && booking.checkOut && 
           currentDate >= booking.checkIn && currentDate < booking.checkOut
         );
 
