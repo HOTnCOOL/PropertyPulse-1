@@ -488,6 +488,12 @@ export default function GuestDashboard() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   
+  // Add state for interactive elements
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showMessageForm, setShowMessageForm] = useState(false);
+  const [newMessage, setNewMessage] = useState("");
+  const [serviceAdded, setServiceAdded] = useState<number | null>(null);
+  
   // Parse URL parameters to get guest info
   const params = new URLSearchParams(window.location.search);
   const bookingRef = params.get('ref');
@@ -649,6 +655,48 @@ export default function GuestDashboard() {
   
   // Extract the guest data for easier referencing
   const { userInfo, payments, upcomingPayments, bookings, messages, additionalServices } = data;
+  
+  // Handle payment submission
+  const handlePayNow = () => {
+    setShowPaymentModal(true);
+  };
+  
+  const handlePaymentSubmit = () => {
+    toast({
+      title: "Payment Processed",
+      description: "Your payment has been successfully processed.",
+      variant: "default"
+    });
+    setShowPaymentModal(false);
+  };
+  
+  // Handle message submission
+  const handleSendMessage = () => {
+    if (newMessage.trim()) {
+      toast({
+        title: "Message Sent",
+        description: "Your message has been sent to the property manager.",
+        variant: "default"
+      });
+      setNewMessage("");
+      setShowMessageForm(false);
+    }
+  };
+  
+  // Handle service booking
+  const handleAddService = (serviceId: number) => {
+    setServiceAdded(serviceId);
+    toast({
+      title: "Service Added",
+      description: "The selected service has been added to your booking.",
+      variant: "default"
+    });
+    
+    // Reset after a few seconds for demo purposes
+    setTimeout(() => {
+      setServiceAdded(null);
+    }, 3000);
+  };
 
   return (
     <div className="container mx-auto py-6 px-4 max-w-6xl">
@@ -744,7 +792,7 @@ export default function GuestDashboard() {
                       <span className="font-semibold">{upcomingPayments[0].amount}</span>
                     </div>
                     <Button 
-                      onClick={() => setActiveTab("payments")}
+                      onClick={handlePayNow}
                       className="w-full py-2 mt-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
                     >
                       Pay Now
@@ -954,7 +1002,11 @@ export default function GuestDashboard() {
                             <td className="px-3 py-4">{payment.description}</td>
                             <td className="px-3 py-4 text-right font-medium">{payment.amount}</td>
                             <td className="px-3 py-4 text-right">
-                              <Button size="sm" className="text-sm px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                              <Button 
+                                size="sm" 
+                                className="text-sm px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                                onClick={handlePayNow}
+                              >
                                 Pay Now
                               </Button>
                             </td>
@@ -1014,7 +1066,11 @@ export default function GuestDashboard() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Messages</CardTitle>
-              <Button size="sm" className="px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700">
+              <Button 
+                size="sm" 
+                className="px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700"
+                onClick={() => setShowMessageForm(true)}
+              >
                 New Message
               </Button>
             </CardHeader>
@@ -1049,8 +1105,14 @@ export default function GuestDashboard() {
                     <p className="text-sm text-gray-600 mb-3">{service.description}</p>
                     <div className="flex justify-between items-center">
                       <span className="font-medium">{service.price}</span>
-                      <Button variant="outline" size="sm" className="px-3 py-1 border border-blue-300 text-blue-600 rounded-md hover:bg-blue-50">
-                        Add to Booking
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="px-3 py-1 border border-blue-300 text-blue-600 rounded-md hover:bg-blue-50"
+                        onClick={() => handleAddService(service.id)}
+                        disabled={serviceAdded === service.id}
+                      >
+                        {serviceAdded === service.id ? 'Added ✓' : 'Add to Booking'}
                       </Button>
                     </div>
                   </div>
@@ -1060,6 +1122,121 @@ export default function GuestDashboard() {
           </Card>
         </TabsContent>
       </Tabs>
+      
+      {/* Payment Modal */}
+      {showPaymentModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full">
+            <h2 className="text-xl font-bold mb-4">Make a Payment</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Payment Amount</label>
+                <input 
+                  type="text" 
+                  className="w-full p-2 border rounded-md" 
+                  value={upcomingPayments[0]?.amount || "$0.00"} 
+                  readOnly 
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Card Number</label>
+                <input 
+                  type="text" 
+                  className="w-full p-2 border rounded-md" 
+                  placeholder="**** **** **** ****" 
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Expiry Date</label>
+                  <input 
+                    type="text" 
+                    className="w-full p-2 border rounded-md" 
+                    placeholder="MM/YY" 
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">CVV</label>
+                  <input 
+                    type="text" 
+                    className="w-full p-2 border rounded-md" 
+                    placeholder="***" 
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Name on Card</label>
+                <input 
+                  type="text" 
+                  className="w-full p-2 border rounded-md" 
+                  placeholder="Enter name on card" 
+                />
+              </div>
+              <div className="flex gap-3 mt-6">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => setShowPaymentModal(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="flex-1"
+                  onClick={handlePaymentSubmit}
+                >
+                  Pay Now
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Message Form */}
+      {showMessageForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full">
+            <h2 className="text-xl font-bold mb-4">Send a Message</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Subject</label>
+                <input 
+                  type="text" 
+                  className="w-full p-2 border rounded-md" 
+                  placeholder="Enter subject" 
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Message</label>
+                <textarea 
+                  className="w-full p-2 border rounded-md h-32" 
+                  placeholder="Type your message here..."
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                ></textarea>
+              </div>
+              <div className="flex gap-3 mt-6">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => {
+                    setShowMessageForm(false);
+                    setNewMessage("");
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="flex-1"
+                  onClick={handleSendMessage}
+                >
+                  Send Message
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
