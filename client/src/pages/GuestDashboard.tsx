@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { 
   MapPin, 
   Key, 
@@ -14,7 +16,8 @@ import {
   User,
   CreditCard,
   Package,
-  AlarmClock
+  AlarmClock,
+  Loader2
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -22,10 +25,96 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 
+// Define interfaces for guest dashboard data
+interface Guest {
+  id: number;
+  name: string;
+  email: string;
+  phone: string;
+  idNumber?: string;
+  nationality?: string;
+  bookingReference?: string;
+}
+
+interface Property {
+  id?: number;
+  name?: string;
+  address?: string;
+  description?: string;
+}
+
+interface Booking {
+  id: number;
+  checkIn: string;
+  checkOut: string;
+  property?: Property | string;
+  status: string;
+  totalAmount: string;
+  roomNumber?: string;
+  guestCount?: number;
+}
+
+interface Payment {
+  id: number;
+  date: string;
+  amount: string;
+  type: string;
+  status: string;
+  dueDate?: string;
+  description?: string;
+}
+
+interface Message {
+  id: number;
+  date: string;
+  sender: string;
+  subject?: string;
+  content: string;
+  timestamp?: string;
+}
+
+interface PropertyDetails {
+  address: string;
+  checkInTime: string;
+  checkOutTime: string;
+  emergencyContacts: Array<{name: string; phone: string}>;
+  nearbyAttractions?: {
+    restaurants: number;
+    shops: number;
+    attractions: number;
+    services: number;
+  };
+}
+
+interface DashboardData {
+  guest: Guest;
+  bookings: Booking[];
+  currentBooking: Booking | null;
+  propertyInfo: {
+    name?: string;
+    location?: {
+      address: string;
+    }
+  } | null;
+  messages: Message[];
+}
+
+interface AdditionalService {
+  id: number;
+  name: string;
+  description: string;
+  price: string;
+}
+
 // Main Guest Dashboard component
 export default function GuestDashboard() {
   const [activeTab, setActiveTab] = useState("overview");
   const { toast } = useToast();
+  const [location] = useLocation();
+  
+  // Extract guestId from URL if present
+  const guestIdMatch = location.match(/\/guest-dashboard\/(\d+)/);
+  const guestId = guestIdMatch ? parseInt(guestIdMatch[1]) : null;
   
   // Add state for interactive elements
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -33,78 +122,103 @@ export default function GuestDashboard() {
   const [newMessage, setNewMessage] = useState("");
   const [serviceAdded, setServiceAdded] = useState<number | null>(null);
   
-  // Mock user data
-  const userInfo = {
-    name: "Alex Johnson",
-    email: "alex.johnson@example.com",
-    phone: "+1 (555) 123-4567",
-    bookingReference: "BK12345678",
-    checkInDate: "2025-03-10",
-    checkOutDate: "2025-03-17",
-    roomName: "Luxury Ocean View Suite",
-    roomNumber: "301",
-    guestCount: 2
+  // Fetch guest dashboard data
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["guestDashboard", guestId],
+    queryFn: async () => {
+      if (!guestId) {
+        // Use demo data if no guest ID
+        return getDemoData();
+      }
+      
+      const response = await fetch(`/api/guest-dashboard/${guestId}`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch guest data");
+      }
+      return response.json() as Promise<DashboardData>;
+    },
+    enabled: true, // Always enabled for demo; in production, enable only when guestId exists
+  });
+  
+  // Function to get demo data when no guestId is provided
+  const getDemoData = (): DashboardData => {
+    return {
+      guest: {
+        id: 1,
+        name: "Alex Johnson",
+        email: "alex.johnson@example.com",
+        phone: "+1 (555) 123-4567",
+        bookingReference: "BK12345678"
+      },
+      bookings: [
+        { 
+          id: 1, 
+          checkIn: "2024-10-05", 
+          checkOut: "2024-10-12", 
+          property: { name: "Mountain Retreat Suite" }, 
+          status: "Completed", 
+          totalAmount: "$1800.00" 
+        },
+        { 
+          id: 2, 
+          checkIn: "2025-03-10", 
+          checkOut: "2025-03-17", 
+          property: { name: "Luxury Ocean View Suite" }, 
+          status: "Upcoming", 
+          totalAmount: "$2800.00",
+          roomNumber: "301",
+          guestCount: 2
+        }
+      ],
+      currentBooking: {
+        id: 2, 
+        checkIn: "2025-03-10", 
+        checkOut: "2025-03-17",
+        property: { name: "Luxury Ocean View Suite" },
+        status: "Upcoming", 
+        totalAmount: "$2800.00",
+        roomNumber: "301",
+        guestCount: 2
+      },
+      propertyInfo: {
+        name: "Luxury Ocean View Suite",
+        location: {
+          address: "123 Ocean Drive, Beachside, CA 90210"
+        }
+      },
+      messages: [
+        { 
+          id: 1, 
+          date: "2025-02-20", 
+          sender: "System", 
+          subject: "Booking Confirmation", 
+          content: "Your booking #BK12345678 has been confirmed for March 10-17, 2025."
+        },
+        { 
+          id: 2, 
+          date: "2025-02-25", 
+          sender: "Property Manager", 
+          subject: "Welcome Message", 
+          content: "We're looking forward to hosting you next month! Please let us know if you have any special requests."
+        },
+        { 
+          id: 3, 
+          date: "2025-03-01", 
+          sender: "System", 
+          subject: "Payment Reminder", 
+          content: "This is a friendly reminder that your final payment of $800 is due on March 15, 2025."
+        }
+      ]
+    };
   };
   
-  // Mock payment data
-  const payments = [
-    { id: 1, date: "2025-01-15", amount: "$1200.00", type: "Deposit", status: "Paid" },
-    { id: 2, date: "2025-02-15", amount: "$800.00", type: "First Payment", status: "Paid" },
-    { id: 3, date: "2025-03-15", amount: "$800.00", type: "Final Payment", status: "Due" }
-  ];
-  
   // Mock upcoming payments
-  const upcomingPayments = [
-    { id: 3, dueDate: "2025-03-15", amount: "$800.00", description: "Final Payment" }
-  ];
-  
-  // Mock bookings data
-  const bookings = [
-    { 
-      id: 1, 
-      checkIn: "2024-10-05", 
-      checkOut: "2024-10-12", 
-      property: "Mountain Retreat Suite", 
-      status: "Completed", 
-      totalAmount: "$1800.00" 
-    },
-    { 
-      id: 2, 
-      checkIn: "2025-03-10", 
-      checkOut: "2025-03-17", 
-      property: "Luxury Ocean View Suite", 
-      status: "Upcoming", 
-      totalAmount: "$2800.00" 
-    }
-  ];
-  
-  // Mock messages
-  const messages = [
-    { 
-      id: 1, 
-      date: "2025-02-20", 
-      sender: "System", 
-      subject: "Booking Confirmation", 
-      content: "Your booking #BK12345678 has been confirmed for March 10-17, 2025."
-    },
-    { 
-      id: 2, 
-      date: "2025-02-25", 
-      sender: "Property Manager", 
-      subject: "Welcome Message", 
-      content: "We're looking forward to hosting you next month! Please let us know if you have any special requests."
-    },
-    { 
-      id: 3, 
-      date: "2025-03-01", 
-      sender: "System", 
-      subject: "Payment Reminder", 
-      content: "This is a friendly reminder that your final payment of $800 is due on March 15, 2025."
-    }
+  const upcomingPayments: Payment[] = [
+    { id: 3, date: "", dueDate: "2025-03-15", amount: "$800.00", description: "Final Payment", type: "Final Payment", status: "Due" }
   ];
   
   // Mock additional services
-  const additionalServices = [
+  const additionalServices: AdditionalService[] = [
     { 
       id: 1, 
       name: "Airport Pickup", 
@@ -131,8 +245,8 @@ export default function GuestDashboard() {
     }
   ];
   
-  // Static property info
-  const propertyInfo = {
+  // Mock property details (would normally come from API)
+  const propertyDetails: PropertyDetails = {
     address: "123 Ocean Drive, Beachside, CA 90210",
     checkInTime: "3:00 PM - 8:00 PM",
     checkOutTime: "11:00 AM",
@@ -190,12 +304,52 @@ export default function GuestDashboard() {
       setServiceAdded(null);
     }, 3000);
   };
-
+  
+  // If loading, show loading state
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center">
+          <Loader2 className="h-10 w-10 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading guest information...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  // If error, show error message
+  if (error || !data) {
+    return (
+      <div className="container mx-auto py-6 px-4 max-w-6xl">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+          <h1 className="text-xl font-bold text-red-700 mb-2">Error Loading Dashboard</h1>
+          <p className="text-red-600 mb-4">{error instanceof Error ? error.message : "Failed to load guest information"}</p>
+          <Button onClick={() => window.location.reload()}>Try Again</Button>
+        </div>
+      </div>
+    );
+  }
+  
+  // Extract data for easy access
+  const { guest, currentBooking, propertyInfo } = data;
+  // Use the property name from the current booking
+  const propertyName = typeof currentBooking?.property === 'object' ? 
+    currentBooking?.property?.name : 
+    currentBooking?.property;
+  
+  // Use the address from the booking or fallback to the static data
+  const propertyAddress = propertyInfo?.location?.address || propertyDetails.address;
+  
+  // Use bookings data from the API or mock data if empty
+  const dashboardBookings = data.bookings && data.bookings.length > 0 ? data.bookings : [];
+  // Use messages data from the API or mock data if empty
+  const dashboardMessages = data.messages && data.messages.length > 0 ? data.messages : [];
+  
   return (
     <div className="container mx-auto py-6 px-4 max-w-6xl">
       <div className="mb-6">
         <h1 className="text-3xl font-bold mb-2">Guest Dashboard</h1>
-        <p className="text-muted-foreground">Welcome to your personalized guest portal. Manage your booking, explore property details, and find everything you need for your stay.</p>
+        <p className="text-muted-foreground">Welcome to your personalized guest portal, {guest.name}. Manage your booking, explore property details, and find everything you need for your stay.</p>
       </div>
 
       <Tabs defaultValue="overview" value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -217,18 +371,22 @@ export default function GuestDashboard() {
                   <User className="w-8 h-8 text-white" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold">{userInfo.name}</h2>
-                  <p className="text-gray-700">Booking #{userInfo.bookingReference}</p>
-                  <div className="mt-1 flex gap-3">
-                    <span className="inline-flex items-center text-sm text-gray-600">
-                      <Calendar className="w-4 h-4 mr-1 text-blue-500" />
-                      {new Date(userInfo.checkInDate).toLocaleDateString()} - {new Date(userInfo.checkOutDate).toLocaleDateString()}
-                    </span>
-                    <span className="inline-flex items-center text-sm text-gray-600">
-                      <Key className="w-4 h-4 mr-1 text-blue-500" />
-                      Room {userInfo.roomNumber}
-                    </span>
-                  </div>
+                  <h2 className="text-xl font-bold">{guest.name}</h2>
+                  <p className="text-gray-700">Booking #{guest.bookingReference}</p>
+                  {currentBooking && (
+                    <div className="mt-1 flex gap-3">
+                      <span className="inline-flex items-center text-sm text-gray-600">
+                        <Calendar className="w-4 h-4 mr-1 text-blue-500" />
+                        {new Date(currentBooking.checkIn).toLocaleDateString()} - {new Date(currentBooking.checkOut).toLocaleDateString()}
+                      </span>
+                      {currentBooking.roomNumber && (
+                        <span className="inline-flex items-center text-sm text-gray-600">
+                          <Key className="w-4 h-4 mr-1 text-blue-500" />
+                          Room {currentBooking.roomNumber}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -275,7 +433,7 @@ export default function GuestDashboard() {
                   <div className="border rounded-lg p-4">
                     <div className="flex justify-between mb-2">
                       <span className="text-gray-600">Due Date</span>
-                      <span className="font-semibold">{new Date(upcomingPayments[0].dueDate).toLocaleDateString()}</span>
+                      <span className="font-semibold">{new Date(upcomingPayments[0].dueDate || "").toLocaleDateString()}</span>
                     </div>
                     <div className="flex justify-between mb-3">
                       <span className="text-gray-600">Amount</span>
@@ -306,7 +464,7 @@ export default function GuestDashboard() {
                 </button>
               </div>
               <div className="space-y-3">
-                {messages.slice(0, 2).map(message => (
+                {dashboardMessages.slice(0, 2).map(message => (
                   <div key={message.id} className="border-b last:border-0 pb-3">
                     <div className="flex justify-between text-sm text-gray-500 mb-1">
                       <span>{message.sender}</span>
@@ -328,7 +486,7 @@ export default function GuestDashboard() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-lg mb-4">{propertyInfo.address}</p>
+                <p className="text-lg mb-4">{propertyAddress}</p>
               </CardContent>
             </Card>
             
@@ -343,11 +501,11 @@ export default function GuestDashboard() {
                 <div className="flex justify-between mb-4">
                   <div>
                     <h3 className="font-medium">Check-in</h3>
-                    <p className="text-lg font-bold">{propertyInfo.checkInTime}</p>
+                    <p className="text-lg font-bold">{propertyDetails.checkInTime}</p>
                   </div>
                   <div className="text-right">
                     <h3 className="font-medium">Check-out</h3>
-                    <p className="text-lg font-bold">{propertyInfo.checkOutTime}</p>
+                    <p className="text-lg font-bold">{propertyDetails.checkOutTime}</p>
                   </div>
                 </div>
               </CardContent>
@@ -362,7 +520,7 @@ export default function GuestDashboard() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  {propertyInfo.emergencyContacts.map((contact, idx) => (
+                  {propertyDetails.emergencyContacts.map((contact, idx) => (
                     <div key={idx} className="flex justify-between">
                       <span className="font-medium">{contact.name}:</span>
                       <span>{contact.phone}</span>
@@ -382,34 +540,40 @@ export default function GuestDashboard() {
             </CardHeader>
             <CardContent>
               <div className="space-y-5">
-                {bookings.map(booking => (
-                  <div key={booking.id} className={`border rounded-lg p-4 ${booking.status === 'Upcoming' ? 'border-blue-200 bg-blue-50' : ''}`}>
-                    <div className="flex justify-between mb-2">
-                      <h3 className="font-semibold">{booking.property}</h3>
-                      <span className={`px-2 py-1 text-xs rounded-full ${
-                        booking.status === 'Completed' ? 'bg-green-100 text-green-800' : 
-                        booking.status === 'Upcoming' ? 'bg-blue-100 text-blue-800' : 
-                        'bg-gray-100 text-gray-800'
-                      }`}>
-                        {booking.status}
-                      </span>
-                    </div>
-                    <div className="text-sm text-gray-500 mb-3">
-                      {new Date(booking.checkIn).toLocaleDateString()} to {new Date(booking.checkOut).toLocaleDateString()}
-                    </div>
-                    <div className="flex justify-between items-end">
-                      <div className="text-sm">
-                        <span className="text-gray-500">Total:</span> 
-                        <span className="font-semibold ml-1">{booking.totalAmount}</span>
+                {dashboardBookings.map((booking: Booking) => {
+                  // Handle both string and object property types
+                  const propertyName = typeof booking.property === 'object' ? 
+                    booking.property?.name : booking.property;
+                  
+                  return (
+                    <div key={booking.id} className={`border rounded-lg p-4 ${booking.status === 'Upcoming' ? 'border-blue-200 bg-blue-50' : ''}`}>
+                      <div className="flex justify-between mb-2">
+                        <h3 className="font-semibold">{propertyName}</h3>
+                        <span className={`px-2 py-1 text-xs rounded-full ${
+                          booking.status === 'Completed' ? 'bg-green-100 text-green-800' : 
+                          booking.status === 'Upcoming' ? 'bg-blue-100 text-blue-800' : 
+                          'bg-gray-100 text-gray-800'
+                        }`}>
+                          {booking.status}
+                        </span>
                       </div>
-                      {booking.status === 'Upcoming' && (
-                        <Button variant="outline" size="sm" className="text-sm px-3 py-1 border border-blue-300 text-blue-600 rounded hover:bg-blue-50">
-                          View Details
-                        </Button>
-                      )}
+                      <div className="text-sm text-gray-500 mb-3">
+                        {new Date(booking.checkIn).toLocaleDateString()} to {new Date(booking.checkOut).toLocaleDateString()}
+                      </div>
+                      <div className="flex justify-between items-end">
+                        <div className="text-sm">
+                          <span className="text-gray-500">Total:</span> 
+                          <span className="font-semibold ml-1">{booking.totalAmount}</span>
+                        </div>
+                        {booking.status === 'Upcoming' && (
+                          <Button variant="outline" size="sm" className="text-sm px-3 py-1 border border-blue-300 text-blue-600 rounded hover:bg-blue-50">
+                            View Details
+                          </Button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
@@ -437,7 +601,7 @@ export default function GuestDashboard() {
                       <tbody className="divide-y">
                         {upcomingPayments.map(payment => (
                           <tr key={payment.id}>
-                            <td className="px-3 py-4">{new Date(payment.dueDate).toLocaleDateString()}</td>
+                            <td className="px-3 py-4">{new Date(payment.dueDate || "").toLocaleDateString()}</td>
                             <td className="px-3 py-4">{payment.description}</td>
                             <td className="px-3 py-4 text-right font-medium">{payment.amount}</td>
                             <td className="px-3 py-4 text-right">
@@ -476,22 +640,21 @@ export default function GuestDashboard() {
                       </tr>
                     </thead>
                     <tbody className="divide-y">
-                      {payments.map(payment => (
-                        <tr key={payment.id}>
-                          <td className="px-3 py-4">{new Date(payment.date).toLocaleDateString()}</td>
-                          <td className="px-3 py-4">{payment.type}</td>
-                          <td className="px-3 py-4 text-right font-medium">{payment.amount}</td>
-                          <td className="px-3 py-4 text-right">
-                            <span className={`px-2 py-1 text-xs rounded-full ${
-                              payment.status === 'Paid' ? 'bg-green-100 text-green-800' : 
-                              payment.status === 'Due' ? 'bg-yellow-100 text-yellow-800' : 
-                              'bg-gray-100 text-gray-800'
-                            }`}>
-                              {payment.status}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
+                      {/* Show any past payments from upcomingPayments as well as any that might come from the API */}
+                      {upcomingPayments
+                        .filter(payment => payment.status === "Paid")
+                        .map(payment => (
+                          <tr key={payment.id}>
+                            <td className="px-3 py-4">{new Date(payment.date).toLocaleDateString()}</td>
+                            <td className="px-3 py-4">{payment.type}</td>
+                            <td className="px-3 py-4 text-right font-medium">{payment.amount}</td>
+                            <td className="px-3 py-4 text-right">
+                              <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">
+                                {payment.status}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
                     </tbody>
                   </table>
                 </div>
