@@ -28,7 +28,6 @@ import { insertGuestSchema, type Guest } from "@db/schema";
 import * as z from "zod";
 import GuestList from "../components/GuestList";
 import IdScanner from "../components/IdScanner";
-import AdvancedIdScanner from "../components/AdvancedIdScanner";
 import { GuestSearch } from "../components/GuestSearch";
 import { format } from "date-fns";
 
@@ -314,10 +313,7 @@ export default function GuestRegistration() {
     nationality?: string;
     idType?: 'passport' | 'national_id';
     expiryDate?: string;
-    orientation?: 'portrait' | 'landscape';
-  } | undefined) => {
-    // Early return if no data
-    if (!data) return;
+  }) => {
     console.log('Received extracted data from OCR:', data);
 
     const setFormValue = (key: keyof FormData, value: any) => {
@@ -605,11 +601,10 @@ export default function GuestRegistration() {
 
                   {/* ID Scanner section */}
                   <div className="mb-6" ref={idScannerRef}>
-                    <h3 className="text-lg font-medium mb-3">AI-Powered ID/Passport Scanner</h3>
-                    <AdvancedIdScanner
+                    <h3 className="text-lg font-medium mb-3">Scan ID/Passport</h3>
+                    <IdScanner
                       onDataExtracted={handleExtractedData}
                       onImageCaptured={handleIdImageCaptured}
-                      guestId={registeredGuest?.id}
                     />
                   </div>
 

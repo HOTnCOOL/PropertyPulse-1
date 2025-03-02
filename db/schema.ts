@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, numeric, integer, boolean, jsonb, varchar, date, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, numeric, integer, boolean, jsonb, varchar } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -137,47 +137,6 @@ export const todos = pgTable("todos", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-// Define document type enum for different document types
-export const documentTypeEnum = pgEnum('document_type', [
-  'id_card', 
-  'passport', 
-  'residence_permit',
-  'invoice',
-  'payment_receipt',
-  'booking_confirmation'
-]);
-
-// Define document status enum for GDPR retention
-export const documentStatusEnum = pgEnum('document_status', [
-  'active',             // Document is active and being used
-  'retention_period',   // Document is in GDPR retention period 
-  'pending_deletion',   // Document is marked for deletion 
-  'deleted'             // Document metadata exists but content is deleted
-]);
-
-// Table for storing documents with GDPR compliance
-export const documents = pgTable("documents", {
-  id: serial("id").primaryKey(),
-  guestId: integer("guest_id").references(() => guests.id),
-  bookingId: integer("booking_id").references(() => bookings.id),
-  paymentId: integer("payment_id").references(() => payments.id),
-  type: documentTypeEnum("type").notNull(),
-  filename: text("filename").notNull(),
-  fileUrl: text("file_url").notNull(),
-  originalFilename: text("original_filename"),
-  fileSize: integer("file_size"),
-  mimeType: text("mime_type"),
-  status: documentStatusEnum("status").default('active').notNull(),
-  extractedData: jsonb("extracted_data"), // Structured data extracted using OCR
-  metadata: jsonb("metadata"),            // Additional metadata about the document
-  uploadedBy: text("uploaded_by"),        // Who uploaded: "guest", "admin", or username
-  retentionExpiry: timestamp("retention_expiry"), // When document should be deleted per GDPR
-  gdprConsent: boolean("gdpr_consent").default(false), // Whether user consented to storage
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-  deletedAt: timestamp("deleted_at"),     // Soft deletion timestamp
-});
-
 // Relations
 export const propertiesRelations = relations(properties, ({ many }) => ({
   guests: many(guests),
@@ -202,26 +161,10 @@ export const bookingsRelations = relations(bookings, ({ one }) => ({
   }),
 }));
 
-export const paymentsRelations = relations(payments, ({ one, many }) => ({
+export const paymentsRelations = relations(payments, ({ one }) => ({
   guest: one(guests, {
     fields: [payments.guestId],
     references: [guests.id],
-  }),
-  documents: many(documents),
-}));
-
-export const documentsRelations = relations(documents, ({ one }) => ({
-  guest: one(guests, {
-    fields: [documents.guestId],
-    references: [guests.id],
-  }),
-  booking: one(bookings, {
-    fields: [documents.bookingId],
-    references: [bookings.id],
-  }),
-  payment: one(payments, {
-    fields: [documents.paymentId],
-    references: [payments.id],
   }),
 }));
 
@@ -307,27 +250,17 @@ export const loginAdminSchema = z.object({
   password: z.string().min(1, "Password is required"),
 });
 
-// Document schemas
-export const insertDocumentSchema = z.object({
-  guestId: z.number().optional(),
-  bookingId: z.number().optional(),
-  paymentId: z.number().optional(),
-  type: z.enum(['id_card', 'passport', 'residence_permit', 'invoice', 'payment_receipt', 'booking_confirmation']),
-  filename: z.string().min(1, "Filename is required"),
-  fileUrl: z.string().min(1, "File URL is required"),
-  originalFilename: z.string().optional(),
-  fileSize: z.number().optional(),
-  mimeType: z.string().optional(),
-  extractedData: z.record(z.any()).optional(),
-  metadata: z.record(z.any()).optional(),
-  uploadedBy: z.string().optional(),
-  gdprConsent: z.boolean().default(true),
-  retentionExpiry: z.date().optional(),
-});
-
-export const selectDocumentSchema = createSelectSchema(documents);
-
-// Admins table defined before using its type
+export type Property = typeof properties.$inferSelect;
+export type Guest = typeof guests.$inferSelect;
+export type Payment = typeof payments.$inferSelect;
+export type Todo = typeof todos.$inferSelect;
+export type Asset = typeof assets.$inferSelect;
+export type Booking = typeof bookings.$inferSelect;
+export type NewBooking = z.infer<typeof insertBookingSchema>;
+export type Admin = typeof admins.$inferSelect;
+export type NewAdmin = z.infer<typeof insertAdminSchema>;
+export type LoginGuest = z.infer<typeof loginGuestSchema>;
+export type LoginAdmin = z.infer<typeof loginAdminSchema>;
 export const admins = pgTable("admins", {
   id: serial("id").primaryKey(),
   email: text("email").notNull().unique(),
@@ -335,18 +268,3 @@ export const admins = pgTable("admins", {
   name: text("name").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
-
-// Export types for all entities
-export type Property = typeof properties.$inferSelect;
-export type Guest = typeof guests.$inferSelect;
-export type Payment = typeof payments.$inferSelect;
-export type Todo = typeof todos.$inferSelect;
-export type Asset = typeof assets.$inferSelect;
-export type Booking = typeof bookings.$inferSelect;
-export type Document = typeof documents.$inferSelect;
-export type Admin = typeof admins.$inferSelect;
-export type NewBooking = z.infer<typeof insertBookingSchema>;
-export type NewDocument = z.infer<typeof insertDocumentSchema>;
-export type NewAdmin = z.infer<typeof insertAdminSchema>;
-export type LoginGuest = z.infer<typeof loginGuestSchema>;
-export type LoginAdmin = z.infer<typeof loginAdminSchema>;
