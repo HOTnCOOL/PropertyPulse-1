@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, numeric, integer, boolean, jsonb, varchar } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, numeric, integer, boolean, jsonb, varchar, date, pgEnum } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -137,6 +137,47 @@ export const todos = pgTable("todos", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Define document type enum for different document types
+export const documentTypeEnum = pgEnum('document_type', [
+  'id_card', 
+  'passport', 
+  'residence_permit',
+  'invoice',
+  'payment_receipt',
+  'booking_confirmation'
+]);
+
+// Define document status enum for GDPR retention
+export const documentStatusEnum = pgEnum('document_status', [
+  'active',             // Document is active and being used
+  'retention_period',   // Document is in GDPR retention period 
+  'pending_deletion',   // Document is marked for deletion 
+  'deleted'             // Document metadata exists but content is deleted
+]);
+
+// Table for storing documents with GDPR compliance
+export const documents = pgTable("documents", {
+  id: serial("id").primaryKey(),
+  guestId: integer("guest_id").references(() => guests.id),
+  bookingId: integer("booking_id").references(() => bookings.id),
+  paymentId: integer("payment_id").references(() => payments.id),
+  type: documentTypeEnum("type").notNull(),
+  filename: text("filename").notNull(),
+  fileUrl: text("file_url").notNull(),
+  originalFilename: text("original_filename"),
+  fileSize: integer("file_size"),
+  mimeType: text("mime_type"),
+  status: documentStatusEnum("status").default('active').notNull(),
+  extractedData: jsonb("extracted_data"), // Structured data extracted using OCR
+  metadata: jsonb("metadata"),            // Additional metadata about the document
+  uploadedBy: text("uploaded_by"),        // Who uploaded: "guest", "admin", or username
+  retentionExpiry: timestamp("retention_expiry"), // When document should be deleted per GDPR
+  gdprConsent: boolean("gdpr_consent").default(false), // Whether user consented to storage
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  deletedAt: timestamp("deleted_at"),     // Soft deletion timestamp
+});
+
 // Relations
 export const propertiesRelations = relations(properties, ({ many }) => ({
   guests: many(guests),
@@ -161,10 +202,26 @@ export const bookingsRelations = relations(bookings, ({ one }) => ({
   }),
 }));
 
-export const paymentsRelations = relations(payments, ({ one }) => ({
+export const paymentsRelations = relations(payments, ({ one, many }) => ({
   guest: one(guests, {
     fields: [payments.guestId],
     references: [guests.id],
+  }),
+  documents: many(documents),
+}));
+
+export const documentsRelations = relations(documents, ({ one }) => ({
+  guest: one(guests, {
+    fields: [documents.guestId],
+    references: [guests.id],
+  }),
+  booking: one(bookings, {
+    fields: [documents.bookingId],
+    references: [bookings.id],
+  }),
+  payment: one(payments, {
+    fields: [documents.paymentId],
+    references: [payments.id],
   }),
 }));
 
