@@ -1,6 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes.fixed"; // Changed to use fixed routes
 import { setupVite, serveStatic, log } from "./vite";
+import { registerOCRRoutes } from "./routes/ocr";
 
 const app = express();
 app.use(express.json());
@@ -48,6 +49,10 @@ async function startServer() {
   try {
     log(`Starting server on port ${port}...`);
     const server = registerRoutes(app);
+    
+    // Register OCR routes
+    log('Registering OCR and document management routes...');
+    registerOCRRoutes(app);
 
     // Error handling middleware with detailed logging
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

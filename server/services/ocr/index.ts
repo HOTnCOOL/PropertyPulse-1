@@ -1,14 +1,12 @@
 import * as Tesseract from 'tesseract.js';
-import * as tf from '@tensorflow/tfjs';
-import { createWorker } from 'tesseract.js';
-import * as fs from 'fs';
 import * as path from 'path';
+import * as fs from 'fs';
 import { log } from '../../vite';
+import sharp from 'sharp';
 
-// Initialize TensorFlow.js if needed
-tf.setBackend('cpu');
-
-// Types for OCR results
+/**
+ * OCR Result interface
+ */
 interface OCRResult {
   success: boolean;
   error?: string;
@@ -18,7 +16,9 @@ interface OCRResult {
   processingTimeMs?: number;
 }
 
-// Standard interface for extracted ID card data
+/**
+ * ID Card Data interface - represents structured data extracted from ID documents
+ */
 export interface IDCardData {
   firstName?: string;
   lastName?: string;
@@ -36,7 +36,9 @@ export interface IDCardData {
   gdprConsent?: boolean;
 }
 
-// Configuration for OCR
+/**
+ * OCR Configuration interface
+ */
 interface OCRConfig {
   language: string;
   imagePreprocessing: boolean;
@@ -45,13 +47,15 @@ interface OCRConfig {
   retentionPeriodDays: number;
 }
 
-// Default configuration with GDPR compliance
+/**
+ * Default OCR configuration
+ */
 const DEFAULT_CONFIG: OCRConfig = {
   language: 'eng',
   imagePreprocessing: true,
-  confidenceThreshold: 65,
+  confidenceThreshold: 70, // Minimum confidence level (0-100) to accept OCR results
   gdprCompliant: true,
-  retentionPeriodDays: 90 // Standard GDPR retention period for ID documents
+  retentionPeriodDays: 90, // Default retention period (90 days)
 };
 
 /**
@@ -64,50 +68,35 @@ export class OCRService {
   private schedulerRunning = false;
 
   constructor(config: Partial<OCRConfig> = {}) {
-    this.config = { ...DEFAULT_CONFIG, ...config };
-    this.initializeWorker();
+    this.config = {
+      ...DEFAULT_CONFIG,
+      ...config,
+    };
+    
+    // Start GDPR compliance scheduler if enabled
+    if (this.config.gdprCompliant) {
+      this.startGdprComplianceScheduler();
+    }
   }
 
   /**
    * Initialize the Tesseract OCR worker
    */
   private async initializeWorker(): Promise<void> {
-    if (this.worker) {
-      return;
-    }
+    if (this.initialized) return;
     
     try {
-      log('Initializing OCR service worker...', 'ocr');
-      
-      this.worker = await createWorker({
-        logger: progress => {
-          if (progress.status === 'recognizing text') {
-            // Log only when recognizing to avoid excessive logging
-            log(`OCR progress: ${Math.round(progress.progress * 100)}%`, 'ocr');
-          }
-        }
-      });
-      
-      await this.worker.loadLanguage(this.config.language);
-      await this.worker.initialize(this.config.language);
-      
-      // Set parameters for better ID card recognition
-      await this.worker.setParameters({
-        tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvwxyz-/.,:;()<>[]{}|\\~`!@#$%^&*_+=\'\" ',
-        tessedit_ocr_engine_mode: 3, // Use LSTM neural network for better accuracy
-        preserve_interword_spaces: 1,
-      });
-      
+      log('Initializing Tesseract OCR worker...', 'ocr');
+      this.worker = await Tesseract.createWorker(this.config.language);
+      // Note: In newer versions of tesseract.js, these methods might be handled automatically
+      // or in a different way, so we're commenting them out for now
+      // await this.worker.loadLanguage(this.config.language);
+      // await this.worker.initialize(this.config.language);
+      log('Tesseract OCR worker initialized successfully', 'ocr');
       this.initialized = true;
-      log('OCR service initialized successfully', 'ocr');
-      
-      // Start the GDPR compliance scheduler if enabled
-      if (this.config.gdprCompliant && !this.schedulerRunning) {
-        this.startGdprComplianceScheduler();
-      }
     } catch (error) {
-      log(`OCR service initialization failed: ${error}`, 'ocr');
-      throw new Error(`Failed to initialize OCR service: ${error}`);
+      log(`Failed to initialize Tesseract OCR worker: ${error}`, 'ocr');
+      throw new Error(`OCR initialization failed: ${error}`);
     }
   }
 
@@ -118,20 +107,15 @@ export class OCRService {
    */
   private async detectOrientation(imagePath: string): Promise<'portrait' | 'landscape'> {
     try {
-      // Use TensorFlow.js to analyze image dimensions
-      const imageBuffer = fs.readFileSync(imagePath);
-      const imageData = await tf.node.decodeImage(imageBuffer);
+      const metadata = await sharp(imagePath).metadata();
+      if (!metadata.width || !metadata.height) {
+        throw new Error('Could not determine image dimensions');
+      }
       
-      const height = imageData.shape[0];
-      const width = imageData.shape[1];
-      
-      // Clean up tensor to prevent memory leaks
-      imageData.dispose();
-      
-      return height > width ? 'portrait' : 'landscape';
+      return metadata.width > metadata.height ? 'landscape' : 'portrait';
     } catch (error) {
       log(`Error detecting orientation: ${error}`, 'ocr');
-      return 'portrait'; // Default to portrait on error
+      return 'portrait'; // Default to portrait if detection fails
     }
   }
 
@@ -146,53 +130,20 @@ export class OCRService {
     }
     
     try {
-      // Load image using TensorFlow.js
-      const imageBuffer = fs.readFileSync(imagePath);
-      let image = await tf.node.decodeImage(imageBuffer, 3);
+      const outputPath = `${imagePath.substring(0, imagePath.lastIndexOf('.'))}_preprocessed.jpg`;
       
-      // Convert to grayscale
-      const grayscale = image.mean(2).expandDims(2);
+      // Apply image preprocessing techniques
+      await sharp(imagePath)
+        .greyscale() // Convert to grayscale
+        .normalize() // Normalize the image (improve contrast)
+        .sharpen() // Sharpen the image
+        .toFile(outputPath);
       
-      // Apply contrast normalization
-      const normalized = grayscale.sub(grayscale.min())
-                                  .div(grayscale.max().sub(grayscale.min()))
-                                  .mul(255);
-      
-      // Add simple adaptive thresholding
-      const blurred = normalized.cast('float32')
-                                .expandDims(0)
-                                .pad([[0, 0], [2, 2], [2, 2], [0, 0]])
-                                .conv2d(
-                                  tf.ones([5, 5, 1, 1]).div(25),
-                                  1,
-                                  'valid'
-                                )
-                                .squeeze([0]);
-                                
-      const threshold = normalized.sub(blurred).add(10);
-      const binary = threshold.greater(0).mul(255).cast('int32');
-      
-      // Create output path for preprocessed image
-      const outputDir = path.dirname(imagePath);
-      const filename = path.basename(imagePath);
-      const preprocessedPath = path.join(outputDir, `preprocessed_${filename}`);
-      
-      // Save preprocessed image
-      const preprocessedBuffer = await tf.node.encodePng(binary.expandDims(2).tile([1, 1, 3]));
-      fs.writeFileSync(preprocessedPath, preprocessedBuffer);
-      
-      // Clean up tensors
-      image.dispose();
-      grayscale.dispose();
-      normalized.dispose();
-      blurred.dispose();
-      threshold.dispose();
-      binary.dispose();
-      
-      return preprocessedPath;
+      log(`Image preprocessed: ${outputPath}`, 'ocr');
+      return outputPath;
     } catch (error) {
       log(`Image preprocessing failed: ${error}`, 'ocr');
-      return imagePath; // Return original on failure
+      return imagePath; // Return original image if preprocessing fails
     }
   }
 
@@ -204,143 +155,128 @@ export class OCRService {
    */
   private parseIdCardData(text: string, idType: 'passport' | 'national_id'): IDCardData {
     const data: IDCardData = {
-      idType
+      idType,
     };
     
-    // Convert text to lowercase and normalize whitespace
+    if (!text) return data;
+    
+    // Normalize text: convert to lowercase and remove extra spaces
     const normalizedText = text.toLowerCase().replace(/\\s+/g, ' ');
+    const lines = text.split('\\n').map(line => line.trim()).filter(line => line.length > 0);
     
-    // Common patterns for both ID types
-    const datePatterns = [
-      /birth\s*(?:date)?\s*:?\s*(\d{1,2}[\s./-]\d{1,2}[\s./-]\d{2,4})/i,
-      /dob\s*:?\s*(\d{1,2}[\s./-]\d{1,2}[\s./-]\d{2,4})/i,
-      /(\d{1,2}[\s./-]\d{1,2}[\s./-](?:19|20)\d{2})/i,
-    ];
+    // Common patterns for ID documents
+    const patterns = {
+      firstName: [
+        /first\s*name[:\s]+([a-zA-Z\s]+)/i,
+        /given\s*name[s]?[:\s]+([a-zA-Z\s]+)/i,
+        /name[s]?[:\s]+([a-zA-Z\s]+)/i,
+        /vor[n]?[a]?[m]?[e]?[:\s]+([a-zA-Z\s]+)/i, // German
+      ],
+      lastName: [
+        /last\s*name[:\s]+([a-zA-Z\s]+)/i,
+        /surname[:\s]+([a-zA-Z\s]+)/i,
+        /family\s*name[:\s]+([a-zA-Z\s]+)/i,
+        /nach[n]?[a]?[m]?[e]?[:\s]+([a-zA-Z\s]+)/i, // German
+      ],
+      dateOfBirth: [
+        /date\s*of\s*birth[:\s]+([\d\.\/\-\s]+)/i,
+        /birth[:\s]+([\d\.\/\-\s]+)/i,
+        /dob[:\s]+([\d\.\/\-\s]+)/i,
+        /geburtsdatum[:\s]+([\d\.\/\-\s]+)/i, // German
+      ],
+      placeOfBirth: [
+        /place\s*of\s*birth[:\s]+([a-zA-Z\s]+)/i,
+        /geburtsort[:\s]+([a-zA-Z\s]+)/i, // German
+      ],
+      idNumber: [
+        /id[:\s]*no[\.:]?[:\s]*([\w\-]+)/i,
+        /identification\s*number[:\s]*([\w\-]+)/i,
+        /document\s*no[\.:]?[:\s]*([\w\-]+)/i,
+        /card\s*no[\.:]?[:\s]*([\w\-]+)/i,
+        /ausweisnummer[:\s]*([\w\-]+)/i, // German
+      ],
+      nationality: [
+        /nationality[:\s]+([a-zA-Z\s]+)/i,
+        /nation[:\s]+([a-zA-Z\s]+)/i,
+        /staatsangehörigkeit[:\s]+([a-zA-Z\s]+)/i, // German
+      ],
+      expiryDate: [
+        /expiry\s*date[:\s]+([\d\.\/\-\s]+)/i,
+        /expiration\s*date[:\s]+([\d\.\/\-\s]+)/i,
+        /valid\s*until[:\s]+([\d\.\/\-\s]+)/i,
+        /exp[:\s]+([\d\.\/\-\s]+)/i,
+        /gültig\s*bis[:\s]+([\d\.\/\-\s]+)/i, // German
+      ],
+      issueDate: [
+        /date\s*of\s*issue[:\s]+([\d\.\/\-\s]+)/i,
+        /issue\s*date[:\s]+([\d\.\/\-\s]+)/i,
+        /ausstellungsdatum[:\s]+([\d\.\/\-\s]+)/i, // German
+      ],
+      personalNumber: [
+        /personal\s*no[\.:]?[:\s]*([\w\-]+)/i,
+        /personal\s*id[:\s]*([\w\-]+)/i,
+      ],
+      homeAddress: [
+        /address[:\s]+([a-zA-Z0-9\s\.,\-]+)/i,
+        /residence[:\s]+([a-zA-Z0-9\s\.,\-]+)/i,
+        /anschrift[:\s]+([a-zA-Z0-9\s\.,\-]+)/i, // German
+      ],
+    };
     
-    const namePatterns = [
-      /name\s*:?\s*([a-zA-Z\s]+)/i,
-      /surname\s*:?\s*([a-zA-Z\s]+)/i,
-      /last\s*name\s*:?\s*([a-zA-Z\s]+)/i,
-      /first\s*name\s*:?\s*([a-zA-Z\s]+)/i,
-      /given\s*names?\s*:?\s*([a-zA-Z\s]+)/i,
-    ];
-    
-    const idNumberPatterns = [
-      /id\s*(?:number|no|#)?\s*:?\s*([a-zA-Z0-9]+)/i,
-      /document\s*(?:number|no|#)?\s*:?\s*([a-zA-Z0-9]+)/i,
-      /passport\s*(?:number|no|#)?\s*:?\s*([a-zA-Z0-9]+)/i,
-    ];
-    
-    // Extract dates
-    for (const pattern of datePatterns) {
-      const match = normalizedText.match(pattern);
-      if (match && match[1]) {
-        // If we don't have a date of birth yet, use this match
-        if (!data.dateOfBirth) {
-          data.dateOfBirth = match[1].trim();
-        } 
-        // If we already have a DOB and find another date, it might be expiry
-        else if (!data.expiryDate) {
-          // Look for context clues to determine if it's an expiry date
-          const surroundingText = normalizedText.substring(
-            Math.max(0, normalizedText.indexOf(match[1]) - 20),
-            Math.min(normalizedText.length, normalizedText.indexOf(match[1]) + match[1].length + 20)
-          );
-          
-          if (surroundingText.includes('expir') || surroundingText.includes('valid') || 
-              surroundingText.includes('until') || surroundingText.includes('thru')) {
-            data.expiryDate = match[1].trim();
-          }
+    // Attempt to extract data using patterns
+    for (const [key, regexList] of Object.entries(patterns)) {
+      for (const regex of regexList) {
+        const match = normalizedText.match(regex);
+        if (match && match[1]) {
+          data[key as keyof IDCardData] = match[1].trim();
+          break;
         }
       }
     }
     
-    // Extract names based on ID type
+    // Special case processing for passport MRZ (Machine Readable Zone)
     if (idType === 'passport') {
-      // For passports, try to find the specific name fields
-      const surnameMatch = text.match(/surname\s*:?\s*([a-zA-Z\s]+)/i);
-      const givenNameMatch = text.match(/given\s*names?\s*:?\s*([a-zA-Z\s]+)/i);
+      // Look for MRZ lines (typically 2 or 3 lines at the bottom of the passport)
+      const mrzLines = lines
+        .filter(line => /^[A-Z0-9<]{30,44}$/.test(line))
+        .slice(-3); // Get last 3 potential MRZ lines
       
-      if (surnameMatch && surnameMatch[1]) {
-        data.lastName = surnameMatch[1].trim();
-      }
-      
-      if (givenNameMatch && givenNameMatch[1]) {
-        data.firstName = givenNameMatch[1].trim();
-      }
-      
-      // Extract nationality
-      const nationalityMatch = text.match(/nationality\s*:?\s*([a-zA-Z\s]+)/i);
-      if (nationalityMatch && nationalityMatch[1]) {
-        data.nationality = nationalityMatch[1].trim();
-      }
-      
-      // Extract passport number
-      const passportNumberMatch = text.match(/passport\s*(?:number|no|#)?\s*:?\s*([a-zA-Z0-9]+)/i);
-      if (passportNumberMatch && passportNumberMatch[1]) {
-        data.idNumber = passportNumberMatch[1].trim();
-      }
-    } else {
-      // For national IDs
-      const firstNameMatch = text.match(/first\s*name\s*:?\s*([a-zA-Z\s]+)/i);
-      const lastNameMatch = text.match(/last\s*name\s*:?\s*([a-zA-Z\s]+)/i);
-      
-      if (firstNameMatch && firstNameMatch[1]) {
-        data.firstName = firstNameMatch[1].trim();
-      }
-      
-      if (lastNameMatch && lastNameMatch[1]) {
-        data.lastName = lastNameMatch[1].trim();
-      }
-      
-      // Extract personal number if present
-      const personalNumberMatch = text.match(/personal\s*(?:number|no|#)?\s*:?\s*([a-zA-Z0-9]+)/i);
-      if (personalNumberMatch && personalNumberMatch[1]) {
-        data.personalNumber = personalNumberMatch[1].trim();
-      }
-      
-      // Extract address
-      const addressMatch = text.match(/address\s*:?\s*([a-zA-Z0-9\s,.-]+)/i);
-      if (addressMatch && addressMatch[1]) {
-        data.homeAddress = addressMatch[1].trim();
-      }
-    }
-    
-    // If we couldn't find structured name fields, try generic patterns
-    if (!data.firstName && !data.lastName) {
-      for (const pattern of namePatterns) {
-        const match = text.match(pattern);
-        if (match && match[1]) {
-          const fullName = match[1].trim();
-          const nameParts = fullName.split(/\s+/);
-          
-          if (nameParts.length > 1) {
-            data.firstName = nameParts[0];
-            data.lastName = nameParts.slice(1).join(' ');
-          } else {
-            data.firstName = fullName;
+      if (mrzLines.length >= 2) {
+        // Process MRZ data (this is simplified and would need to be more robust in production)
+        // Typical passport MRZ format:
+        // Line 1: P<ISSCNTRY<LASTNAME<<FIRSTNAME<<<<<<<<<<<<<<<<<<<<<<
+        // Line 2: PASSPORTNUMBER<NATCNTRY<DOB<SEX<EXPDATE<PERSONALNUMBER<<<
+        
+        // Extract last name from first MRZ line
+        const line1 = mrzLines[0];
+        const nameStart = line1.indexOf('<<') + 2;
+        if (nameStart > 2) {
+          const nameParts = line1.substring(nameStart).split('<<')[0];
+          if (nameParts && !data.lastName) {
+            data.lastName = nameParts.replace(/</g, ' ').trim();
           }
-          
-          break;
+        }
+        
+        // Extract passport number and date of birth from second MRZ line
+        const line2 = mrzLines[1];
+        if (line2.length >= 9 && !data.idNumber) {
+          data.idNumber = line2.substring(0, 9).replace(/</g, '').trim();
+        }
+        
+        if (line2.length >= 19 && !data.dateOfBirth) {
+          const dobStr = line2.substring(13, 19);
+          // Format YY/MM/DD
+          if (/^\d{6}$/.test(dobStr)) {
+            const yy = dobStr.substring(0, 2);
+            const mm = dobStr.substring(2, 4);
+            const dd = dobStr.substring(4, 6);
+            
+            // Assume 20th century for years > 50, 21st century for years <= 50
+            const year = parseInt(yy) > 50 ? `19${yy}` : `20${yy}`;
+            data.dateOfBirth = `${dd}/${mm}/${year}`;
+          }
         }
       }
-    }
-    
-    // Extract ID number if not found yet
-    if (!data.idNumber) {
-      for (const pattern of idNumberPatterns) {
-        const match = text.match(pattern);
-        if (match && match[1]) {
-          data.idNumber = match[1].trim();
-          break;
-        }
-      }
-    }
-    
-    // Extract place of birth
-    const placeOfBirthMatch = text.match(/place\s*of\s*birth\s*:?\s*([a-zA-Z\s,.-]+)/i);
-    if (placeOfBirthMatch && placeOfBirthMatch[1]) {
-      data.placeOfBirth = placeOfBirthMatch[1].trim();
     }
     
     return data;
@@ -354,7 +290,7 @@ export class OCRService {
    * @returns OCR result with extracted data
    */
   public async scanIdDocument(
-    imagePath: string, 
+    imagePath: string,
     idType: 'passport' | 'national_id' = 'national_id',
     gdprConsent: boolean = false
   ): Promise<OCRResult> {
@@ -363,28 +299,26 @@ export class OCRService {
     }
     
     if (!this.worker) {
-      return { 
-        success: false, 
-        error: 'OCR worker not initialized' 
+      return {
+        success: false,
+        error: 'OCR worker not initialized',
+      };
+    }
+    
+    // GDPR compliance check
+    if (this.config.gdprCompliant && !gdprConsent) {
+      return {
+        success: false,
+        error: 'GDPR consent is required for document scanning',
       };
     }
     
     try {
-      const startTime = Date.now();
-      
-      // Ensure we have user consent
-      if (this.config.gdprCompliant && !gdprConsent) {
-        return {
-          success: false,
-          error: 'GDPR consent required for ID document processing'
-        };
-      }
-      
-      // Check if file exists
+      // Make sure the image exists
       if (!fs.existsSync(imagePath)) {
         return {
           success: false,
-          error: `Image file not found: ${imagePath}`
+          error: `Image file not found: ${imagePath}`,
         };
       }
       
@@ -392,47 +326,59 @@ export class OCRService {
       const orientation = await this.detectOrientation(imagePath);
       
       // Preprocess image if enabled
-      const processedImagePath = await this.preprocessImage(imagePath);
+      const preprocessedImagePath = await this.preprocessImage(imagePath);
+      
+      // Start timer for performance tracking
+      const startTime = Date.now();
       
       // Perform OCR
-      const result = await this.worker.recognize(processedImagePath);
+      log(`Starting OCR processing for ${idType} (${orientation})`, 'ocr');
+      const result = await this.worker.recognize(preprocessedImagePath);
       
-      // Check confidence
-      if (result.data.confidence < this.config.confidenceThreshold) {
+      // Calculate processing time
+      const processingTime = Date.now() - startTime;
+      
+      // Check confidence level
+      const confidence = result.data.confidence;
+      if (confidence < this.config.confidenceThreshold) {
         return {
           success: false,
-          error: `OCR confidence too low: ${result.data.confidence}%`,
-          text: result.data.text,
-          confidence: result.data.confidence,
-          processingTimeMs: Date.now() - startTime
+          error: `OCR confidence too low: ${confidence}%`,
+          confidence,
+          processingTimeMs: processingTime,
         };
       }
       
-      // Parse text to extract structured data
-      const extractedData = this.parseIdCardData(result.data.text, idType);
+      // Extract the text
+      const text = result.data.text;
       
-      // Add orientation and GDPR consent
+      // Parse the text to extract ID card data
+      const extractedData = this.parseIdCardData(text, idType);
+      
+      // Add orientation and original image path to data
       extractedData.orientation = orientation;
       extractedData.originalImagePath = imagePath;
       extractedData.gdprConsent = gdprConsent;
       
-      // Clean up preprocessed image if it's different from original
-      if (processedImagePath !== imagePath && fs.existsSync(processedImagePath)) {
-        fs.unlinkSync(processedImagePath);
+      // Clean up temporary file if we created one
+      if (preprocessedImagePath !== imagePath && fs.existsSync(preprocessedImagePath)) {
+        fs.unlinkSync(preprocessedImagePath);
       }
+      
+      log(`OCR processing completed in ${processingTime}ms with confidence ${confidence}%`, 'ocr');
       
       return {
         success: true,
-        text: result.data.text,
+        text,
         data: extractedData,
-        confidence: result.data.confidence,
-        processingTimeMs: Date.now() - startTime
+        confidence,
+        processingTimeMs: processingTime,
       };
     } catch (error) {
       log(`OCR processing error: ${error}`, 'ocr');
       return {
         success: false,
-        error: `OCR processing failed: ${error}`
+        error: `OCR processing failed: ${error}`,
       };
     }
   }
@@ -441,15 +387,15 @@ export class OCRService {
    * Start the GDPR compliance scheduler to handle document retention
    */
   private startGdprComplianceScheduler(): void {
+    if (this.schedulerRunning) return;
+    
     this.schedulerRunning = true;
     
-    // Run once a day to check for documents that need to be deleted
+    // Set up a daily scheduler to clean up expired documents
     const ONE_DAY_MS = 24 * 60 * 60 * 1000;
-    
     setInterval(() => {
-      log('Running GDPR compliance check for document retention', 'ocr');
-      // This would typically query the database for documents past retention period
-      // and process them according to GDPR requirements
+      // This would typically connect to the document service to clean up expired documents
+      log('Running GDPR compliance scheduler', 'ocr');
     }, ONE_DAY_MS);
     
     log('GDPR compliance scheduler started', 'ocr');
@@ -463,10 +409,10 @@ export class OCRService {
       await this.worker.terminate();
       this.worker = null;
       this.initialized = false;
-      log('OCR service terminated', 'ocr');
+      log('OCR worker terminated', 'ocr');
     }
   }
 }
 
-// Export singleton instance for use throughout the application
+// Export a singleton instance for use throughout the application
 export const ocrService = new OCRService();
