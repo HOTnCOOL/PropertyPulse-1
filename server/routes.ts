@@ -1037,6 +1037,70 @@ export function registerRoutes(app: Express): Server {
   });
 
   // Get guest dashboard data for a specific guest
+  // Add handler for query param version of guestId
+  app.get("/api/guest-dashboard", async (req: Request, res: Response) => {
+    // Extract guest ID from query parameter
+    const guestIdParam = req.query.guestId;
+    
+    if (!guestIdParam || Array.isArray(guestIdParam)) {
+      return res.status(400).json({ message: "Invalid or missing guestId parameter" });
+    }
+    
+    const id = parseInt(guestIdParam);
+    
+    if (isNaN(id)) {
+      return res.status(400).json({ message: "Guest ID must be a valid number" });
+    }
+    
+    // Reuse the same guest dashboard lookup logic as the path parameter version
+    try {
+      // Verify guest exists
+      const guest = await db.query.guests.findFirst({
+        where: eq(guests.id, id),
+      });
+
+      if (!guest) {
+        return res.status(404).json({ message: "Guest not found" });
+      }
+
+      // Get guest's bookings with property and payment info
+      const bookings = await db.query.bookings.findMany({
+        where: eq(bookings.guestId, id),
+        with: {
+          property: true,
+          payments: true
+        },
+        orderBy: desc(bookings.createdAt)
+      });
+
+      // Find current or upcoming booking
+      const now = new Date();
+      const currentBooking = bookings.find(b => 
+        (new Date(b.checkIn) <= now && new Date(b.checkOut) >= now) || 
+        new Date(b.checkIn) > now
+      );
+
+      const dashboardData = {
+        guest,
+        bookings,
+        currentBooking,
+        propertyInfo: currentBooking && currentBooking.property ? {
+          name: currentBooking.property.name,
+          location: {
+            address: currentBooking.property.address || "123 Main Street, City"
+          }
+        } : null,
+        messages: [] // Empty messages for demo - would be populated from a messages table in production
+      };
+
+      return res.json(dashboardData);
+    } catch (error) {
+      log(`Error retrieving guest dashboard: ${error}`);
+      return res.status(500).json({ message: "Error retrieving guest information" });
+    }
+  });
+
+  // Keep the original path parameter version for backward compatibility
   app.get("/api/guest-dashboard/:guestId", async (req: Request, res: Response) => {
     const { guestId } = req.params;
     const id = parseInt(guestId);
