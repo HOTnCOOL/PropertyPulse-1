@@ -1243,44 +1243,48 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Update a todo - extremely simplified version
+  // Update a todo
   app.patch("/api/todos/:id", async (req: Request, res: Response) => {
     const { id } = req.params;
     const todoId = parseInt(id);
     
     try {
-      // Create a SQL query for the update
-      const isCompleted = req.body.isCompleted !== undefined ? req.body.isCompleted : 
-                          req.body.completed !== undefined ? req.body.completed : null;
+      // Check if the todo exists
+      const existingTodo = await db.query.todos.findFirst({
+        where: eq(todos.id, todoId)
+      });
       
-      if (isCompleted !== null) {
-        // Just update the completed status
-        await pool.query(
-          "UPDATE todos SET completed = $1 WHERE id = $2",
-          [isCompleted, todoId]
-        );
-      }
-      
-      // Retrieve the updated todo
-      const result = await pool.query("SELECT * FROM todos WHERE id = $1", [todoId]);
-      
-      if (result.rows.length === 0) {
+      if (!existingTodo) {
         return res.status(404).json({ message: "Todo not found" });
       }
       
-      const todo = result.rows[0];
+      // Get the completed status from request body
+      const completed = req.body.completed !== undefined ? req.body.completed : 
+                       (req.body.isCompleted !== undefined ? req.body.isCompleted : existingTodo.completed);
       
-      // Send a simple response with the todo data
+      // Update the todo using Drizzle ORM
+      const updatedTodo = await db.update(todos)
+        .set({
+          completed: completed,
+          // Also update other fields if provided
+          title: req.body.title || existingTodo.title,
+          description: req.body.description || existingTodo.description,
+          dueDate: req.body.dueDate || existingTodo.dueDate
+        })
+        .where(eq(todos.id, todoId))
+        .returning();
+      
+      // Format the response
       res.json({
-        id: todo.id,
-        title: todo.title,
-        description: todo.description,
-        dueDate: todo.due_date,
-        isCompleted: todo.completed,
-        completed: todo.completed,
-        createdAt: todo.created_at,
-        priority: todo.description?.includes('high') ? 'high' : 
-                todo.description?.includes('low') ? 'low' : 'medium'
+        id: updatedTodo[0].id,
+        title: updatedTodo[0].title,
+        description: updatedTodo[0].description,
+        dueDate: updatedTodo[0].dueDate,
+        completed: updatedTodo[0].completed,
+        createdAt: updatedTodo[0].createdAt,
+        // Add a computed priority field based on the description
+        priority: updatedTodo[0].description?.includes('high') ? 'high' : 
+                updatedTodo[0].description?.includes('low') ? 'low' : 'medium'
       });
     } catch (error) {
       console.error("Error updating todo:", error);
