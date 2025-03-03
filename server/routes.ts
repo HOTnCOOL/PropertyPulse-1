@@ -20,7 +20,7 @@ import {
   insertPaymentSchema,
   selectGuestSchema,
 } from "../db/schema";
-import { eq, and, desc, gt, lt, gte, lte, ne, or, ilike } from "drizzle-orm";
+import { eq, and, desc, gt, lt, gte, lte, ne, or, ilike, asc } from "drizzle-orm";
 import bcrypt from "bcrypt";
 import multer from "multer";
 import path from "path";
@@ -1188,12 +1188,22 @@ export function registerRoutes(app: Express): Server {
     try {
       const todoList = await db.query.todos.findMany({
         orderBy: [
-          desc(todos.isCompleted),
-          desc(todos.dueDate)
+          // Using 'completed' field as defined in the schema instead of 'isCompleted'
+          asc(todos.completed),
+          asc(todos.dueDate)
         ],
       });
       
-      res.json(todoList);
+      // Transform the response to match the expected format in the frontend
+      const formattedTodos = todoList.map(todo => ({
+        ...todo,
+        // Add any additional fields the frontend might be expecting
+        isCompleted: todo.completed,
+        priority: todo.description?.includes('high') ? 'high' : 
+                 todo.description?.includes('low') ? 'low' : 'medium'
+      }));
+      
+      res.json(formattedTodos);
     } catch (error) {
       log(`Error fetching todos: ${error}`);
       res.status(500).json({ message: "Error fetching todos" });
@@ -1211,16 +1221,22 @@ export function registerRoutes(app: Express): Server {
     }
 
     try {
+      // Using the proper schema fields that exist in the database
       const newTodo = await db.insert(todos).values({
         title: result.data.title,
-        description: result.data.description,
+        description: result.data.description || null,
         dueDate: result.data.dueDate ? new Date(result.data.dueDate) : null,
-        priority: result.data.priority || "medium",
-        isCompleted: result.data.isCompleted || false,
-        assignedTo: result.data.assignedTo || null,
+        completed: result.data.completed || false,
       }).returning();
 
-      res.status(201).json(newTodo[0]);
+      // Transform to match expected format
+      const formattedTodo = {
+        ...newTodo[0],
+        isCompleted: newTodo[0].completed,
+        priority: 'medium'
+      };
+
+      res.status(201).json(formattedTodo);
     } catch (error) {
       log(`Error creating todo: ${error}`);
       res.status(500).json({ message: "Error creating todo" });
@@ -1231,18 +1247,48 @@ export function registerRoutes(app: Express): Server {
   app.patch("/api/todos/:id", async (req: Request, res: Response) => {
     const { id } = req.params;
     const todoId = parseInt(id);
-
+    
     try {
+      // Map frontend field names to database field names
+      const updateData: any = {};
+      
+      if (req.body.title !== undefined) {
+        updateData.title = req.body.title;
+      }
+      
+      if (req.body.description !== undefined) {
+        updateData.description = req.body.description;
+      }
+      
+      if (req.body.dueDate !== undefined) {
+        updateData.dueDate = req.body.dueDate ? new Date(req.body.dueDate) : null;
+      }
+      
+      // Map isCompleted to completed field in database
+      if (req.body.isCompleted !== undefined) {
+        updateData.completed = req.body.isCompleted;
+      } else if (req.body.completed !== undefined) {
+        updateData.completed = req.body.completed;
+      }
+      
       const updatedTodo = await db.update(todos)
-        .set(req.body)
+        .set(updateData)
         .where(eq(todos.id, todoId))
         .returning();
 
       if (updatedTodo.length === 0) {
         return res.status(404).json({ message: "Todo not found" });
       }
+      
+      // Transform the response to match expected format in frontend
+      const formattedTodo = {
+        ...updatedTodo[0],
+        isCompleted: updatedTodo[0].completed,
+        priority: updatedTodo[0].description?.includes('high') ? 'high' : 
+                 updatedTodo[0].description?.includes('low') ? 'low' : 'medium'
+      };
 
-      res.json(updatedTodo[0]);
+      res.json(formattedTodo);
     } catch (error) {
       log(`Error updating todo: ${error}`);
       res.status(500).json({ message: "Error updating todo" });
