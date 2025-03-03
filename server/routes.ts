@@ -674,33 +674,100 @@ export function registerRoutes(app: Express): Server {
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
 
+      // Fetch bookings with check-ins today
       const checkIns = await db.query.bookings.findMany({
         where: and(
           gte(bookings.checkIn, today),
           lt(bookings.checkIn, tomorrow)
         ),
         with: {
-          guest: true,
-          property: true,
+          guest: {
+            columns: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              phone: true,
+              idNumber: true,
+              nationality: true,
+              bookingReference: true,
+              createdAt: true
+            }
+          },
+          property: {
+            columns: {
+              id: true,
+              name: true,
+              address: true
+            }
+          },
         },
         orderBy: bookings.checkIn
       });
 
+      // Fetch bookings with check-outs today
       const checkOuts = await db.query.bookings.findMany({
         where: and(
           gte(bookings.checkOut, today),
           lt(bookings.checkOut, tomorrow)
         ),
         with: {
-          guest: true,
-          property: true,
+          guest: {
+            columns: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              phone: true,
+              idNumber: true,
+              nationality: true,
+              bookingReference: true,
+              createdAt: true
+            }
+          },
+          property: {
+            columns: {
+              id: true,
+              name: true,
+              address: true
+            }
+          },
         },
         orderBy: bookings.checkOut
       });
+      
+      // Process the bookings to include guest and property information in a format the client expects
+      const processedCheckIns = checkIns.map(booking => {
+        if (!booking.guest) return booking;
+        
+        return {
+          ...booking,
+          guest: {
+            ...booking.guest,
+            name: `${booking.guest.firstName} ${booking.guest.lastName}`,
+            property: booking.property?.name || 'Unknown',
+            roomNumber: booking.roomNumber || 'Not assigned'
+          }
+        };
+      });
+      
+      const processedCheckOuts = checkOuts.map(booking => {
+        if (!booking.guest) return booking;
+        
+        return {
+          ...booking,
+          guest: {
+            ...booking.guest,
+            name: `${booking.guest.firstName} ${booking.guest.lastName}`,
+            property: booking.property?.name || 'Unknown',
+            roomNumber: booking.roomNumber || 'Not assigned'
+          }
+        };
+      });
 
       res.json({
-        checkIns,
-        checkOuts,
+        checkIns: processedCheckIns,
+        checkOuts: processedCheckOuts,
         date: today.toISOString()
       });
     } catch (error) {
