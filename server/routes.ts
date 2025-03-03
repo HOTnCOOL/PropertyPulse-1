@@ -470,7 +470,8 @@ export function registerRoutes(app: Express): Server {
         available: true,
         property,
         pricePeriods,
-        days,
+        nights,
+        days: nights, // Include 'days' for backward compatibility
         totalAmount,
         depositAmount,
         preferredType: periodType,
