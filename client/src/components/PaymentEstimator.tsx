@@ -183,9 +183,9 @@ function calculateOptimalPaymentBreakdown(
       isPrepaid: true // Always prepaid as it's required
     });
 
-    // Group remaining days for a simplified payment schedule
+    // Group remaining nights for a simplified payment schedule
     if (totalDays > 1) {
-      // Group consecutive days into one payment period
+      // Group consecutive nights into one payment period
       const remainingDays = totalDays - 1;
       periods.push({
         type: 'daily',
@@ -239,7 +239,7 @@ function calculateOptimalPaymentBreakdown(
           endDate: endDate,
           baseAmount: weeklyPerNightRate * remainingPartialDays,
           amount: weeklyPerNightRate * remainingPartialDays,
-          label: `${remainingPartialDays} days at weekly rate`,
+          label: `${remainingPartialDays} nights at weekly rate`,
           index: completeWeeks > 0 ? 2 : 1,
           isPrepaid: false
         });
@@ -285,7 +285,7 @@ function calculateOptimalPaymentBreakdown(
           endDate: endDate,
           baseAmount: monthlyPerNightRate * remainingDays,
           amount: monthlyPerNightRate * remainingDays,
-          label: `${remainingDays} days at monthly rate`,
+          label: `${remainingDays} nights at monthly rate`,
           index: remainingMonths > 0 ? 2 : 1,
           isPrepaid: false
         });
@@ -516,7 +516,7 @@ const PlanCard = ({
           <AlertCircle className="h-3.5 w-3.5" />
           <span>
             {type === 'monthly'
-              ? 'Requires minimum 30-day stay'
+              ? 'Requires minimum 30-night stay'
               : type === 'weekly'
                 ? 'Requires minimum 7-day stay'
                 : ''}
@@ -551,7 +551,7 @@ export default function PaymentEstimator({ property, checkIn, checkOut }: Paymen
     }
 
     if (type === 'weekly' && !eligibility.weekly) {
-      setPlanError('Weekly plan requires minimum 7 days stay');
+      setPlanError('Weekly plan requires minimum 7 nights stay');
       return;
     }
 
