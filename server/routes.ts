@@ -1243,56 +1243,47 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Update a todo - simplified version
+  // Update a todo - extremely simplified version
   app.patch("/api/todos/:id", async (req: Request, res: Response) => {
     const { id } = req.params;
     const todoId = parseInt(id);
     
     try {
-      // First find the todo we want to update
-      const todo = await db.query.todos.findFirst({
-        where: eq(todos.id, todoId)
-      });
+      // Create a SQL query for the update
+      const isCompleted = req.body.isCompleted !== undefined ? req.body.isCompleted : 
+                          req.body.completed !== undefined ? req.body.completed : null;
       
-      if (!todo) {
+      if (isCompleted !== null) {
+        // Just update the completed status
+        await pool.query(
+          "UPDATE todos SET completed = $1 WHERE id = $2",
+          [isCompleted, todoId]
+        );
+      }
+      
+      // Retrieve the updated todo
+      const result = await pool.query("SELECT * FROM todos WHERE id = $1", [todoId]);
+      
+      if (result.rows.length === 0) {
         return res.status(404).json({ message: "Todo not found" });
       }
       
-      // Prepare update data with proper field names
-      const updateData = {
-        title: req.body.title !== undefined ? req.body.title : todo.title,
-        description: req.body.description !== undefined ? req.body.description : todo.description,
-        completed: req.body.isCompleted !== undefined ? req.body.isCompleted : 
-                  req.body.completed !== undefined ? req.body.completed : todo.completed
-      };
+      const todo = result.rows[0];
       
-      // Handle the due date field separately
-      if (req.body.dueDate !== undefined) {
-        // @ts-ignore - we need to set due_date directly
-        updateData.due_date = req.body.dueDate ? new Date(req.body.dueDate) : null;
-      }
-      
-      // Update the todo
-      await db.update(todos)
-        .set(updateData)
-        .where(eq(todos.id, todoId));
-        
-      // Fetch the updated todo to return in response
-      const updatedTodo = await db.query.todos.findFirst({
-        where: eq(todos.id, todoId)
+      // Send a simple response with the todo data
+      res.json({
+        id: todo.id,
+        title: todo.title,
+        description: todo.description,
+        dueDate: todo.due_date,
+        isCompleted: todo.completed,
+        completed: todo.completed,
+        createdAt: todo.created_at,
+        priority: todo.description?.includes('high') ? 'high' : 
+                todo.description?.includes('low') ? 'low' : 'medium'
       });
-      
-      // Transform for frontend format
-      const formattedTodo = {
-        ...updatedTodo,
-        isCompleted: updatedTodo?.completed,
-        priority: updatedTodo?.description?.includes('high') ? 'high' : 
-                 updatedTodo?.description?.includes('low') ? 'low' : 'medium'
-      };
-
-      res.json(formattedTodo);
     } catch (error) {
-      log(`Error updating todo: ${error}`);
+      console.error("Error updating todo:", error);
       res.status(500).json({ message: "Error updating todo" });
     }
   });
