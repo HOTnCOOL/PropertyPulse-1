@@ -161,8 +161,11 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
   });
 
   function calculateTotalAmount(from: Date, to: Date) {
-    const days = Math.ceil((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24));
-    return days * Number(property.rate);
+    // Calculate nights by getting the difference in days
+    // We floor the result because a partial day shouldn't count as a full night
+    // For example: 3rd to 4th = 1 night, 3rd to 5th = 2 nights
+    const nights = Math.floor((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24));
+    return nights * Number(property.rate);
   }
 
   async function onSubmit(values: BookingFormValues) {
@@ -226,7 +229,7 @@ export default function BookingForm({ property, onSuccess }: BookingFormProps) {
                 <span className="font-medium">{format(dateRange.to, "MMMM d, yyyy")}</span>
               </div>
               <div className="flex justify-between text-sm pt-2 border-t">
-                <span className="font-medium">Total for {Math.ceil((dateRange.to.getTime() - dateRange.from.getTime()) / (1000 * 60 * 60 * 24))} nights:</span>
+                <span className="font-medium">Total for {Math.floor((dateRange.to.getTime() - dateRange.from.getTime()) / (1000 * 60 * 60 * 24))} nights:</span>
                 <span className="font-medium">${calculateTotalAmount(dateRange.from, dateRange.to).toLocaleString()}</span>
               </div>
             </div>

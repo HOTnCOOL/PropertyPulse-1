@@ -456,7 +456,9 @@ export function registerRoutes(app: Express): Server {
       }
 
       // Calculate price
-      const days = Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24));
+      // Use Math.floor to calculate nights correctly
+      // For example: 3rd to 4th = 1 night, 3rd to 5th = 2 nights
+      const nights = Math.floor((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24));
       
       // Calculate price based on preferred period type
       const pricePeriods = calculatePricePeriods(checkInDate, checkOutDate, periodType as 'monthly' | 'weekly' | 'daily');
