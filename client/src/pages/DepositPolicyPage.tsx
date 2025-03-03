@@ -38,9 +38,9 @@ export default function DepositPolicyPage() {
         <h4>Security Deposit Amount</h4>
         <p>The amount of the security deposit is determined according to the duration of your stay:</p>
         <ol>
-          <li>$70 for stays longer than 3 days and shorter than 2 weeks (equivalent to one day's rate)</li>
-          <li>$420 for stays longer than 2 weeks and shorter than 2 months (equivalent to one 7-day period)</li>
-          <li>$1500 for stays longer than 2 months (equivalent to one 30-day period)</li>
+          <li>$70 for stays longer than 3 nights and shorter than 2 weeks (equivalent to one night's rate)</li>
+          <li>$420 for stays longer than 2 weeks and shorter than 2 months (equivalent to one 7-night period)</li>
+          <li>$1500 for stays longer than 2 months (equivalent to one 30-night period)</li>
         </ol>
 
         <h3>Summary of Payment Options</h3>
@@ -49,25 +49,25 @@ export default function DepositPolicyPage() {
           how your bookings may be structured based on preferred payment plans:
         </p>
 
-        <h4>30-Day Payment Plan</h4>
+        <h4>30-Night Payment Plan</h4>
         <ul>
-          <li>Rate: $1500 every 30 days ($50/night equivalent)</li>
-          <li>Best value for longer stays of 30+ days</li>
-          <li>Initial Payment Required: First 30-day payment period + security deposit (if applicable)</li>
+          <li>Rate: $1500 every 30 nights ($50/night equivalent)</li>
+          <li>Best value for longer stays of 30+ nights</li>
+          <li>Initial Payment Required: First 30-night payment period + security deposit (if applicable)</li>
         </ul>
 
-        <h4>7-Day Payment Plan</h4>
+        <h4>7-Night Payment Plan</h4>
         <ul>
-          <li>Rate: $420 every 7 days ($60/night equivalent)</li>
+          <li>Rate: $420 every 7 nights ($60/night equivalent)</li>
           <li>Good balance between value and flexibility for medium-length stays</li>
-          <li>Initial Payment Required: First 7-day payment period + security deposit (if applicable)</li>
+          <li>Initial Payment Required: First 7-night payment period + security deposit (if applicable)</li>
         </ul>
 
-        <h4>Daily Payment Plan</h4>
+        <h4>Nightly Payment Plan</h4>
         <ul>
-          <li>Rate: $70 per day</li>
+          <li>Rate: $70 per night</li>
           <li>Maximum flexibility for payment scheduling, but at a higher overall cost</li>
-          <li>Initial Payment Required: First day's payment + security deposit (if applicable)</li>
+          <li>Initial Payment Required: First night's payment + security deposit (if applicable)</li>
         </ul>
 
         <h3>Need Assistance?</h3>
