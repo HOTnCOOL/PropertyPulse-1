@@ -1,7 +1,7 @@
 import { Request, Response, Express } from "express";
 import { createServer, Server } from "http";
 import { log } from "./vite";
-import { db } from "../db";
+import { db, pool } from "../db";
 import {
   properties,
   guests,
