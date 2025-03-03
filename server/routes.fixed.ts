@@ -344,7 +344,7 @@ export function registerRoutes(app: Express): Server {
 
     const passwordMatch = await bcrypt.compare(
       result.data.password,
-      admin.passwordHash
+      admin.password
     );
 
     if (!passwordMatch) {
