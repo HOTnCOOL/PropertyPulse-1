@@ -67,7 +67,7 @@ const calculateDepositAmount = (plan: 'monthly' | 'weekly' | 'daily', prepaidPer
   
   switch (plan) {
     case 'daily':
-      baseDeposit = DAILY_RATE; // One day's rate for daily plan
+      baseDeposit = DAILY_RATE; // One night's rate for daily plan
       break;
     case 'weekly':
       baseDeposit = WEEKLY_RATE; // One week's rate for weekly plan
@@ -231,9 +231,9 @@ export default function PaymentSchedule() {
     const stayDuration = differenceInDays(selectedDates.to, selectedDates.from);
     
     // Select plan based on stay duration rules:
-    // - 60+ days: Monthly plan (if eligible)
-    // - 15-60 days: Weekly plan (if eligible)
-    // - <14 days: Daily plan
+    // - 60+ nights: Monthly plan (if eligible)
+    // - 15-60 nights: Weekly plan (if eligible)
+    // - <14 nights: Daily plan
     if (stayDuration > 60 && eligibility.monthly) {
       setPreferredPackageType('monthly');
     } else if (stayDuration >= 15 && eligibility.weekly) {
@@ -580,14 +580,14 @@ export default function PaymentSchedule() {
                 {!eligibility.monthly && (
                   <div className="mt-3 text-xs flex items-start gap-2 text-amber-700 bg-amber-50 p-2 rounded-md">
                     <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-                    <span>Monthly plan requires a 30+ day stay.</span>
+                    <span>Monthly plan requires a 30+ night stay.</span>
                   </div>
                 )}
                 
                 {!eligibility.weekly && (
                   <div className="mt-3 text-xs flex items-start gap-2 text-amber-700 bg-amber-50 p-2 rounded-md">
                     <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-                    <span>Weekly plan requires a 7+ day stay.</span>
+                    <span>Weekly plan requires a 7+ night stay.</span>
                   </div>
                 )}
               </CardContent>
@@ -670,9 +670,9 @@ export default function PaymentSchedule() {
                             >
                               <div className="space-y-1">
                                 <div className="font-medium text-sm">
-                                  {period.type === 'monthly' ? '30-day period' : 
-                                   period.type === 'weekly' ? '7-day period' : 
-                                   `${differenceInDays(period.endDate, period.startDate)}-day period`}
+                                  {period.type === 'monthly' ? '30-night period' : 
+                                   period.type === 'weekly' ? '7-night period' : 
+                                   `${differenceInDays(period.endDate, period.startDate)}-night period`}
                                 </div>
                                 <div className="text-xs text-muted-foreground flex items-center gap-1">
                                   <CalendarIcon className="h-3 w-3" />
@@ -809,9 +809,9 @@ export default function PaymentSchedule() {
                               >
                                 <div className="space-y-1">
                                   <div className="font-medium text-sm">
-                                    {period.type === 'monthly' ? '30-day period' : 
-                                     period.type === 'weekly' ? '7-day period' : 
-                                     `${differenceInDays(period.endDate, period.startDate)}-day period`}
+                                    {period.type === 'monthly' ? '30-night period' : 
+                                     period.type === 'weekly' ? '7-night period' : 
+                                     `${differenceInDays(period.endDate, period.startDate)}-night period`}
                                   </div>
                                   <div className="text-xs text-muted-foreground flex items-center gap-1">
                                     <CalendarIcon className="h-3 w-3" />

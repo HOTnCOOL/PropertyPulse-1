@@ -518,7 +518,7 @@ const PlanCard = ({
             {type === 'monthly'
               ? 'Requires minimum 30-night stay'
               : type === 'weekly'
-                ? 'Requires minimum 7-day stay'
+                ? 'Requires minimum 7-night stay'
                 : ''}
           </span>
         </div>

@@ -30,7 +30,7 @@ export default function DepositPolicyPage() {
         <h4>General Rules</h4>
         <ul>
           <li>No security deposit is charged for bookings with 3+ prepaid payment periods</li>
-          <li>For all stays longer than 3 days that are only partially paid, a security deposit must be paid in advance or guaranteed by credit card</li>
+          <li>For all stays longer than 3 nights that are only partially paid, a security deposit must be paid in advance or guaranteed by credit card</li>
           <li>The security deposit is fully refundable after checkout and property inspection</li>
           <li>If at least two payment periods of the same type are prepaid, the deposit is reduced by 50%</li>
         </ul>
