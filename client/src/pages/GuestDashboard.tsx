@@ -112,9 +112,15 @@ export default function GuestDashboard() {
   const { toast } = useToast();
   const [location] = useLocation();
   
-  // Extract guestId from URL if present
+  // Extract guestId from URL if present - check both path and query parameters
   const guestIdMatch = location.match(/\/guest-dashboard\/(\d+)/);
-  const guestId = guestIdMatch ? parseInt(guestIdMatch[1]) : null;
+  
+  // Also check for query parameters (e.g., ?guestId=123)
+  const params = new URLSearchParams(window.location.search);
+  const queryGuestId = params.get('guestId') ? parseInt(params.get('guestId') as string) : null;
+  
+  // Use either the path parameter or query parameter, with query parameter taking precedence
+  const guestId = queryGuestId || (guestIdMatch ? parseInt(guestIdMatch[1]) : null);
   
   // Add state for interactive elements
   const [showPaymentModal, setShowPaymentModal] = useState(false);

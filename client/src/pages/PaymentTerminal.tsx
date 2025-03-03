@@ -208,7 +208,7 @@ export default function PaymentTerminal() {
         } else {
           setLocation('/');
         }
-      }, 30000); // 30 seconds delay
+      }, 3000); // 3 seconds delay for testing (changed from 30 seconds)
     } catch (error) {
       console.error("Payment error:", error);
       setPaymentStatus('error');
