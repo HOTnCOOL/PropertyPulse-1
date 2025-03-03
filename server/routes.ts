@@ -1243,49 +1243,51 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Update a todo
+  // Update a todo - simplified version
   app.patch("/api/todos/:id", async (req: Request, res: Response) => {
     const { id } = req.params;
     const todoId = parseInt(id);
     
     try {
-      // Map frontend field names to database field names
-      const updateData: any = {};
+      // First find the todo we want to update
+      const todo = await db.query.todos.findFirst({
+        where: eq(todos.id, todoId)
+      });
       
-      if (req.body.title !== undefined) {
-        updateData.title = req.body.title;
-      }
-      
-      if (req.body.description !== undefined) {
-        updateData.description = req.body.description;
-      }
-      
-      if (req.body.dueDate !== undefined) {
-        updateData.dueDate = req.body.dueDate ? new Date(req.body.dueDate) : null;
-      }
-      
-      // Map isCompleted to completed field in database
-      if (req.body.isCompleted !== undefined) {
-        updateData.completed = req.body.isCompleted;
-      } else if (req.body.completed !== undefined) {
-        updateData.completed = req.body.completed;
-      }
-      
-      const updatedTodo = await db.update(todos)
-        .set(updateData)
-        .where(eq(todos.id, todoId))
-        .returning();
-
-      if (updatedTodo.length === 0) {
+      if (!todo) {
         return res.status(404).json({ message: "Todo not found" });
       }
       
-      // Transform the response to match expected format in frontend
+      // Prepare update data with proper field names
+      const updateData = {
+        title: req.body.title !== undefined ? req.body.title : todo.title,
+        description: req.body.description !== undefined ? req.body.description : todo.description,
+        completed: req.body.isCompleted !== undefined ? req.body.isCompleted : 
+                  req.body.completed !== undefined ? req.body.completed : todo.completed
+      };
+      
+      // Handle the due date field separately
+      if (req.body.dueDate !== undefined) {
+        // @ts-ignore - we need to set due_date directly
+        updateData.due_date = req.body.dueDate ? new Date(req.body.dueDate) : null;
+      }
+      
+      // Update the todo
+      await db.update(todos)
+        .set(updateData)
+        .where(eq(todos.id, todoId));
+        
+      // Fetch the updated todo to return in response
+      const updatedTodo = await db.query.todos.findFirst({
+        where: eq(todos.id, todoId)
+      });
+      
+      // Transform for frontend format
       const formattedTodo = {
-        ...updatedTodo[0],
-        isCompleted: updatedTodo[0].completed,
-        priority: updatedTodo[0].description?.includes('high') ? 'high' : 
-                 updatedTodo[0].description?.includes('low') ? 'low' : 'medium'
+        ...updatedTodo,
+        isCompleted: updatedTodo?.completed,
+        priority: updatedTodo?.description?.includes('high') ? 'high' : 
+                 updatedTodo?.description?.includes('low') ? 'low' : 'medium'
       };
 
       res.json(formattedTodo);
