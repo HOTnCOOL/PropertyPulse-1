@@ -3,20 +3,6 @@ import { relations } from "drizzle-orm";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// Declare admins first to avoid circular references
-export const admins = pgTable("admins", {
-  id: serial("id").primaryKey(),
-  email: text("email").notNull().unique(),
-  password: text("password").notNull(),
-  name: text("name").notNull(),
-  role: text("role").notNull().default('staff'),
-  active: boolean("active").notNull().default(true),
-  cashBalance: numeric("cash_balance", { precision: 10, scale: 2 }).default("0.00"),
-  lastActivity: timestamp("last_activity"),
-  createdAt: timestamp("created_at").defaultNow(),
-  createdBy: integer("created_by"),
-});
-
 // Add discount configuration schema for each payment plan
 const discountConfigSchema = z.object({
   daily: z.object({
@@ -42,6 +28,20 @@ const discountConfigSchema = z.object({
     periodsRequired: z.number().optional(),
     nextPeriodDiscount: z.number().optional(),
   })
+});
+
+// Define admins table first to avoid circular references
+export const admins = pgTable("admins", {
+  id: serial("id").primaryKey(),
+  email: text("email").notNull().unique(),
+  password: text("password").notNull(),
+  name: text("name").notNull(),
+  role: text("role").notNull().default('staff'),
+  active: boolean("active").notNull().default(true),
+  cashBalance: numeric("cash_balance", { precision: 10, scale: 2 }).default("0.00"),
+  lastActivity: timestamp("last_activity"),
+  createdAt: timestamp("created_at").defaultNow(),
+  createdBy: integer("created_by"),
 });
 
 export const properties = pgTable("properties", {
@@ -84,7 +84,7 @@ export const guests = pgTable("guests", {
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
   email: text("email").notNull(),
-  phone: text("phone").notNull(), // Keeping this as notNull to match the database
+  phone: text("phone").notNull(), 
   propertyId: integer("property_id").references(() => properties.id),
   checkIn: timestamp("check_in"), 
   checkOut: timestamp("check_out"), 
@@ -92,14 +92,12 @@ export const guests = pgTable("guests", {
   bookingReference: varchar("booking_reference", { length: 10 }),
   dateOfBirth: timestamp("date_of_birth"),
   placeOfBirth: text("place_of_birth"),
-  address: text("address").notNull(), // Keeping this as notNull to match the database
+  address: text("address").notNull(),
   homeAddress: text("home_address"),
-  idNumber: text("id_number"), // Keeping this optional to match the database
+  idNumber: text("id_number"),
   idType: text("id_type"),
   idImageUrl: text("id_image_url"),
   createdAt: timestamp("created_at").defaultNow(),
-  // Note: We can't add personal_number directly because it doesn't exist in the DB yet
-  // We'll have to push a migration for this later
 });
 
 export const bookings = pgTable("bookings", {
@@ -142,13 +140,12 @@ export const assets = pgTable("assets", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-// Define documents table for storing uploaded files
 export const documents = pgTable("documents", {
   id: serial("id").primaryKey(),
   guestId: integer("guest_id").references(() => guests.id),
   bookingId: integer("booking_id").references(() => bookings.id),
   paymentId: integer("payment_id").references(() => payments.id),
-  type: text("type").notNull(), // 'receipt', 'id', 'contract', etc.
+  type: text("type").notNull(),
   filename: text("filename").notNull(),
   fileUrl: text("file_url").notNull(),
   originalFilename: text("original_filename"),
@@ -165,13 +162,12 @@ export const documents = pgTable("documents", {
   deletedAt: timestamp("deleted_at"),
 });
 
-// Table for tracking staff expenses
 export const expenses = pgTable("expenses", {
   id: serial("id").primaryKey(),
   amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
   date: timestamp("date").notNull(),
   description: text("description").notNull(),
-  category: text("category").notNull(), // e.g., 'office', 'maintenance', 'cleaning'
+  category: text("category").notNull(),
   staffId: integer("staff_id").references(() => admins.id).notNull(),
   approved: boolean("approved").default(false),
   approvedBy: integer("approved_by").references(() => admins.id),
@@ -180,14 +176,13 @@ export const expenses = pgTable("expenses", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-// Table for tracking cash management
 export const cashTransactions = pgTable("cash_transactions", {
   id: serial("id").primaryKey(),
   staffId: integer("staff_id").references(() => admins.id).notNull(),
   amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
-  type: text("type").notNull(), // 'deposit', 'withdrawal', 'payment', 'expense'
-  relatedId: integer("related_id"), // Could be payment_id, expense_id, etc.
-  relatedType: text("related_type"), // 'payment', 'expense', etc.
+  type: text("type").notNull(),
+  relatedId: integer("related_id"),
+  relatedType: text("related_type"),
   balanceBefore: numeric("balance_before", { precision: 10, scale: 2 }).notNull(),
   balanceAfter: numeric("balance_after", { precision: 10, scale: 2 }).notNull(),
   notes: text("notes"),
@@ -195,14 +190,13 @@ export const cashTransactions = pgTable("cash_transactions", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-// Table for tracking all financial activity
 export const activityLogs = pgTable("activity_logs", {
   id: serial("id").primaryKey(),
   adminId: integer("admin_id").references(() => admins.id),
-  action: text("action").notNull(), // 'create', 'update', 'delete', 'approve', etc.
-  entityType: text("entity_type").notNull(), // 'payment', 'booking', 'expense', etc.
+  action: text("action").notNull(),
+  entityType: text("entity_type").notNull(),
   entityId: integer("entity_id").notNull(),
-  details: jsonb("details"), // Store additional details as needed
+  details: jsonb("details"),
   createdAt: timestamp("created_at").defaultNow(),
   ipAddress: text("ip_address"),
 });
@@ -341,7 +335,7 @@ export const insertGuestSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
   email: z.string().email("Invalid email address"),
-  phone: z.string().min(1, "Phone number is required"), // This will be handled in the UI as optional
+  phone: z.string().min(1, "Phone number is required"),
   propertyId: z.number(),
   checkIn: z.string().or(z.date()).nullish(), 
   checkOut: z.string().or(z.date()).nullish(), 
@@ -349,12 +343,11 @@ export const insertGuestSchema = z.object({
   bookingReference: z.string().length(10).optional(),
   dateOfBirth: z.string().or(z.date()).optional().nullable(),
   placeOfBirth: z.string().optional(),
-  address: z.string().min(1, "Address is required"), // This will be handled in the UI as not displayed
+  address: z.string().min(1, "Address is required"),
   homeAddress: z.string().optional(),
-  idNumber: z.string().min(1, "ID/Passport number is required"), // This will be required in the UI
+  idNumber: z.string().min(1, "ID/Passport number is required"),
   idType: z.enum(['passport', 'national_id']).optional(),
   idImageUrl: z.string().optional(),
-  // We'll add personal_number to the schema in a future update
 });
 
 export const selectPropertySchema = createSelectSchema(properties).extend({
